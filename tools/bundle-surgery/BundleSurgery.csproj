@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>BundleSurgery</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    AssetsTools.NET parses Unity asset bundles. Pinned to the version
+    originally vendored via USCSandbox so bundle round-trip semantics
+    (read -> rewrite -> read) stay byte-identical to what we have
+    battle-tested against the Linux depot.
+
+    classdata.tpk (next to this csproj) is the Unity type-tree database that
+    AssetsTools.NET needs to deserialize release bundles (Silksong's bundles
+    are type-tree-stripped). Copied into the build output via Content/CopyToOutputDirectory.
+  -->
+  <ItemGroup>
+    <PackageReference Include="AssetsTools.NET" Version="3.0.0" />
+    <!--
+      Mono.Cecil rewrites the game's File.Replace call sites to SafeIo, which
+      is the only way to fix saving on devices whose storage cannot do it (see
+      RedirectFileReplace.cs). Unity ships this same library beside il2cpp.dll
+      and it is what IL2CPP itself reads these assemblies with, so a round trip
+      through it is as close to a no-op as the format allows.
+    -->
+    <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="classdata.tpk">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
