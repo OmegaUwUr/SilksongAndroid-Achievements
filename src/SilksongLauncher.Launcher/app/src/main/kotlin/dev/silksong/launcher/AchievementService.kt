@@ -139,7 +139,6 @@ class AchievementService : Service() {
             .firstOrNull { it.name == "addHandler" && it.parameterTypes.size == 1 }
             ?.invoke(session.steamClient, handler)
         return handler
-        return handler
     }
 
     private fun invokeStats(name: String, vararg args: Any?): Any? {
@@ -227,14 +226,17 @@ class AchievementService : Service() {
     private fun ownsSilksong(licenses: List<*>): Boolean {
         if (licenses.isEmpty()) return false
         return licenses.any { license ->
-            val text = license.toString()
+            val item = license ?: return@any false
+            val text = item.toString()
             if (text.contains(APP_ID.toString())) return@any true
-            val fields = license.javaClass.declaredFields
+            val fields = item.javaClass.declaredFields
             fields.any { f ->
                 runCatching {
                     f.isAccessible = true
-                    val value = f.get(license)
-                    value is Iterable<*> && value.any { it?.toString() == APP_ID.toString() || it?.toString() == "1030303" }
+                    val value = f.get(item)
+                    value is Iterable<*> && value.any {
+                        it?.toString() == APP_ID.toString() || it?.toString() == "1030303"
+                    }
                 }.getOrDefault(false)
             }
         }
@@ -276,3 +278,4 @@ class AchievementService : Service() {
         executor.shutdownNow()
         super.onDestroy()
     }
+}
