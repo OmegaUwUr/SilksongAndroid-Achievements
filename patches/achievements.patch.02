@@ -1,0 +1,182 @@
++        return handler
++    }
++
++    private fun invokeStats(name: String, vararg args: Any?): Any? {
++        val target = stats.get() ?: return null
++        val methods = target.javaClass.methods.filter { it.name == name && it.parameterTypes.size == args.size }
++        val method = methods.firstOrNull { m ->
++            m.parameterTypes.withIndex().all { (i, type) ->
++                val arg = args[i]
++                arg == null || type.isAssignableFrom(arg.javaClass) ||
++                    (type.isPrimitive && type == Int::class.javaPrimitiveType && arg is Int)
++            }
++        } ?: methods.firstOrNull() ?: return null
++        return method.invoke(target, *args)
++    }
++
++    private fun achievement(name: String): Boolean {
++        if (!ready.get()) return false
++        return try {
++            val result = invokeStats("setAchievement", name)
++            result as? Boolean ?: true
++        } catch (t: Throwable) {
++            LauncherLog.log("SetAchievement($name) failed", t)
++            false
++        }
++    }
++
++    private fun getAchievement(name: String): Boolean {
++        if (!ready.get()) return false
++        return try {
++            val result = invokeStats("getAchievement", name)
++            result as? Boolean ?: false
++        } catch (_: Throwable) {
++            false
++        }
++    }
++
++    private fun store(): Boolean {
++        if (!ready.get()) return false
++        val now = System.currentTimeMillis()
++        if (now - lastStore < STORE_MIN_INTERVAL_MS) return true
++        return try {
++            val result = invokeStats("storeStats")
++            lastStore = now
++            result as? Boolean ?: true
++        } catch (t: Throwable) {
++            LauncherLog.log("StoreStats failed", t)
++            false
++        }
++    }
++
++    private fun handle(line: String): Boolean {
++        val parts = line.trimEnd('\n').split('\t', limit = 2)
++        return when (parts[0]) {
++            "PING", "REQUEST" -> ready.get()
++            "SET" -> parts.getOrNull(1)?.let { achievement(it) } ?: false
++            "GET" -> parts.getOrNull(1)?.let { getAchievement(it) } ?: false
++            "STORE" -> store()
++            else -> false
++        }
++    }
++
++    private fun serve() {
++        try {
++            server = LocalServerSocket(SOCKET_NAME)
++            while (running.get()) {
++                val socket = server!!.accept()
++                executor.execute { handleClient(socket) }
++            }
++        } catch (e: Throwable) {
++            if (running.get()) LauncherLog.log("Achievement socket stopped", e)
++        }
++    }
++
++    private fun handleClient(socket: LocalSocket) {
++        socket.use { s ->
++            s.soTimeout = 2_000
++            val reader = BufferedReader(InputStreamReader(s.inputStream, Charsets.UTF_8))
++            val writer = PrintWriter(OutputStreamWriter(s.outputStream, Charsets.UTF_8), true)
++            val line = reader.readLine() ?: return
++            writer.print(if (handle(line)) "1\n" else "0\n")
++            writer.flush()
++        }
++    }
++
++    private fun ownsSilksong(licenses: List<*>): Boolean {
++        if (licenses.isEmpty()) return false
++        return licenses.any { license ->
++            val text = license.toString()
++            if (text.contains(APP_ID.toString())) return@any true
++            val fields = license.javaClass.declaredFields
++            fields.any { f ->
++                runCatching {
++                    f.isAccessible = true
++                    val value = f.get(license)
++                    value is Iterable<*> && value.any { it?.toString() == APP_ID.toString() || it?.toString() == "1030303" }
++                }.getOrDefault(false)
++            }
++        }
++    }
++
++    private fun createNotificationChannel() {
++        if (Build.VERSION.SDK_INT >= 26) {
++            getSystemService(NotificationManager::class.java).createNotificationChannel(
++                NotificationChannel(CHANNEL_ID, "Steam achievements", NotificationManager.IMPORTANCE_LOW),
++            )
++        }
++    }
++
++    private fun notification(): Notification {
++        return if (Build.VERSION.SDK_INT >= 26) {
++            Notification.Builder(this, CHANNEL_ID)
++                .setContentTitle("Silksong Steam achievements")
++                .setContentText("Steam achievement synchronization is active")
++                .setSmallIcon(android.R.drawable.stat_sys_upload)
++                .setOngoing(true)
++                .build()
++        } else {
++            Notification.Builder(this)
++                .setContentTitle("Silksong Steam achievements")
++                .setContentText("Steam achievement synchronization is active")
++                .setSmallIcon(android.R.drawable.stat_sys_upload)
++                .setOngoing(true)
++                .build()
++        }
++    }
++
++    override fun onDestroy() {
++        running.set(false)
++        ready.set(false)
++        runCatching { store() }
++        runCatching { server?.close() }
++        steam?.close()
++        steam = null
++        executor.shutdownNow()
++        super.onDestroy()
++    }
++}
+diff -ruN '--exclude=.github' '--exclude=BUILD_APK.md' orig_src/SilksongAndroid-1.0.3/src/SilksongLauncher.Launcher/app/src/main/kotlin/dev/silksong/launcher/LauncherActivity.kt mod_src/SilksongAndroid-1.0.3/src/SilksongLauncher.Launcher/app/src/main/kotlin/dev/silksong/launcher/LauncherActivity.kt
+--- orig_src/SilksongAndroid-1.0.3/src/SilksongLauncher.Launcher/app/src/main/kotlin/dev/silksong/launcher/LauncherActivity.kt	2026-08-29 09:35:33.000000000 +0000
++++ mod_src/SilksongAndroid-1.0.3/src/SilksongLauncher.Launcher/app/src/main/kotlin/dev/silksong/launcher/LauncherActivity.kt	2026-09-09 15:22:39.000000000 +0000
+@@ -525,6 +525,12 @@
+             // is the moment the game will read them, so it is the moment they
+             // cannot be stale.
+             settings.exportForGame(this)
++            // Keep the authenticated JavaSteam session alive in :launcher while
++            // Unity runs in the game process. Manual-file launches have no
++            // credentials and therefore never start this service.
++            if (TokenStore(this).read() != null) {
++                AchievementService.start(this)
++            }
+             // Same reason, and the more important one: this is the last moment
+             // before the engine owns the save directory. See SaveDir -- the
+             // game promotes a stranded save temp over the real save without
+diff -ruN '--exclude=.github' '--exclude=BUILD_APK.md' orig_src/SilksongAndroid-1.0.3/tools/docker/apk.Dockerfile mod_src/SilksongAndroid-1.0.3/tools/docker/apk.Dockerfile
+--- orig_src/SilksongAndroid-1.0.3/tools/docker/apk.Dockerfile	2026-08-29 09:35:33.000000000 +0000
++++ mod_src/SilksongAndroid-1.0.3/tools/docker/apk.Dockerfile	2026-09-09 16:33:13.000000000 +0000
+@@ -17,10 +17,9 @@
+ #                Pinned, not discovered: d8 rejects class files newer than it
+ #                understands, and a JDK 25 on PATH emits major version 69,
+ #                which fails the dex step with no obvious connection to the JDK.
+-#   Android SDK— platform android.jar and build-tools (d8/aapt2/zipalign/
+-#                apksigner). No NDK and no CMake: the launcher has no native
+-#                code of its own, and the game's own libraries are compiled on
+-#                the phone.
++#   Android SDK— platform android.jar, build-tools, plus NDK/CMake for the
++#                launcher's ARM64 Steam API compatibility shim. The game's
++#                own libraries are still compiled on the phone.
+ #   .NET 8 SDK — tools/bundle-surgery, which Gradle stages into the APK and
+ #                will not build without.
+ #   bsdtar     — the Android module arrives as a macOS .pkg, which is a xar
+@@ -82,7 +81,9 @@
+         "platform-tools" \
+         "platforms;android-${ANDROID_PLATFORM}" \
+         "build-tools;36.0.0" \
+-        "build-tools;35.0.0" >/dev/null; \
++        "build-tools;35.0.0" \
++        "ndk;27.2.12479018" \
++        "cmake;3.22.1" >/dev/null; \
+     chmod -R a+rX "$ANDROID_HOME"
+ 
+ # ── .NET 8 ─────────────────────────────────────────────────────────────────
