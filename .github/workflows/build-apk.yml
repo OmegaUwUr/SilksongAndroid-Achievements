@@ -19,6 +19,32 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h /
+
+          # The APK is built entirely inside our Docker image, so the large
+          # Android/.NET/Haskell/CodeQL toolchains preinstalled on the GitHub
+          # host are redundant. Removing them typically frees many gigabytes.
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /opt/hostedtoolcache/go || true
+          sudo rm -rf /opt/hostedtoolcache/Python || true
+          sudo rm -rf /opt/hostedtoolcache/Ruby || true
+
+          # Remove package-manager caches and any images left on the runner.
+          sudo apt-get clean || true
+          sudo rm -rf /var/lib/apt/lists/* || true
+          docker system prune -af || true
+
+          echo "Disk after cleanup:"
+          df -h /
+
       - name: Read version
         id: version
         shell: bash
@@ -28,9 +54,6 @@ jobs:
           [[ -n "$version" ]] || { echo "::error::VERSION is empty"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # This workflow is for test/personal builds, so it deliberately creates
-      # an ephemeral signing key. Each run gets a different key; uninstall an
-      # older APK before installing a build produced by another run.
       - name: Create temporary signing key
         shell: bash
         run: |
@@ -57,7 +80,13 @@ jobs:
           tags: silksong-apk:latest
           load: true
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min
+
+      - name: Show disk after Docker image
+        shell: bash
+        run: |
+          df -h /
+          docker system df
 
       - name: Cache Unity Android player module
         uses: actions/cache@v4
@@ -65,20 +94,15 @@ jobs:
           path: .ci-cache/unity-player
           key: unity-player-${{ hashFiles('tools/ondevice-il2cpp/fetch-unity.sh') }}
 
-      - name: Cache build intermediates
-        uses: actions/cache@v4
-        with:
-          path: .ci-cache/build
-          key: apk-build-${{ hashFiles('src/SilksongLauncher.Launcher/app/build.gradle.kts', 'src/SilksongLauncher.Launcher/app/src/main/cpp/**', 'src/SilksongLauncher.Launcher/app/src/main/kotlin/**') }}
-          restore-keys: |
-            apk-build-
-
       - name: Build signed APK
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .ci-cache/unity-player .ci-cache/nuget .ci-cache/build build
           cp "$RUNNER_TEMP/silksong-build.jks" .ci-cache/build.jks
+
+          echo "Disk before APK build:"
+          df -h /
 
           docker run --rm \
             -v "$PWD:/workspace" \
