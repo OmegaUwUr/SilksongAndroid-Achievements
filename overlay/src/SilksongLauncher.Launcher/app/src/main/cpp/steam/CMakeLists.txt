@@ -1,0 +1,5 @@
+add_library(steam_api SHARED steam_api_shim.c)
+target_compile_features(steam_api PRIVATE c_std_11)
+target_link_libraries(steam_api PRIVATE log)
+target_link_options(steam_api PRIVATE "-Wl,-z,max-page-size=16384")
+set_target_properties(steam_api PROPERTIES OUTPUT_NAME "steam_api")
