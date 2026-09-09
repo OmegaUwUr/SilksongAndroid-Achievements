@@ -1,0 +1,110 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d ' \t\r\n' < VERSION)"
+          [[ -n "$version" ]] || { echo "::error::VERSION is empty"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # This workflow is for test/personal builds, so it deliberately creates
+      # an ephemeral signing key. Each run gets a different key; uninstall an
+      # older APK before installing a build produced by another run.
+      - name: Create temporary signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -v \
+            -keystore "$RUNNER_TEMP/silksong-build.jks" \
+            -storepass android \
+            -keypass android \
+            -alias silksong \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 30 \
+            -dname "CN=SilksongAndroid CI Build, OU=CI, O=SilksongAndroid, C=US" >/dev/null
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build APK image
+        uses: docker/build-push-action@v6
+        with:
+          context: tools/docker
+          file: tools/docker/apk.Dockerfile
+          platforms: linux/amd64
+          tags: silksong-apk:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Cache Unity Android player module
+        uses: actions/cache@v4
+        with:
+          path: .ci-cache/unity-player
+          key: unity-player-${{ hashFiles('tools/ondevice-il2cpp/fetch-unity.sh') }}
+
+      - name: Cache build intermediates
+        uses: actions/cache@v4
+        with:
+          path: .ci-cache/build
+          key: apk-build-${{ hashFiles('src/SilksongLauncher.Launcher/app/build.gradle.kts', 'src/SilksongLauncher.Launcher/app/src/main/cpp/**', 'src/SilksongLauncher.Launcher/app/src/main/kotlin/**') }}
+          restore-keys: |
+            apk-build-
+
+      - name: Build signed APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-cache/unity-player .ci-cache/nuget .ci-cache/build build
+          cp "$RUNNER_TEMP/silksong-build.jks" .ci-cache/build.jks
+
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -v "$PWD/.ci-cache/unity-player:/opt/unity-player" \
+            -v "$PWD/.ci-cache/nuget:/root/.nuget/packages" \
+            -v "$PWD/.ci-cache/build:/root/.cache/silksong" \
+            -e GRADLE_DAEMON=0 \
+            -e DEBUGGABLE=1 \
+            -e KEYSTORE=/workspace/.ci-cache/build.jks \
+            -e KS_PASS=android \
+            -e KEY_PASS=android \
+            -e KEY_ALIAS=silksong \
+            silksong-apk:latest apk
+
+          rm -f .ci-cache/build.jks
+          sudo chown -R "$(id -u):$(id -g)" .ci-cache build
+
+          apk="$(find build -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          [[ -n "$apk" && -f "$apk" ]] || { echo "::error::Build completed without an APK in build/"; exit 1; }
+          echo "Built $apk"
+          ls -lh "$apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SilksongAndroid-${{ steps.version.outputs.version }}-achievements
+          path: build/*.apk
+          if-no-files-found: error
+          retention-days: 14
