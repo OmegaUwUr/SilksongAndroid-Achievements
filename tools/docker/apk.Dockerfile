@@ -63,7 +63,7 @@ RUN set -eux; \
     unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools; \
     mv /tmp/cmdline-tools/cmdline-tools "$ANDROID_HOME/cmdline-tools/bootstrap"; \
     rm -rf /tmp/cmdline-tools.zip /tmp/cmdline-tools; \
-    printf 'y\n%.0s' $(seq 1 50) | "$ANDROID_HOME/cmdline-tools/bootstrap/bin/sdkmanager" --licenses >/dev/null; \
+    (set +o pipefail; yes | "$ANDROID_HOME/cmdline-tools/bootstrap/bin/sdkmanager" --licenses >/dev/null); \
     "$ANDROID_HOME/cmdline-tools/bootstrap/bin/sdkmanager" --install "cmdline-tools;latest" >/dev/null; \
     rm -rf "$ANDROID_HOME/cmdline-tools/bootstrap"
 
@@ -76,7 +76,7 @@ ENV PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$P
 # highest installed, so 36 is what ends up dexing and signing.
 ARG ANDROID_PLATFORM=36
 RUN set -eux; \
-    printf 'y\n%.0s' $(seq 1 50) | sdkmanager --licenses >/dev/null; \
+    (set +o pipefail; yes | sdkmanager --licenses >/dev/null); \
     sdkmanager --install \
         "platform-tools" \
         "platforms;android-${ANDROID_PLATFORM}" \
