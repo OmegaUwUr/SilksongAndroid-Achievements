@@ -1,9 +1,9 @@
-// Android Steamworks achievement shim for SilksongAndroid.
+// Android Steamworks ABI shim for SilksongAndroid.
 //
-// Silksong keeps its normal Steamworks.NET achievement code. This ARM64
-// Android library takes the place of Valve's desktop steam_api library and
-// forwards the small ISteamUserStats surface to AchievementService in the
-// authenticated launcher process.
+// The public surface intentionally mirrors Valve's libsteam_api contract used
+// by Steamworks.NET/IL2CPP, while the implementation is Android-native:
+// achievement operations are forwarded to AchievementService, whose JavaSteam
+// session owns authentication and talks to Steam's CM servers.
 
 #include <android/log.h>
 #include <stdbool.h>
@@ -16,11 +16,21 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <errno.h>
+#include <pthread.h>
 
 #define LOG_TAG "SilksongSteamShim"
 #define SOCKET_NAME "silksong-achievements-v1"
 #define CONNECT_TIMEOUT_MS 1500
 #define REQUEST_TIMEOUT_MS 30000
+#define SILKSONG_APP_ID UINT64_C(1030300)
+
+// Valve callback base for ISteamUserStats is 1100.
+#define CALLBACK_USER_STATS_RECEIVED 1101
+#define CALLBACK_USER_STATS_STORED 1102
+#define CALLBACK_USER_ACHIEVEMENT_STORED 1103
+#define ERESULT_OK 1
+#define ACHIEVEMENT_NAME_MAX 128
+#define CALLBACK_QUEUE_CAPACITY 16
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
@@ -28,6 +38,100 @@
 typedef struct { uint8_t opaque[64]; } fake_stats_t;
 static fake_stats_t g_stats;
 static bool g_ready = false;
+
+// Layouts mirror Valve's callback structs on 64-bit platforms. Steamworks.NET
+// copies these bytes according to the callback ID returned by manual dispatch.
+typedef struct {
+    uint64_t game_id;
+    int32_t result;
+    int32_t _padding;
+    uint64_t steam_id_user;
+} user_stats_received_t;
+
+typedef struct {
+    uint64_t game_id;
+    int32_t result;
+    int32_t _padding;
+} user_stats_stored_t;
+
+typedef struct {
+    uint64_t game_id;
+    uint8_t group_achievement;
+    char achievement_name[ACHIEVEMENT_NAME_MAX];
+    uint32_t current_progress;
+    uint32_t max_progress;
+} user_achievement_stored_t;
+
+typedef union {
+    user_stats_received_t received;
+    user_stats_stored_t stored;
+    user_achievement_stored_t achievement;
+} callback_payload_t;
+
+typedef struct {
+    int32_t steam_user;
+    int32_t callback_id;
+    void *param;
+} callback_msg_t;
+
+typedef struct {
+    int32_t callback_id;
+    callback_payload_t payload;
+} queued_callback_t;
+
+static queued_callback_t g_callbacks[CALLBACK_QUEUE_CAPACITY];
+static unsigned g_callback_head = 0;
+static unsigned g_callback_count = 0;
+static bool g_callback_checked_out = false;
+static pthread_mutex_t g_callback_mutex = PTHREAD_MUTEX_INITIALIZER;
+static char g_last_achievement[ACHIEVEMENT_NAME_MAX];
+
+static void enqueue_callback(int32_t callback_id, const callback_payload_t *payload) {
+    pthread_mutex_lock(&g_callback_mutex);
+    if (g_callback_count == CALLBACK_QUEUE_CAPACITY) {
+        // Drop the oldest callback rather than block the game. Stats callbacks
+        // are tiny and normally consumed every frame, so reaching this is a
+        // diagnostic-worthy abnormal condition.
+        g_callback_head = (g_callback_head + 1) % CALLBACK_QUEUE_CAPACITY;
+        g_callback_count--;
+        LOGW("Steam callback queue overflow; dropped oldest callback");
+    }
+    unsigned index = (g_callback_head + g_callback_count) % CALLBACK_QUEUE_CAPACITY;
+    g_callbacks[index].callback_id = callback_id;
+    g_callbacks[index].payload = *payload;
+    g_callback_count++;
+    pthread_mutex_unlock(&g_callback_mutex);
+}
+
+static void queue_user_stats_received(void) {
+    callback_payload_t payload;
+    memset(&payload, 0, sizeof(payload));
+    payload.received.game_id = SILKSONG_APP_ID;
+    payload.received.result = ERESULT_OK;
+    // The game normally keys this callback by game ID. A real SteamID is owned
+    // by the JavaSteam process and is intentionally not duplicated here.
+    payload.received.steam_id_user = 0;
+    enqueue_callback(CALLBACK_USER_STATS_RECEIVED, &payload);
+}
+
+static void queue_user_stats_stored(void) {
+    callback_payload_t payload;
+    memset(&payload, 0, sizeof(payload));
+    payload.stored.game_id = SILKSONG_APP_ID;
+    payload.stored.result = ERESULT_OK;
+    enqueue_callback(CALLBACK_USER_STATS_STORED, &payload);
+}
+
+static void queue_achievement_stored(const char *name) {
+    if (!name || !*name) return;
+    callback_payload_t payload;
+    memset(&payload, 0, sizeof(payload));
+    payload.achievement.game_id = SILKSONG_APP_ID;
+    payload.achievement.group_achievement = 0;
+    strncpy(payload.achievement.achievement_name, name,
+            sizeof(payload.achievement.achievement_name) - 1);
+    enqueue_callback(CALLBACK_USER_ACHIEVEMENT_STORED, &payload);
+}
 
 static void set_socket_timeout(int fd, int option, int timeout_ms) {
     struct timeval tv;
@@ -88,13 +192,9 @@ bool SteamAPI_Init(void) {
 
 bool SteamAPI_InitSafe(void) { return SteamAPI_Init(); }
 void SteamAPI_Shutdown(void) { g_ready = false; LOGI("SteamAPI_Shutdown"); }
-void SteamAPI_RunCallbacks(void) {}
 bool SteamAPI_IsSteamRunning(void) { return g_ready; }
+void SteamAPI_ReleaseCurrentThreadMemory(void) {}
 
-// Steamworks.NET commonly imports these bootstrap helpers even when only
-// ISteamUserStats is used. There is no desktop Steam client pipe on Android;
-// stable non-zero pseudo handles are enough because all real work is forwarded
-// over our private socket.
 int SteamAPI_GetHSteamUser(void) { return 1; }
 int SteamAPI_GetHSteamPipe(void) { return 1; }
 int Steam_GetHSteamUserCurrent(void) { return 1; }
@@ -105,9 +205,6 @@ static bool is_user_stats_version(const char *version) {
     return version != NULL && strncmp(version, prefix, sizeof(prefix) - 1) == 0;
 }
 
-// Newer Steamworks SDKs obtain interface pointers through these generic entry
-// points instead of calling SteamAPI_SteamUserStats_vNNN directly. Returning
-// the same stable object keeps both discovery mechanisms compatible.
 void *SteamInternal_FindOrCreateUserInterface(int hSteamUser, const char *version) {
     (void)hSteamUser;
     return is_user_stats_version(version) ? &g_stats : NULL;
@@ -136,7 +233,8 @@ bool SteamAPI_ISteamUserStats_RequestCurrentStats(void *self) {
     (void)self;
     char response[8];
     bool ok = request("REQUEST\n", response, sizeof(response));
-    LOGI("RequestCurrentStats -> %s", ok ? "ok" : "failed");
+    if (ok) queue_user_stats_received();
+    LOGI("RequestCurrentStats -> %s", ok ? "ok + callback queued" : "failed");
     return ok;
 }
 
@@ -148,6 +246,10 @@ bool SteamAPI_ISteamUserStats_SetAchievement(void *self, const char *name) {
     if (n <= 0 || (size_t)n >= sizeof(message)) return false;
     char response[8];
     bool ok = request(message, response, sizeof(response));
+    if (ok) {
+        memset(g_last_achievement, 0, sizeof(g_last_achievement));
+        strncpy(g_last_achievement, name, sizeof(g_last_achievement) - 1);
+    }
     LOGI("SetAchievement(%s) -> %s", name, ok ? "queued" : "failed");
     return ok;
 }
@@ -156,7 +258,12 @@ bool SteamAPI_ISteamUserStats_StoreStats(void *self) {
     (void)self;
     char response[8];
     bool ok = request("STORE\n", response, sizeof(response));
-    LOGI("StoreStats -> %s", ok ? "accepted by Steam" : "failed");
+    if (ok) {
+        queue_user_stats_stored();
+        queue_achievement_stored(g_last_achievement);
+        g_last_achievement[0] = '\0';
+    }
+    LOGI("StoreStats -> %s", ok ? "accepted by Steam + callbacks queued" : "failed");
     return ok;
 }
 
@@ -173,9 +280,7 @@ bool SteamAPI_ISteamUserStats_GetAchievement(void *self, const char *name, bool 
 }
 
 bool SteamAPI_ISteamUserStats_ClearAchievement(void *self, const char *name) {
-    (void)self;
-    (void)name;
-    // The Android bridge intentionally never clears a Steam achievement.
+    (void)self; (void)name;
     return false;
 }
 
@@ -183,35 +288,79 @@ bool SteamAPI_ISteamUserStats_GetAchievementAndUnlockTime(
         void *self, const char *name, bool *achieved, uint32_t *unlock_time) {
     if (!achieved || !unlock_time) return false;
     bool ok = SteamAPI_ISteamUserStats_GetAchievement(self, name, achieved);
-    *unlock_time = 0; // Timestamp is not needed by Silksong's unlock path.
+    *unlock_time = 0;
     return ok;
 }
 
 uint32_t SteamAPI_ISteamUserStats_GetNumAchievements(void *self) {
     (void)self;
-    // Silksong does not need enumeration to submit achievements. Returning 0
-    // is safer than inventing an ABI for strings owned by another process.
     return 0;
 }
 
 const char *SteamAPI_ISteamUserStats_GetAchievementName(void *self, uint32_t index) {
-    (void)self;
-    (void)index;
+    (void)self; (void)index;
     return NULL;
 }
 
 bool SteamAPI_ISteamUserStats_IndicateAchievementProgress(
         void *self, const char *name, uint32_t current, uint32_t max) {
-    (void)self;
-    (void)name;
-    (void)current;
-    (void)max;
+    (void)self; (void)name; (void)current; (void)max;
     return false;
 }
 
-// Steamworks.NET callback registration imports. The Android bridge performs
-// the network callback work in JavaSteam's CallbackManager; native callbacks
-// are deliberately inert, but the exports must exist for P/Invoke resolution.
+// Valve's current Steamworks.NET callback dispatcher uses the manual-dispatch
+// API. We provide the queue semantics it expects, with callbacks generated only
+// after the Android backend has completed the corresponding operation.
+void SteamAPI_ManualDispatch_Init(void) {
+    LOGI("SteamAPI_ManualDispatch_Init");
+}
+
+void SteamAPI_ManualDispatch_RunFrame(int hSteamPipe) {
+    (void)hSteamPipe;
+}
+
+bool SteamAPI_ManualDispatch_GetNextCallback(int hSteamPipe, callback_msg_t *message) {
+    (void)hSteamPipe;
+    if (!message) return false;
+
+    pthread_mutex_lock(&g_callback_mutex);
+    if (g_callback_count == 0 || g_callback_checked_out) {
+        pthread_mutex_unlock(&g_callback_mutex);
+        return false;
+    }
+
+    queued_callback_t *queued = &g_callbacks[g_callback_head];
+    message->steam_user = 1;
+    message->callback_id = queued->callback_id;
+    message->param = &queued->payload;
+    g_callback_checked_out = true;
+    pthread_mutex_unlock(&g_callback_mutex);
+    return true;
+}
+
+void SteamAPI_ManualDispatch_FreeLastCallback(int hSteamPipe) {
+    (void)hSteamPipe;
+    pthread_mutex_lock(&g_callback_mutex);
+    if (g_callback_checked_out && g_callback_count > 0) {
+        g_callback_head = (g_callback_head + 1) % CALLBACK_QUEUE_CAPACITY;
+        g_callback_count--;
+    }
+    g_callback_checked_out = false;
+    pthread_mutex_unlock(&g_callback_mutex);
+}
+
+bool SteamAPI_ManualDispatch_GetAPICallResult(
+        int hSteamPipe, uint64_t api_call, void *callback, int callback_size,
+        int callback_expected, bool *failed) {
+    (void)hSteamPipe; (void)api_call; (void)callback; (void)callback_size;
+    (void)callback_expected;
+    if (failed) *failed = false;
+    return false;
+}
+
+// Kept for older Steamworks.NET builds. Current versions keep callback
+// registration in managed code and consume our ManualDispatch queue instead.
+void SteamAPI_RunCallbacks(void) {}
 void SteamAPI_RegisterCallback(void *callback, int callback_id) {
     (void)callback; (void)callback_id;
 }
