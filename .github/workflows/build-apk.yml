@@ -26,9 +26,6 @@ jobs:
           echo "Disk before cleanup:"
           df -h /
 
-          # The APK is built entirely inside our Docker image, so the large
-          # Android/.NET/Haskell/CodeQL toolchains preinstalled on the GitHub
-          # host are redundant. Removing them typically frees many gigabytes.
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /opt/ghc || true
@@ -37,7 +34,6 @@ jobs:
           sudo rm -rf /opt/hostedtoolcache/Python || true
           sudo rm -rf /opt/hostedtoolcache/Ruby || true
 
-          # Remove package-manager caches and any images left on the runner.
           sudo apt-get clean || true
           sudo rm -rf /var/lib/apt/lists/* || true
           docker system prune -af || true
@@ -45,19 +41,48 @@ jobs:
           echo "Disk after cleanup:"
           df -h /
 
-      - name: Read version
+      - name: Read managed version
         id: version
         shell: bash
         run: |
           set -euo pipefail
-          version="$(tr -d ' \t\r\n' < VERSION)"
-          [[ -n "$version" ]] || { echo "::error::VERSION is empty"; exit 1; }
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          upstream="$(tr -d ' \t\r\n' < VERSION)"
+          revision="$(tr -d ' \t\r\n' < APP_REVISION)"
 
-      # If repository signing secrets have not been configured yet, keep a
-      # generated CI key in Actions cache. The fixed cache key makes the APK
-      # certificate stable across workflow runs without committing a private
-      # key to git. User-provided signing secrets always take precedence.
+          [[ "$upstream" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::VERSION must be major.minor.patch; got '$upstream'"
+            exit 1
+          }
+          [[ "$revision" =~ ^[0-9]+$ ]] || {
+            echo "::error::APP_REVISION must be an integer; got '$revision'"
+            exit 1
+          }
+          (( revision >= 0 && revision < 100 )) || {
+            echo "::error::APP_REVISION must be between 0 and 99"
+            exit 1
+          }
+
+          IFS='.' read -r major minor patch <<< "$upstream"
+          (( minor < 100 && patch < 100 )) || {
+            echo "::error::VERSION minor and patch must be below 100"
+            exit 1
+          }
+
+          base_code=$((major * 10000 + minor * 100 + patch))
+          version_code=$((base_code * 100 + revision))
+          version_name="${upstream}-achievements.${revision}"
+          short_sha="${GITHUB_SHA::7}"
+
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          echo "version=$version_name" >> "$GITHUB_OUTPUT"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+
+          echo "Managed APK version: $version_name"
+          echo "Android versionCode: $version_code"
+          echo "Source commit: $short_sha"
+
       - name: Restore fallback signing key
         uses: actions/cache@v4
         with:
@@ -88,8 +113,6 @@ jobs:
             printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/silksong-build.jks"
             chmod 600 "$RUNNER_TEMP/silksong-build.jks"
 
-            # Fail before the expensive Docker build when configured secrets
-            # are corrupt or inconsistent.
             keytool -list \
               -keystore "$RUNNER_TEMP/silksong-build.jks" \
               -storepass "$SIGNING_STORE_PASSWORD" \
@@ -174,6 +197,7 @@ jobs:
           chmod 600 .ci-cache/build.jks
 
           echo "Signing source: $APK_SIGNING_SOURCE"
+          echo "Building ${{ steps.version.outputs.version }} (versionCode ${{ steps.version.outputs.version_code }})"
           echo "Disk before APK build:"
           df -h /
 
@@ -184,6 +208,9 @@ jobs:
             -v "$PWD/.ci-cache/build:/root/.cache/silksong" \
             -e GRADLE_DAEMON=0 \
             -e DEBUGGABLE=1 \
+            -e VERSION_NAME="${{ steps.version.outputs.version }}" \
+            -e VERSION_CODE="${{ steps.version.outputs.version_code }}" \
+            -e APK_NAME="SilksongAndroid-${{ steps.version.outputs.version }}.apk" \
             -e KEYSTORE=/workspace/.ci-cache/build.jks \
             -e KS_PASS="$APK_KS_PASS" \
             -e KEY_PASS="$APK_KEY_PASS" \
@@ -201,7 +228,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SilksongAndroid-${{ steps.version.outputs.version }}-achievements
+          name: SilksongAndroid-${{ steps.version.outputs.version }}-${{ steps.version.outputs.short_sha }}
           path: build/*.apk
           if-no-files-found: error
           retention-days: 14
