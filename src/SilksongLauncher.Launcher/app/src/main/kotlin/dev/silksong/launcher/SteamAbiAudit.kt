@@ -34,6 +34,7 @@ object SteamAbiAudit {
     private val supported = setOf(
         "SteamAPI_Init",
         "SteamAPI_InitSafe",
+        "SteamInternal_SteamAPI_Init",
         "SteamAPI_Shutdown",
         "SteamAPI_RunCallbacks",
         "SteamAPI_IsSteamRunning",
