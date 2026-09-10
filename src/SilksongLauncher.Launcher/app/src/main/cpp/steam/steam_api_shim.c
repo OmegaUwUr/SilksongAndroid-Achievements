@@ -23,8 +23,8 @@
 #define CONNECT_TIMEOUT_MS 1500
 #define REQUEST_TIMEOUT_MS 30000
 #define SILKSONG_APP_ID UINT64_C(1030300)
+#define STEAM_ERROR_MESSAGE_MAX 1024
 
-// Valve callback base for ISteamUserStats is 1100.
 #define CALLBACK_USER_STATS_RECEIVED 1101
 #define CALLBACK_USER_STATS_STORED 1102
 #define CALLBACK_USER_ACHIEVEMENT_STORED 1103
@@ -39,8 +39,6 @@ typedef struct { uint8_t opaque[64]; } fake_stats_t;
 static fake_stats_t g_stats;
 static bool g_ready = false;
 
-// Layouts mirror Valve's callback structs on 64-bit platforms. Steamworks.NET
-// copies these bytes according to the callback ID returned by manual dispatch.
 typedef struct {
     uint64_t game_id;
     int32_t result;
@@ -89,9 +87,6 @@ static char g_last_achievement[ACHIEVEMENT_NAME_MAX];
 static void enqueue_callback(int32_t callback_id, const callback_payload_t *payload) {
     pthread_mutex_lock(&g_callback_mutex);
     if (g_callback_count == CALLBACK_QUEUE_CAPACITY) {
-        // Drop the oldest callback rather than block the game. Stats callbacks
-        // are tiny and normally consumed every frame, so reaching this is a
-        // diagnostic-worthy abnormal condition.
         g_callback_head = (g_callback_head + 1) % CALLBACK_QUEUE_CAPACITY;
         g_callback_count--;
         LOGW("Steam callback queue overflow; dropped oldest callback");
@@ -108,8 +103,6 @@ static void queue_user_stats_received(void) {
     memset(&payload, 0, sizeof(payload));
     payload.received.game_id = SILKSONG_APP_ID;
     payload.received.result = ERESULT_OK;
-    // The game normally keys this callback by game ID. A real SteamID is owned
-    // by the JavaSteam process and is intentionally not duplicated here.
     payload.received.steam_id_user = 0;
     enqueue_callback(CALLBACK_USER_STATS_RECEIVED, &payload);
 }
@@ -188,6 +181,24 @@ bool SteamAPI_Init(void) {
     }
     LOGI("SteamAPI_Init -> %s", g_ready ? "ready" : "not ready");
     return g_ready;
+}
+
+// Steamworks SDK 1.62+ and current Steamworks.NET initialize through this
+// entry point. ESteamAPIInitResult uses 0 for success and 1 for generic failure.
+int SteamInternal_SteamAPI_Init(const char *interface_versions, char *out_error_message) {
+    (void)interface_versions;
+    bool ok = SteamAPI_Init();
+    if (out_error_message) {
+        if (ok) {
+            out_error_message[0] = '\0';
+        } else {
+            const char *message = "Silksong Android Steam bridge is not ready";
+            strncpy(out_error_message, message, STEAM_ERROR_MESSAGE_MAX - 1);
+            out_error_message[STEAM_ERROR_MESSAGE_MAX - 1] = '\0';
+        }
+    }
+    LOGI("SteamInternal_SteamAPI_Init -> %s", ok ? "OK" : "FailedGeneric");
+    return ok ? 0 : 1;
 }
 
 bool SteamAPI_InitSafe(void) { return SteamAPI_Init(); }
@@ -308,9 +319,6 @@ bool SteamAPI_ISteamUserStats_IndicateAchievementProgress(
     return false;
 }
 
-// Valve's current Steamworks.NET callback dispatcher uses the manual-dispatch
-// API. We provide the queue semantics it expects, with callbacks generated only
-// after the Android backend has completed the corresponding operation.
 void SteamAPI_ManualDispatch_Init(void) {
     LOGI("SteamAPI_ManualDispatch_Init");
 }
@@ -358,8 +366,6 @@ bool SteamAPI_ManualDispatch_GetAPICallResult(
     return false;
 }
 
-// Kept for older Steamworks.NET builds. Current versions keep callback
-// registration in managed code and consume our ManualDispatch queue instead.
 void SteamAPI_RunCallbacks(void) {}
 void SteamAPI_RegisterCallback(void *callback, int callback_id) {
     (void)callback; (void)callback_id;
