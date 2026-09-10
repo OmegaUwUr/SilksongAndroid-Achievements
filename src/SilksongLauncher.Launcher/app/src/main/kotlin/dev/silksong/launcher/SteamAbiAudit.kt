@@ -37,12 +37,18 @@ object SteamAbiAudit {
         "SteamAPI_Shutdown",
         "SteamAPI_RunCallbacks",
         "SteamAPI_IsSteamRunning",
+        "SteamAPI_ReleaseCurrentThreadMemory",
         "SteamAPI_GetHSteamUser",
         "SteamAPI_GetHSteamPipe",
         "Steam_GetHSteamUserCurrent",
         "SteamAPI_RestartAppIfNecessary",
         "SteamInternal_FindOrCreateUserInterface",
         "SteamInternal_CreateInterface",
+        "SteamAPI_ManualDispatch_Init",
+        "SteamAPI_ManualDispatch_RunFrame",
+        "SteamAPI_ManualDispatch_GetNextCallback",
+        "SteamAPI_ManualDispatch_FreeLastCallback",
+        "SteamAPI_ManualDispatch_GetAPICallResult",
         "SteamAPI_SteamUserStats_v001",
         "SteamAPI_SteamUserStats_v002",
         "SteamAPI_SteamUserStats_v003",
@@ -79,8 +85,6 @@ object SteamAbiAudit {
         cppDir.walkTopDown()
             .filter { it.isFile && (it.extension == "cpp" || it.extension == "c" || it.extension == "h") }
             .forEach { file ->
-                // IL2CPP-generated files are ordinary text. Read line by line so
-                // the audit does not retain hundreds of MB of generated source.
                 runCatching {
                     file.bufferedReader().useLines { lines ->
                         lines.forEach { line ->
@@ -97,6 +101,18 @@ object SteamAbiAudit {
 
     fun requireCompatible(cppDir: File) {
         val result = inspect(cppDir)
+        val reportDir = cppDir.parentFile ?: cppDir
+        runCatching {
+            File(reportDir, "steam-abi-required.txt")
+                .writeText(result.required.joinToString("\n", postfix = if (result.required.isEmpty()) "" else "\n"))
+            File(reportDir, "steam-abi-interfaces.txt")
+                .writeText(result.interfaceVersions.joinToString("\n", postfix = if (result.interfaceVersions.isEmpty()) "" else "\n"))
+            File(reportDir, "steam-abi-missing.txt")
+                .writeText(result.missing.joinToString("\n", postfix = if (result.missing.isEmpty()) "" else "\n"))
+        }.onFailure {
+            LauncherLog.log("Steam ABI audit: could not write diagnostic files: ${it.message}")
+        }
+
         if (result.required.isEmpty()) {
             LauncherLog.log("Steam ABI audit: no Steam entry-point strings found in translated C++")
             return
