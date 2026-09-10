@@ -54,7 +54,17 @@ jobs:
           [[ -n "$version" ]] || { echo "::error::VERSION is empty"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Restore persistent signing key
+      # If repository signing secrets have not been configured yet, keep a
+      # generated CI key in Actions cache. The fixed cache key makes the APK
+      # certificate stable across workflow runs without committing a private
+      # key to git. User-provided signing secrets always take precedence.
+      - name: Restore fallback signing key
+        uses: actions/cache@v4
+        with:
+          path: .ci-signing
+          key: silksong-apk-fallback-signing-v1
+
+      - name: Prepare APK signing key
         shell: bash
         env:
           SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
@@ -64,34 +74,70 @@ jobs:
         run: |
           set -euo pipefail
 
-          [[ -n "$SIGNING_KEYSTORE_BASE64" ]] || {
-            echo "::error::Missing GitHub Actions secret SIGNING_KEYSTORE_BASE64"
-            exit 1
-          }
-          [[ -n "$SIGNING_STORE_PASSWORD" ]] || {
-            echo "::error::Missing GitHub Actions secret SIGNING_STORE_PASSWORD"
-            exit 1
-          }
-          [[ -n "$SIGNING_KEY_ALIAS" ]] || {
-            echo "::error::Missing GitHub Actions secret SIGNING_KEY_ALIAS"
-            exit 1
-          }
-          [[ -n "$SIGNING_KEY_PASSWORD" ]] || {
-            echo "::error::Missing GitHub Actions secret SIGNING_KEY_PASSWORD"
-            exit 1
-          }
+          have_keystore=0
+          have_store_pass=0
+          have_alias=0
+          have_key_pass=0
+          [[ -n "$SIGNING_KEYSTORE_BASE64" ]] && have_keystore=1
+          [[ -n "$SIGNING_STORE_PASSWORD" ]] && have_store_pass=1
+          [[ -n "$SIGNING_KEY_ALIAS" ]] && have_alias=1
+          [[ -n "$SIGNING_KEY_PASSWORD" ]] && have_key_pass=1
+          configured=$((have_keystore + have_store_pass + have_alias + have_key_pass))
 
-          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/silksong-build.jks"
-          chmod 600 "$RUNNER_TEMP/silksong-build.jks"
+          if [[ "$configured" -eq 4 ]]; then
+            printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/silksong-build.jks"
+            chmod 600 "$RUNNER_TEMP/silksong-build.jks"
 
-          # Fail before doing an expensive Docker build if the secret is corrupt,
-          # the password is wrong, or the configured alias is missing.
-          keytool -list \
-            -keystore "$RUNNER_TEMP/silksong-build.jks" \
-            -storepass "$SIGNING_STORE_PASSWORD" \
-            -alias "$SIGNING_KEY_ALIAS" >/dev/null
+            # Fail before the expensive Docker build when configured secrets
+            # are corrupt or inconsistent.
+            keytool -list \
+              -keystore "$RUNNER_TEMP/silksong-build.jks" \
+              -storepass "$SIGNING_STORE_PASSWORD" \
+              -alias "$SIGNING_KEY_ALIAS" >/dev/null
 
-          echo "Persistent APK signing key restored and validated."
+            echo "APK_KS_PASS=$SIGNING_STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "APK_KEY_PASS=$SIGNING_KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "APK_KEY_ALIAS=$SIGNING_KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "APK_SIGNING_SOURCE=repository secrets" >> "$GITHUB_ENV"
+            echo "Persistent APK signing key restored and validated."
+          elif [[ "$configured" -ne 0 ]]; then
+            echo "::error::Signing secrets are only partially configured. Set all four SIGNING_* secrets, or remove the partial set to use the cached CI key."
+            exit 1
+          else
+            mkdir -p .ci-signing
+            fallback=.ci-signing/fallback.jks
+            fallback_store_pass=android
+            fallback_key_pass=android
+            fallback_alias=silksong-ci
+
+            if [[ ! -s "$fallback" ]]; then
+              echo "No signing secrets configured; generating a cached CI signing certificate."
+              keytool -genkeypair -v \
+                -keystore "$fallback" \
+                -storepass "$fallback_store_pass" \
+                -keypass "$fallback_key_pass" \
+                -alias "$fallback_alias" \
+                -keyalg RSA \
+                -keysize 2048 \
+                -validity 10000 \
+                -dname "CN=SilksongAndroid CI, OU=Build, O=SilksongAndroid, L=CI, ST=CI, C=CA" >/dev/null
+            else
+              echo "Using cached CI signing certificate."
+            fi
+
+            keytool -list \
+              -keystore "$fallback" \
+              -storepass "$fallback_store_pass" \
+              -alias "$fallback_alias" >/dev/null
+            cp "$fallback" "$RUNNER_TEMP/silksong-build.jks"
+            chmod 600 "$RUNNER_TEMP/silksong-build.jks"
+
+            echo "APK_KS_PASS=$fallback_store_pass" >> "$GITHUB_ENV"
+            echo "APK_KEY_PASS=$fallback_key_pass" >> "$GITHUB_ENV"
+            echo "APK_KEY_ALIAS=$fallback_alias" >> "$GITHUB_ENV"
+            echo "APK_SIGNING_SOURCE=cached CI key" >> "$GITHUB_ENV"
+            echo "::warning::Repository signing secrets are not configured. This build uses the stable Actions-cached CI certificate."
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -121,16 +167,13 @@ jobs:
 
       - name: Build signed APK
         shell: bash
-        env:
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           mkdir -p .ci-cache/unity-player .ci-cache/nuget .ci-cache/build build
           cp "$RUNNER_TEMP/silksong-build.jks" .ci-cache/build.jks
           chmod 600 .ci-cache/build.jks
 
+          echo "Signing source: $APK_SIGNING_SOURCE"
           echo "Disk before APK build:"
           df -h /
 
@@ -142,9 +185,9 @@ jobs:
             -e GRADLE_DAEMON=0 \
             -e DEBUGGABLE=1 \
             -e KEYSTORE=/workspace/.ci-cache/build.jks \
-            -e KS_PASS="$SIGNING_STORE_PASSWORD" \
-            -e KEY_PASS="$SIGNING_KEY_PASSWORD" \
-            -e KEY_ALIAS="$SIGNING_KEY_ALIAS" \
+            -e KS_PASS="$APK_KS_PASS" \
+            -e KEY_PASS="$APK_KEY_PASS" \
+            -e KEY_ALIAS="$APK_KEY_ALIAS" \
             silksong-apk:latest apk
 
           rm -f .ci-cache/build.jks
