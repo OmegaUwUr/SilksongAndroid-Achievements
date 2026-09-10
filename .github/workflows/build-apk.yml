@@ -54,19 +54,44 @@ jobs:
           [[ -n "$version" ]] || { echo "::error::VERSION is empty"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Create temporary signing key
+      - name: Restore persistent signing key
         shell: bash
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          keytool -genkeypair -v \
+
+          [[ -n "$SIGNING_KEYSTORE_BASE64" ]] || {
+            echo "::error::Missing GitHub Actions secret SIGNING_KEYSTORE_BASE64"
+            exit 1
+          }
+          [[ -n "$SIGNING_STORE_PASSWORD" ]] || {
+            echo "::error::Missing GitHub Actions secret SIGNING_STORE_PASSWORD"
+            exit 1
+          }
+          [[ -n "$SIGNING_KEY_ALIAS" ]] || {
+            echo "::error::Missing GitHub Actions secret SIGNING_KEY_ALIAS"
+            exit 1
+          }
+          [[ -n "$SIGNING_KEY_PASSWORD" ]] || {
+            echo "::error::Missing GitHub Actions secret SIGNING_KEY_PASSWORD"
+            exit 1
+          }
+
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/silksong-build.jks"
+          chmod 600 "$RUNNER_TEMP/silksong-build.jks"
+
+          # Fail before doing an expensive Docker build if the secret is corrupt,
+          # the password is wrong, or the configured alias is missing.
+          keytool -list \
             -keystore "$RUNNER_TEMP/silksong-build.jks" \
-            -storepass android \
-            -keypass android \
-            -alias silksong \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 30 \
-            -dname "CN=SilksongAndroid CI Build, OU=CI, O=SilksongAndroid, C=US" >/dev/null
+            -storepass "$SIGNING_STORE_PASSWORD" \
+            -alias "$SIGNING_KEY_ALIAS" >/dev/null
+
+          echo "Persistent APK signing key restored and validated."
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -96,10 +121,15 @@ jobs:
 
       - name: Build signed APK
         shell: bash
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           mkdir -p .ci-cache/unity-player .ci-cache/nuget .ci-cache/build build
           cp "$RUNNER_TEMP/silksong-build.jks" .ci-cache/build.jks
+          chmod 600 .ci-cache/build.jks
 
           echo "Disk before APK build:"
           df -h /
@@ -112,9 +142,9 @@ jobs:
             -e GRADLE_DAEMON=0 \
             -e DEBUGGABLE=1 \
             -e KEYSTORE=/workspace/.ci-cache/build.jks \
-            -e KS_PASS=android \
-            -e KEY_PASS=android \
-            -e KEY_ALIAS=silksong \
+            -e KS_PASS="$SIGNING_STORE_PASSWORD" \
+            -e KEY_PASS="$SIGNING_KEY_PASSWORD" \
+            -e KEY_ALIAS="$SIGNING_KEY_ALIAS" \
             silksong-apk:latest apk
 
           rm -f .ci-cache/build.jks
