@@ -2,6 +2,17 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.2
+
+Fixes achievement synchronization service startup in the final packaged APK.
+
+Changes in this revision:
+
+- Declares `dev.silksong.launcher.AchievementService` in the hand-generated final APK manifest used by the Docker/CI packaging path.
+- Adds `android.permission.FOREGROUND_SERVICE` to that generated manifest so the service can promote itself with `startForeground()` on supported Android versions.
+- Adds build-time checks that fail CI if the achievement service declaration or foreground-service permission is lost again.
+- Explains the previous runtime symptom where `startForegroundService()` returned a null component and no `AchievementService.onCreate()` / READY logs followed.
+
 ## 1.0.3-achievements.1
 
 Initial managed revision of the Steam-achievement integration for upstream SilksongAndroid 1.0.3.
