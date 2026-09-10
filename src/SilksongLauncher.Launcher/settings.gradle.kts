@@ -11,6 +11,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // GameNative's JavaSteam fork publishes achievement-write support here.
+        maven { url = uri("https://central.sonatype.com/repository/maven-snapshots/") }
     }
 }
 
