@@ -83,28 +83,46 @@ object SaveHistory {
         }
         require(bytes.isNotEmpty()) { "Steam returned an empty historical save" }
 
-        // Install through a synced temp file so a process kill can never leave a
-        // partially-written active save. The old full local set is already in
-        // safetyBackup before this point.
         val temp = File(saveDir, ".${version.activeName}.history.part")
+        val previous = File(saveDir, ".${version.activeName}.prehistory")
+        temp.delete()
+        previous.delete()
+
         FileOutputStream(temp).use { out ->
             out.write(bytes)
             out.fd.sync()
         }
-        if (active.exists() && !active.delete()) {
-            temp.delete()
-            throw IllegalStateException("Could not replace current ${version.activeName}")
-        }
-        if (!temp.renameTo(active)) {
-            temp.delete()
-            throw IllegalStateException("Could not install historical ${version.activeName}")
-        }
 
-        // Deliberately mark this as a NEW local change rather than preserving
-        // the historical cloud timestamp. If the user later chooses the normal
-        // Play path, analyzePull sees local > cloud and asks what to keep instead
-        // of silently replacing the restored version with the current root save.
-        active.setLastModified(System.currentTimeMillis())
+        var movedCurrentAside = false
+        try {
+            if (active.exists()) {
+                if (!active.renameTo(previous)) {
+                    throw IllegalStateException("Could not stage current ${version.activeName} for replacement")
+                }
+                movedCurrentAside = true
+            }
+
+            if (!temp.renameTo(active)) {
+                throw IllegalStateException("Could not install historical ${version.activeName}")
+            }
+
+            // The new active file is fully in place. The hidden rollback copy is
+            // redundant with the timestamped full safety backup and can go away.
+            previous.delete()
+
+            // Treat the restored content as a new local choice. Normal Play will
+            // therefore surface a cloud conflict instead of silently pulling the
+            // newer root save over the restored version.
+            active.setLastModified(System.currentTimeMillis())
+        } catch (t: Throwable) {
+            temp.delete()
+            if (movedCurrentAside && !active.exists() && previous.exists()) {
+                previous.renameTo(active)
+            }
+            throw t
+        } finally {
+            if (active.exists()) previous.delete()
+        }
 
         LauncherLog.log(
             "Save history: restored slot ${version.slot} from ${version.restoreFolder}/${version.sourceName}; " +
