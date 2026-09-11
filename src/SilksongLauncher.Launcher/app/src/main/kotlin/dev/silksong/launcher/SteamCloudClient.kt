@@ -5,24 +5,12 @@
 //   downloadFile(appId, filename)    → byte[] (HTTP fetch + ZIP decompress
 //                                      if Steam served compressed)
 //
-// Mirrors the .NET launcher's SteamKit2CloudSaveStore architecture but
-// flat — no manifest cache or write queue (Phase 1c/1d adds the upload
-// side). The download protocol is straight from the C# implementation:
-//
-//   1. Cloud.ClientFileDownload returns { url_host, url_path, use_https,
-//      request_headers, file_size, raw_file_size }.
-//   2. HTTP GET url_host + url_path with the headers attached.
-//   3. If raw_file_size > 0 AND raw_file_size != file_size AND the
-//      payload begins with the PK\x03\x04 ZIP magic, decompress as a
-//      single-entry ZIP archive.
-//
 // HTTP is via OkHttp 5 (already a transitive dep through ktor/JavaSteam).
 
 package dev.silksong.launcher
 
 import `in`.dragonbra.javasteam.protobufs.steamclient.SteammessagesCloudSteamclient.CCloud_ClientBeginFileUpload_Request
 import `in`.dragonbra.javasteam.protobufs.steamclient.SteammessagesCloudSteamclient.CCloud_ClientCommitFileUpload_Request
-import `in`.dragonbra.javasteam.protobufs.steamclient.SteammessagesCloudSteamclient.CCloud_ClientDeleteFile_Request
 import `in`.dragonbra.javasteam.protobufs.steamclient.SteammessagesCloudSteamclient.CCloud_ClientFileDownload_Request
 import `in`.dragonbra.javasteam.protobufs.steamclient.SteammessagesCloudSteamclient.CCloud_EnumerateUserFiles_Request
 import `in`.dragonbra.javasteam.rpc.service.Cloud
@@ -56,7 +44,6 @@ class SteamCloudClient(session: SteamSession) {
         val timestampUnix: Long,
     )
 
-    /** Enumerates every cloud file the user has for [appId]. Paginated. */
     fun enumerateFiles(appId: Int): List<CloudFile> {
         val all = mutableListOf<CloudFile>()
         var startIndex = 0
@@ -88,11 +75,6 @@ class SteamCloudClient(session: SteamSession) {
         return all
     }
 
-    /**
-     * Downloads a single cloud file. Returns the raw bytes after any
-     * ZIP decompression. Throws on Steam-side errors, HTTP errors, or
-     * timeouts.
-     */
     fun downloadFile(appId: Int, filename: String): ByteArray {
         val req = CCloud_ClientFileDownload_Request.newBuilder()
             .setAppid(appId)
@@ -118,11 +100,6 @@ class SteamCloudClient(session: SteamSession) {
             if (!httpResp.isSuccessful)
                 throw RuntimeException("HTTP ${httpResp.code} fetching $filename")
             val raw = httpResp.body?.bytes() ?: ByteArray(0)
-
-            // Steam may serve the file compressed. The .NET launcher
-            // detects this via the ZIP magic header (PK\x03\x04) instead
-            // of trusting body.encrypted etc., which has been seen to
-            // misreport. We do the same.
             val rawFileSize = body.rawFileSize
             val fileSize = body.fileSize
             val isZipped = rawFileSize > 0 &&
@@ -140,7 +117,6 @@ class SteamCloudClient(session: SteamSession) {
     }
 
     private fun decompressZip(zipBytes: ByteArray): ByteArray {
-        // Steam wraps the file in a single-entry ZIP archive named "data".
         ZipInputStream(ByteArrayInputStream(zipBytes)).use { zip ->
             val entry = zip.nextEntry
                 ?: throw RuntimeException("ZIP archive has no entries")
@@ -155,32 +131,6 @@ class SteamCloudClient(session: SteamSession) {
         }
     }
 
-    /**
-     * Uploads [rawContent] to the cloud as [cloudPath] for [appId],
-     * stamped with [timestampUnix] (server uses this for conflict
-     * resolution + WhichOneIsNewer comparisons across clients).
-     *
-     * Mirrors SteamKit2CloudSaveStore.UploadFileAsync in the .NET
-     * launcher:
-     *
-     *   1. SHA1 the RAW (pre-compression) bytes — this is the identity
-     *      Steam uses to dedupe and the commit step echoes it back to
-     *      confirm we shipped what we said we'd ship.
-     *   2. ZIP-compress if it actually saves bytes.
-     *   3. Cloud.ClientBeginFileUpload → server returns one or more
-     *      ClientCloudFileUploadBlockDetails entries describing the
-     *      HTTP transfers we need to perform.
-     *   4. For each block, HTTP PUT (or POST when http_method == 2)
-     *      to url_host + url_path with the request_headers attached
-     *      and either the slice (block_offset .. +block_length) of
-     *      the upload bytes or explicit_body_data if the server
-     *      supplied it.
-     *   5. Cloud.ClientCommitFileUpload with transfer_succeeded =
-     *      true/false. The commit MUST run even on failure so Steam
-     *      releases its server-side reservation; otherwise subsequent
-     *      uploads of the same file return TooManyPending until the
-     *      lease expires.
-     */
     fun uploadFile(
         appId: Int,
         cloudPath: String,
@@ -208,11 +158,6 @@ class SteamCloudClient(session: SteamSession) {
         val begin = beginResp.body
             ?: throw RuntimeException("clientBeginFileUpload response missing body")
 
-        // The commit step MUST run no matter how the block transfers
-        // go — Steam holds a server-side lease on the filename until
-        // we commit (success OR failure) and rejects re-uploads of
-        // the same file with TooManyPending until the lease times out
-        // (~minutes). Track success and report it in the commit body.
         var allBlocksOk = false
         val octetStream = "application/octet-stream".toMediaType()
         try {
@@ -233,8 +178,6 @@ class SteamCloudClient(session: SteamSession) {
                     reqBuilder.addHeader(h.name, h.value)
                 }
 
-                // http_method enum: 1 = PUT (default), 2 = POST.
-                // Matches the .NET launcher's mapping.
                 val rb = body.toRequestBody(octetStream)
                 if (block.httpMethod == 2) reqBuilder.post(rb) else reqBuilder.put(rb)
 
@@ -264,22 +207,15 @@ class SteamCloudClient(session: SteamSession) {
     }
 
     /**
-     * Deletes [cloudPath] from the cloud. `isExplicitDelete` true
-     * tells Steam this was a user-initiated delete (vs an implicit
-     * cleanup) — desktop Steam Cloud uses the flag to skip the
-     * recycle-bin / undo history. We pass true because every call
-     * site here corresponds to "the local file is gone, the cloud
-     * copy is orphaned, drop it".
+     * Historical save preservation policy.
+     *
+     * Earlier builds deleted remote files that were absent locally. That is not
+     * safe for Silksong: version-stamped userN_<version>.dat files and rotating
+     * .bak files are useful restore points even after the local game has pruned
+     * them. Keep the API surface so existing CloudSync code does not need a
+     * risky large rewrite, but deliberately make deletion a no-op.
      */
     fun deleteFile(appId: Int, cloudPath: String) {
-        val req = CCloud_ClientDeleteFile_Request.newBuilder()
-            .setAppid(appId)
-            .setFilename(cloudPath)
-            .setIsExplicitDelete(true)
-            .build()
-        val resp = cloud.clientDeleteFile(req).toFuture().get(30, TimeUnit.SECONDS)
-            ?: throw RuntimeException("clientDeleteFile returned no response")
-        if (resp.result != `in`.dragonbra.javasteam.enums.EResult.OK)
-            throw RuntimeException("clientDeleteFile returned ${resp.result}")
+        LauncherLog.log("Cloud preserve: keeping remote-only save file instead of deleting ${cloudPath.substringAfterLast('/')}")
     }
 }
