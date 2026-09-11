@@ -32,8 +32,8 @@ class ExitButton @JvmOverloads constructor(
     private fun requestExit() {
         val activity = context as? Activity ?: return
 
-        val pull = activity.findViewById<View?>(R.id.spin_pull)
-        val push = activity.findViewById<View?>(R.id.spin_push)
+        val pull = activity.findViewById<View>(R.id.spin_pull)
+        val push = activity.findViewById<View>(R.id.spin_push)
         val cloudBusy = pull?.visibility == View.VISIBLE || push?.visibility == View.VISIBLE
         if (cloudBusy) {
             AlertDialog.Builder(activity)
