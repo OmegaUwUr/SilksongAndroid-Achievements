@@ -12,7 +12,6 @@
         android:padding="18dp"
         android:visibility="gone">
 
-        <!-- Brand / account row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -74,14 +73,12 @@
                 android:paddingBottom="10dp" />
         </LinearLayout>
 
-        <!-- Main dashboard -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
             android:orientation="horizontal">
 
-            <!-- Left: primary actions -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -209,6 +206,22 @@
                     </FrameLayout>
                 </LinearLayout>
 
+                <dev.silksong.launcher.SaveHistoryButton
+                    android:id="@+id/btn_save_history"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="0dp"
+                    android:background="@drawable/launcher_card"
+                    android:foreground="@drawable/focus_on_dark"
+                    android:text="↶  Steam Save History"
+                    android:textColor="@color/status_blue"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="false"
+                    android:gravity="center_vertical|start"
+                    android:padding="16dp"
+                    android:layout_marginBottom="8dp" />
+
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -266,7 +279,6 @@
                     android:paddingBottom="13dp" />
             </LinearLayout>
 
-            <!-- Right: service status / live feed -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -327,7 +339,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Pull before play and push after play from the controls on the left."
+                        android:text="Current saves sync normally. Steam Save History opens Restore_Points backups separately."
                         android:textColor="@color/text_muted"
                         android:textSize="11sp"
                         android:layout_marginTop="5dp" />
