@@ -18,9 +18,6 @@ import java.util.Locale
  * so those real cloud files are the history source here.
  */
 object SaveHistory {
-    private const val PREFS = "save_history"
-    private const val KEY_SKIP_PULL_ONCE = "skip_prelaunch_pull_once"
-
     private val userFile = Regex("^(user(\\d+)\\.dat)(?:\\.bak\\d+)?$", RegexOption.IGNORE_CASE)
     private val restoreFolder = Regex("(?:^|/)(Restore_Points[^/]*)/", RegexOption.IGNORE_CASE)
 
@@ -60,12 +57,13 @@ object SaveHistory {
                     )
                 }
                 .distinctBy { Triple(it.cloudPath, it.timestampUnix, it.size) }
-                .sortedWith(compareByDescending<Version> { it.timestampUnix }.thenBy { it.slot })
+                .sortedWith(compareBy<Version> { it.slot }.thenByDescending { it.timestampUnix })
         }
     }
 
     data class RestoreResult(
         val version: Version,
+        /** Directory containing a full pre-restore copy of the local save set. */
         val safetyBackup: File?,
         val restoredFile: File,
     )
@@ -77,7 +75,7 @@ object SaveHistory {
     ): RestoreResult = withContext(Dispatchers.IO) {
         val saveDir = SaveDir.of(context).apply { mkdirs() }
         val active = File(saveDir, version.activeName)
-        val safety = backupCurrent(context, active)
+        val safety = backupCurrentSaveSet(context, saveDir)
 
         val bytes = SteamSession().use { session ->
             session.logOn(credentials)
@@ -85,6 +83,9 @@ object SaveHistory {
         }
         require(bytes.isNotEmpty()) { "Steam returned an empty historical save" }
 
+        // Install through a synced temp file so a process kill can never leave a
+        // partially-written active save. The old full local set is already in
+        // safetyBackup before this point.
         val temp = File(saveDir, ".${version.activeName}.history.part")
         FileOutputStream(temp).use { out ->
             out.write(bytes)
@@ -98,42 +99,51 @@ object SaveHistory {
             temp.delete()
             throw IllegalStateException("Could not install historical ${version.activeName}")
         }
-        active.setLastModified(version.timestampUnix * 1000L)
 
-        markSkipPullOnce(context)
+        // Deliberately mark this as a NEW local change rather than preserving
+        // the historical cloud timestamp. If the user later chooses the normal
+        // Play path, analyzePull sees local > cloud and asks what to keep instead
+        // of silently replacing the restored version with the current root save.
+        active.setLastModified(System.currentTimeMillis())
+
         LauncherLog.log(
             "Save history: restored slot ${version.slot} from ${version.restoreFolder}/${version.sourceName}; " +
-                "safety backup=${safety?.absolutePath ?: "none"}"
+                "originalSteamTimestamp=${version.timestampUnix}; safety backup=${safety?.absolutePath ?: "none"}"
         )
         RestoreResult(version, safety, active)
     }
 
-    private fun backupCurrent(context: Context, active: File): File? {
-        if (!active.isFile) return null
-        val root = File(context.getExternalFilesDir(null), "save-history-backups")
+    /**
+     * Before any historical file is installed, copy every current plain save
+     * file. This is intentionally wider than just userN.dat because shared.dat,
+     * restoreData files, and game-version sidecars can be part of the same state.
+     */
+    private fun backupCurrentSaveSet(context: Context, saveDir: File): File? {
+        val current = saveDir.listFiles()
+            ?.filter { it.isFile && !it.name.startsWith(".") }
+            ?.sortedBy { it.name }
+            .orEmpty()
+        if (current.isEmpty()) return null
+
+        val base = context.getExternalFilesDir(null) ?: context.filesDir
+        val root = File(base, "save-history-backups")
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
-        val dir = File(root, stamp).apply { mkdirs() }
-        val out = File(dir, active.name)
-        active.copyTo(out, overwrite = true)
-        out.setLastModified(active.lastModified())
-        return out
-    }
+        var dir = File(root, stamp)
+        var suffix = 1
+        while (dir.exists()) {
+            dir = File(root, "$stamp-$suffix")
+            suffix++
+        }
+        if (!dir.mkdirs() && !dir.isDirectory) {
+            throw IllegalStateException("Could not create save-history backup directory")
+        }
 
-    private fun markSkipPullOnce(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY_SKIP_PULL_ONCE, true).apply()
-    }
-
-    fun hasPendingRestore(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_SKIP_PULL_ONCE, false)
-
-    /** Consume only when the game is actually about to launch. */
-    fun consumePendingRestore(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(KEY_SKIP_PULL_ONCE, false)) return false
-        prefs.edit().putBoolean(KEY_SKIP_PULL_ONCE, false).apply()
-        return true
+        for (source in current) {
+            val out = File(dir, source.name)
+            source.copyTo(out, overwrite = true)
+            out.setLastModified(source.lastModified())
+        }
+        return dir
     }
 
     fun humanSize(bytes: Long): String = when {
