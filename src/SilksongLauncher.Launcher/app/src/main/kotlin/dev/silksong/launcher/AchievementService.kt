@@ -37,8 +37,9 @@ class AchievementService : Service() {
         private const val SOCKET_NAME = "silksong-achievements-v1"
         private const val STEAM_TIMEOUT_SECONDS = 25L
         private const val ACTION_NOTIFICATION_DISMISSED = "dev.silksong.launcher.ACHIEVEMENT_NOTIFICATION_DISMISSED"
+        private const val ACTION_SAFE_SHUTDOWN = "dev.silksong.launcher.ACHIEVEMENT_SAFE_SHUTDOWN"
 
-        fun start(context: android.content.Context) {
+        fun start(context: Context) {
             LauncherLog.log("Achievements: requesting synchronization service start")
             val intent = Intent(context, AchievementService::class.java)
             try {
@@ -50,12 +51,25 @@ class AchievementService : Service() {
                 throw t
             }
         }
+
+        /**
+         * Requests an orderly stop without starting the service if it is not
+         * already running. The live service receives this process-local
+         * broadcast, flushes any pending Steam achievement write, tears down
+         * JavaSteam and its socket, removes the foreground notification, then
+         * stops itself.
+         */
+        fun stopSafely(context: Context) {
+            LauncherLog.log("Achievements: safe shutdown requested")
+            context.sendBroadcast(Intent(ACTION_SAFE_SHUTDOWN).setPackage(context.packageName))
+        }
     }
 
     private data class AchievementLocation(val statId: Int, val bitIndex: Int)
 
     private val running = AtomicBoolean(true)
     private val ready = AtomicBoolean(false)
+    private val shuttingDown = AtomicBoolean(false)
     private val executor: ExecutorService = Executors.newCachedThreadPool()
     private val achievementLocations = ConcurrentHashMap<String, AchievementLocation>()
     private val remotelyUnlocked = ConcurrentHashMap.newKeySet<String>()
@@ -70,10 +84,10 @@ class AchievementService : Service() {
 
     private val notificationDismissReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != ACTION_NOTIFICATION_DISMISSED || !running.get()) return
+            if (intent?.action != ACTION_NOTIFICATION_DISMISSED || !running.get() || shuttingDown.get()) return
             LauncherLog.log("Achievements: status notification dismissed; restoring while service is active")
             android.os.Handler(mainLooper).postDelayed({
-                if (running.get()) {
+                if (running.get() && !shuttingDown.get()) {
                     getSystemService(NotificationManager::class.java)
                         .notify(NOTIFICATION_ID, notification(notificationText))
                 }
@@ -81,11 +95,17 @@ class AchievementService : Service() {
         }
     }
 
+    private val shutdownReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_SAFE_SHUTDOWN) beginSafeShutdown()
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         LauncherLog.log("Achievements: service created")
         createNotificationChannel()
-        registerDismissReceiver()
+        registerReceivers()
         startForeground(NOTIFICATION_ID, notification(notificationText))
         executor.execute { serve() }
         executor.execute { initializeSteam() }
@@ -134,18 +154,19 @@ class AchievementService : Service() {
                 throw IllegalStateException("Steam returned no named Silksong achievements in the user-stats schema")
             }
 
+            if (shuttingDown.get()) return
             ready.set(true)
             LauncherLog.log("Achievements: READY — ${achievementLocations.size} Steam achievement API names mapped")
             updateNotification("Connected to Steam • ${achievementLocations.size} achievements tracked")
         } catch (t: Throwable) {
-            failReady("Achievement Steam session failed", t)
+            if (!shuttingDown.get()) failReady("Achievement Steam session failed", t)
         }
     }
 
     private fun failReady(message: String, error: Throwable? = null) {
         ready.set(false)
         if (error == null) LauncherLog.log(message) else LauncherLog.log(message, error)
-        updateNotification("Steam achievement synchronization unavailable")
+        if (!shuttingDown.get()) updateNotification("Steam achievement synchronization unavailable")
     }
 
     private fun fetchUserStats(): UserStatsCallback {
@@ -180,7 +201,7 @@ class AchievementService : Service() {
     }
 
     private fun setAchievement(name: String): Boolean {
-        if (!ready.get()) {
+        if (!ready.get() || shuttingDown.get()) {
             LauncherLog.log("SetAchievement($name) rejected: Steam bridge is not ready")
             return false
         }
@@ -200,7 +221,7 @@ class AchievementService : Service() {
     }
 
     private fun getAchievement(name: String): Boolean {
-        if (!ready.get()) return false
+        if (!ready.get() || shuttingDown.get()) return false
         if (!achievementLocations.containsKey(name)) {
             LauncherLog.log("GetAchievement($name): unknown Steam achievement name")
             return false
@@ -253,7 +274,7 @@ class AchievementService : Service() {
                     pendingUnlocks.removeAll(names)
                     remotelyUnlocked.addAll(names)
                     LauncherLog.log("StoreStats: SUCCESS — Steam accepted ${names.joinToString()}")
-                    updateNotification("Connected to Steam • achievements synchronized")
+                    if (!shuttingDown.get()) updateNotification("Connected to Steam • achievements synchronized")
                     return@synchronized true
                 }
                 if (!callback.statsOutOfDate || attempt == 2) {
@@ -261,14 +282,14 @@ class AchievementService : Service() {
                         LauncherLog.log("StoreStats validation failure: stat ${it.statId} reverted to ${it.revertedStatValue}")
                     }
                     LauncherLog.log("StoreStats: FAILED — Steam did not accept achievement update")
-                    updateNotification("Steam achievement synchronization needs attention")
+                    if (!shuttingDown.get()) updateNotification("Steam achievement synchronization needs attention")
                     return@synchronized false
                 }
                 LauncherLog.log("StoreStats: Steam state was out of date; retrying with fresh state")
             } catch (t: Throwable) {
                 LauncherLog.log("StoreStats attempt $attempt failed", t)
                 if (attempt == 2) {
-                    updateNotification("Steam achievement synchronization needs attention")
+                    if (!shuttingDown.get()) updateNotification("Steam achievement synchronization needs attention")
                     return@synchronized false
                 }
             }
@@ -277,6 +298,7 @@ class AchievementService : Service() {
     }
 
     private fun handle(line: String): Boolean {
+        if (shuttingDown.get()) return false
         val parts = line.trimEnd('\n').split('\t', limit = 2)
         val command = parts[0]
         if (command != "PING") LauncherLog.log("Achievements IPC: $command${parts.getOrNull(1)?.let { " $it" } ?: ""}")
@@ -298,7 +320,7 @@ class AchievementService : Service() {
                 executor.execute { handleClient(socket) }
             }
         } catch (t: Throwable) {
-            if (running.get()) LauncherLog.log("Achievement socket stopped", t)
+            if (running.get() && !shuttingDown.get()) LauncherLog.log("Achievement socket stopped", t)
         }
     }
 
@@ -313,13 +335,17 @@ class AchievementService : Service() {
         }
     }
 
-    private fun registerDismissReceiver() {
-        val filter = IntentFilter(ACTION_NOTIFICATION_DISMISSED)
+    private fun registerReceivers() {
+        val dismissFilter = IntentFilter(ACTION_NOTIFICATION_DISMISSED)
+        val shutdownFilter = IntentFilter(ACTION_SAFE_SHUTDOWN)
         if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(notificationDismissReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            registerReceiver(notificationDismissReceiver, dismissFilter, Context.RECEIVER_NOT_EXPORTED)
+            registerReceiver(shutdownReceiver, shutdownFilter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             @Suppress("DEPRECATION")
-            registerReceiver(notificationDismissReceiver, filter)
+            registerReceiver(notificationDismissReceiver, dismissFilter)
+            @Suppress("DEPRECATION")
+            registerReceiver(shutdownReceiver, shutdownFilter)
         }
     }
 
@@ -371,9 +397,49 @@ class AchievementService : Service() {
         }
     }
 
+    private fun beginSafeShutdown() {
+        if (!shuttingDown.compareAndSet(false, true)) return
+        LauncherLog.log("Achievements: beginning safe shutdown")
+        notificationText = "Closing safely • finishing Steam synchronization"
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, notification(notificationText))
+
+        executor.execute {
+            try {
+                if (ready.get() && pendingUnlocks.isNotEmpty()) {
+                    LauncherLog.log("Achievements: flushing ${pendingUnlocks.size} pending unlock(s) before exit")
+                    runCatching { storeStats() }
+                        .onFailure { LauncherLog.log("Achievements: final Steam flush failed", it) }
+                }
+            } finally {
+                running.set(false)
+                ready.set(false)
+                runCatching { server?.close() }
+                steam?.close()
+                steam = null
+                steamUser = null
+                steamUserStats = null
+
+                android.os.Handler(mainLooper).post {
+                    LauncherLog.log("Achievements: safe shutdown complete")
+                    if (Build.VERSION.SDK_INT >= 24) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
+                    }
+                    getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+                    stopSelf()
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
         LauncherLog.log("Achievements: synchronization service stopping")
-        if (ready.get() && pendingUnlocks.isNotEmpty()) runCatching { storeStats() }
+        if (!shuttingDown.get() && ready.get() && pendingUnlocks.isNotEmpty()) {
+            runCatching { storeStats() }
+        }
         running.set(false)
         ready.set(false)
         runCatching { server?.close() }
@@ -382,6 +448,14 @@ class AchievementService : Service() {
         steamUser = null
         steamUserStats = null
         runCatching { unregisterReceiver(notificationDismissReceiver) }
+        runCatching { unregisterReceiver(shutdownReceiver) }
+        if (Build.VERSION.SDK_INT >= 24) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+        getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         executor.shutdownNow()
         super.onDestroy()
     }
