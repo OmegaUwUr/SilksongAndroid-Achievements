@@ -9,384 +9,524 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="18dp"
         android:visibility="gone">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:layout_marginBottom="14dp">
-
-            <FrameLayout
-                android:layout_width="60dp"
-                android:layout_height="60dp"
-                android:background="@drawable/launcher_card">
-
-                <ImageView
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_gravity="center"
-                    android:src="@drawable/launcher_mark"
-                    android:contentDescription="Silksong"
-                    android:scaleType="fitCenter" />
-            </FrameLayout>
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:paddingStart="14dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Hollow Knight: Silksong"
-                    android:textColor="@color/text_primary"
-                    android:textSize="23sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="ANDROID • STEAM CLOUD • ACHIEVEMENTS"
-                    android:textColor="@color/text_dim"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.12"
-                    android:layout_marginTop="3dp" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/txt_login_status"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/launcher_card"
-                android:textColor="@color/status_green"
-                android:textSize="12sp"
-                android:maxLines="1"
-                android:paddingLeft="14dp"
-                android:paddingRight="14dp"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp" />
-        </LinearLayout>
-
-        <LinearLayout
+        <ScrollView
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:orientation="horizontal">
+            android:fillViewport="true"
+            android:clipToPadding="false"
+            android:overScrollMode="never">
 
             <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="0.60"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingEnd="12dp">
+                android:paddingLeft="14dp"
+                android:paddingTop="12dp"
+                android:paddingRight="14dp"
+                android:paddingBottom="18dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <!-- Compact app bar, matching the phone-first reference. -->
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="PLAY"
-                    android:textColor="@color/text_dim"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.14"
-                    android:layout_marginBottom="8dp" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="12dp">
+
+                    <FrameLayout
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="@drawable/launcher_card"
+                        android:clipToOutline="true">
+
+                        <dev.silksong.launcher.OfficialSteamAssetView
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_margin="4dp"
+                            android:tag="ic_launcher"
+                            android:contentDescription="Hollow Knight Silksong"
+                            android:scaleType="centerCrop" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:paddingStart="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="SILKSONG ANDROID"
+                            android:textColor="@color/text_primary"
+                            android:textSize="17sp"
+                            android:textStyle="bold"
+                            android:letterSpacing="0.08" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Steam launcher"
+                            android:textColor="@color/text_dim"
+                            android:textSize="11sp"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+
+                    <dev.silksong.launcher.SettingsShortcutButton
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:background="@drawable/launcher_card"
+                        android:foreground="@drawable/focus_on_dark"
+                        android:text="⚙"
+                        android:textColor="@color/text_muted"
+                        android:textSize="23sp"
+                        android:gravity="center"
+                        android:padding="0dp"
+                        android:contentDescription="Settings" />
+                </LinearLayout>
+
+                <!-- Official Steam library hero + logo. Artwork is staged from
+                     Steam CDN at build time and is not committed to this repo. -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="292dp"
+                    android:background="@drawable/launcher_hero_frame"
+                    android:clipToOutline="true">
+
+                    <dev.silksong.launcher.OfficialSteamAssetView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:tag="launcher_hero"
+                        android:contentDescription="Official Hollow Knight Silksong artwork"
+                        android:scaleType="centerCrop" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/launcher_hero_scrim" />
+
+                    <dev.silksong.launcher.OfficialSteamAssetView
+                        android:layout_width="235dp"
+                        android:layout_height="94dp"
+                        android:layout_gravity="top|start"
+                        android:layout_marginStart="18dp"
+                        android:layout_marginTop="14dp"
+                        android:tag="launcher_logo"
+                        android:contentDescription="Hollow Knight Silksong logo"
+                        android:scaleType="fitStart" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom|end"
+                        android:layout_marginEnd="18dp"
+                        android:layout_marginBottom="18dp"
+                        android:text="EXPLORE\nFIGHT\nDISCOVER\nASCEND"
+                        android:textAlignment="viewEnd"
+                        android:gravity="end"
+                        android:textColor="#D9F7F8FA"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.18"
+                        android:lineSpacingExtra="3dp" />
+                </FrameLayout>
 
                 <Button
                     android:id="@+id/btn_launch"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="58dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="9dp"
                     android:minHeight="0dp"
                     android:background="@drawable/launcher_primary"
                     android:foreground="@drawable/focus_on_dark"
-                    android:text="▶   Play Silksong"
+                    android:text="▶   Play Game"
                     android:textColor="@color/text_primary"
-                    android:textSize="19sp"
+                    android:textSize="18sp"
                     android:textStyle="bold"
                     android:textAllCaps="false"
-                    android:paddingTop="18dp"
-                    android:paddingBottom="18dp"
-                    android:focusedByDefault="true"
-                    android:layout_marginBottom="12dp" />
+                    android:focusedByDefault="true" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="ACCOUNT &amp; SAVES"
-                    android:textColor="@color/text_dim"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.14"
-                    android:layout_marginBottom="8dp" />
-
-                <Button
-                    android:id="@+id/btn_login"
+                <!-- Steam account -->
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="0dp"
-                    android:background="@drawable/launcher_card"
-                    android:foreground="@drawable/focus_on_dark"
-                    android:text="@string/action_log_in"
-                    android:textColor="@color/text_primary"
-                    android:textSize="15sp"
-                    android:textAllCaps="false"
-                    android:gravity="center_vertical|start"
-                    android:padding="16dp"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_height="70dp"
+                    android:layout_marginBottom="7dp"
+                    android:background="@drawable/launcher_card">
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginBottom="8dp">
+                    <ImageView
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center_vertical|start"
+                        android:layout_marginStart="15dp"
+                        android:src="@drawable/ic_dashboard_steam"
+                        android:contentDescription="Steam" />
 
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="8dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:gravity="center_vertical"
+                        android:paddingStart="58dp"
+                        android:paddingEnd="42dp">
 
-                        <Button
-                            android:id="@+id/btn_pull"
-                            android:layout_width="match_parent"
+                        <TextView
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:minHeight="0dp"
-                            android:background="@drawable/launcher_card"
-                            android:foreground="@drawable/focus_on_dark"
-                            android:text="@string/action_pull_saves"
+                            android:text="Steam"
                             android:textColor="@color/text_primary"
-                            android:textSize="14sp"
-                            android:textAllCaps="false"
-                            android:padding="16dp"
-                            android:enabled="false" />
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
 
-                        <ProgressBar
-                            android:id="@+id/spin_pull"
-                            style="?android:attr/progressBarStyleSmall"
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_gravity="center_vertical|end"
-                            android:layout_marginEnd="14dp"
-                            android:indeterminateTint="@color/text_primary"
-                            android:visibility="gone" />
-                    </FrameLayout>
-
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1">
-
-                        <Button
-                            android:id="@+id/btn_push"
-                            android:layout_width="match_parent"
+                        <TextView
+                            android:id="@+id/txt_login_status"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:minHeight="0dp"
-                            android:background="@drawable/launcher_card"
-                            android:foreground="@drawable/focus_on_dark"
-                            android:text="@string/action_push_saves"
-                            android:textColor="@color/text_primary"
-                            android:textSize="14sp"
-                            android:textAllCaps="false"
-                            android:padding="16dp"
-                            android:enabled="false" />
+                            android:text="Not signed in"
+                            android:textColor="@color/status_green"
+                            android:textSize="11sp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
 
-                        <ProgressBar
-                            android:id="@+id/spin_push"
-                            style="?android:attr/progressBarStyleSmall"
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_gravity="center_vertical|end"
-                            android:layout_marginEnd="14dp"
-                            android:indeterminateTint="@color/text_primary"
-                            android:visibility="gone" />
-                    </FrameLayout>
-                </LinearLayout>
-
-                <dev.silksong.launcher.SaveHistoryButton
-                    android:id="@+id/btn_save_history"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="0dp"
-                    android:background="@drawable/launcher_card"
-                    android:foreground="@drawable/focus_on_dark"
-                    android:text="↶  Steam Save History"
-                    android:textColor="@color/status_blue"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:textAllCaps="false"
-                    android:gravity="center_vertical|start"
-                    android:padding="16dp"
-                    android:layout_marginBottom="8dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginBottom="8dp">
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center_vertical|end"
+                        android:layout_marginEnd="14dp"
+                        android:src="@drawable/ic_dashboard_chevron"
+                        android:contentDescription="Open" />
 
                     <Button
-                        android:id="@+id/btn_settings"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="8dp"
-                        android:minHeight="0dp"
-                        android:background="@drawable/launcher_card"
+                        android:id="@+id/btn_login"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@android:color/transparent"
                         android:foreground="@drawable/focus_on_dark"
-                        android:text="⚙  Game settings"
-                        android:textColor="@color/text_primary"
-                        android:textSize="14sp"
+                        android:text="@string/action_log_in"
+                        android:textColor="@android:color/transparent"
+                        android:textSize="1sp"
                         android:textAllCaps="false"
-                        android:padding="16dp" />
+                        android:contentDescription="Steam account" />
+                </FrameLayout>
+
+                <!-- Unified cloud card. -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="70dp"
+                    android:layout_marginBottom="7dp"
+                    android:background="@drawable/launcher_card">
+
+                    <ImageView
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center_vertical|start"
+                        android:layout_marginStart="15dp"
+                        android:src="@drawable/ic_dashboard_cloud"
+                        android:contentDescription="Cloud saves" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:gravity="center_vertical"
+                        android:paddingStart="58dp"
+                        android:paddingEnd="42dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Cloud Saves"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Pull, push, and restore Steam history"
+                            android:textColor="@color/text_muted"
+                            android:textSize="11sp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center_vertical|end"
+                        android:layout_marginEnd="14dp"
+                        android:src="@drawable/ic_dashboard_chevron"
+                        android:contentDescription="Open" />
+
+                    <dev.silksong.launcher.CloudMenuButton
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@android:color/transparent"
+                        android:foreground="@drawable/focus_on_dark"
+                        android:text=""
+                        android:contentDescription="Steam Cloud saves" />
+                </FrameLayout>
+
+                <!-- Achievements / diagnostics. The existing Logs action is
+                     kept as the card's transparent click target. -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="70dp"
+                    android:layout_marginBottom="7dp"
+                    android:background="@drawable/launcher_card">
+
+                    <ImageView
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center_vertical|start"
+                        android:layout_marginStart="15dp"
+                        android:src="@drawable/ic_dashboard_trophy"
+                        android:contentDescription="Achievements" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:gravity="center_vertical"
+                        android:paddingStart="58dp"
+                        android:paddingEnd="42dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Achievements"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="52 Steam achievements • tap for sync diagnostics"
+                            android:textColor="@color/text_muted"
+                            android:textSize="11sp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center_vertical|end"
+                        android:layout_marginEnd="14dp"
+                        android:src="@drawable/ic_dashboard_chevron"
+                        android:contentDescription="Open" />
 
                     <Button
                         android:id="@+id/btn_logs"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:minHeight="0dp"
-                        android:background="@drawable/launcher_card"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@android:color/transparent"
                         android:foreground="@drawable/focus_on_dark"
-                        android:text="ⓘ  Logs &amp; diagnostics"
-                        android:textColor="@color/text_primary"
-                        android:textSize="14sp"
+                        android:text=""
                         android:textAllCaps="false"
-                        android:padding="16dp" />
-                </LinearLayout>
+                        android:contentDescription="Achievement diagnostics" />
+                </FrameLayout>
 
-                <Space
+                <!-- Game settings -->
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1" />
+                    android:layout_height="70dp"
+                    android:layout_marginBottom="7dp"
+                    android:background="@drawable/launcher_card">
+
+                    <ImageView
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center_vertical|start"
+                        android:layout_marginStart="15dp"
+                        android:src="@drawable/ic_dashboard_gamepad"
+                        android:contentDescription="Game settings" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:gravity="center_vertical"
+                        android:paddingStart="58dp"
+                        android:paddingEnd="42dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Game Settings"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Controls, performance, display and launcher options"
+                            android:textColor="@color/text_muted"
+                            android:textSize="11sp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center_vertical|end"
+                        android:layout_marginEnd="14dp"
+                        android:src="@drawable/ic_dashboard_chevron"
+                        android:contentDescription="Open" />
+
+                    <Button
+                        android:id="@+id/btn_settings"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@android:color/transparent"
+                        android:foreground="@drawable/focus_on_dark"
+                        android:text=""
+                        android:textAllCaps="false"
+                        android:contentDescription="Game settings" />
+                </FrameLayout>
+
+                <!-- About -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="70dp"
+                    android:layout_marginBottom="10dp"
+                    android:background="@drawable/launcher_card">
+
+                    <ImageView
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center_vertical|start"
+                        android:layout_marginStart="15dp"
+                        android:src="@drawable/ic_dashboard_info"
+                        android:contentDescription="About" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:gravity="center_vertical"
+                        android:paddingStart="58dp"
+                        android:paddingEnd="42dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="About"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Version, credits and diagnostics"
+                            android:textColor="@color/text_muted"
+                            android:textSize="11sp"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center_vertical|end"
+                        android:layout_marginEnd="14dp"
+                        android:src="@drawable/ic_dashboard_chevron"
+                        android:contentDescription="Open" />
+
+                    <dev.silksong.launcher.AboutButton
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@android:color/transparent"
+                        android:foreground="@drawable/focus_on_dark"
+                        android:text=""
+                        android:contentDescription="About Silksong Android" />
+                </FrameLayout>
 
                 <dev.silksong.launcher.ExitButton
                     android:id="@+id/btn_exit"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="50dp"
                     android:minHeight="0dp"
                     android:background="@drawable/launcher_exit"
                     android:foreground="@drawable/focus_on_dark"
                     android:text="⏻   Exit launcher safely"
                     android:textColor="@color/text_primary"
-                    android:textSize="14sp"
+                    android:textSize="13sp"
                     android:textStyle="bold"
-                    android:textAllCaps="false"
-                    android:paddingTop="13dp"
-                    android:paddingBottom="13dp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="0.40"
-                android:orientation="vertical">
+                    android:textAllCaps="false" />
 
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="STATUS"
+                    android:gravity="center"
+                    android:text="S I L K S O N G   A N D R O I D   •   P L A Y   A N Y W H E R E"
                     android:textColor="@color/text_dim"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.14"
-                    android:layout_marginBottom="8dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:background="@drawable/launcher_card"
-                    android:padding="14dp"
-                    android:layout_marginBottom="8dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="●  Steam achievements"
-                        android:textColor="@color/status_green"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Persistent notification shows when the Steam synchronization service is active."
-                        android:textColor="@color/text_muted"
-                        android:textSize="11sp"
-                        android:layout_marginTop="5dp" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:background="@drawable/launcher_card"
-                    android:padding="14dp"
-                    android:layout_marginBottom="8dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="☁  Steam Cloud"
-                        android:textColor="@color/status_blue"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Current saves sync normally. Steam Save History opens Restore_Points backups separately."
-                        android:textColor="@color/text_muted"
-                        android:textSize="11sp"
-                        android:layout_marginTop="5dp" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:background="@drawable/launcher_card"
-                    android:padding="14dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="LIVE ACTIVITY"
-                        android:textColor="@color/text_dim"
-                        android:textSize="10sp"
-                        android:textStyle="bold"
-                        android:letterSpacing="0.12"
-                        android:layout_marginBottom="8dp" />
-
-                    <ScrollView
-                        android:id="@+id/log_scroll"
-                        android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1"
-                        android:fillViewport="true"
-                        android:scrollbars="vertical"
-                        android:focusable="false"
-                        android:focusableInTouchMode="false"
-                        android:descendantFocusability="blocksDescendants">
-
-                        <TextView
-                            android:id="@+id/txt_log"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/launcher_status_idle"
-                            android:textColor="@color/text_muted"
-                            android:textSize="10sp"
-                            android:fontFamily="monospace"
-                            android:lineSpacingExtra="2dp"
-                            android:focusable="false" />
-                    </ScrollView>
-                </LinearLayout>
+                    android:textSize="8sp"
+                    android:layout_marginTop="15dp"
+                    android:layout_marginBottom="4dp" />
             </LinearLayout>
-        </LinearLayout>
+        </ScrollView>
+
+        <!-- Existing launcher implementation still owns the concrete Pull /
+             Push actions and the live log mirror. Keep those controls in the
+             hierarchy but out of the portrait dashboard; CloudMenuButton and
+             the achievement card forward into them. -->
+        <FrameLayout
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/btn_pull"
+                android:layout_width="1dp"
+                android:layout_height="1dp"
+                android:text="@string/action_pull_saves"
+                android:enabled="false" />
+
+            <Button
+                android:id="@+id/btn_push"
+                android:layout_width="1dp"
+                android:layout_height="1dp"
+                android:text="@string/action_push_saves"
+                android:enabled="false" />
+
+            <ProgressBar
+                android:id="@+id/spin_pull"
+                android:layout_width="1dp"
+                android:layout_height="1dp"
+                android:visibility="gone" />
+
+            <ProgressBar
+                android:id="@+id/spin_push"
+                android:layout_width="1dp"
+                android:layout_height="1dp"
+                android:visibility="gone" />
+
+            <ScrollView
+                android:id="@+id/log_scroll"
+                android:layout_width="1dp"
+                android:layout_height="1dp">
+
+                <TextView
+                    android:id="@+id/txt_log"
+                    android:layout_width="1dp"
+                    android:layout_height="wrap_content"
+                    android:text="@string/launcher_status_idle" />
+            </ScrollView>
+        </FrameLayout>
     </LinearLayout>
 </FrameLayout>
