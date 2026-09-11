@@ -2,6 +2,21 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.6
+
+Adds the full modern launcher dashboard and an explicit safe-exit lifecycle.
+
+Changes in this revision:
+
+- Reworks the launcher screen to more closely match the modern concept: branded header, prominent Play action, separate account/cloud/settings controls, dedicated Steam-achievement and Steam Cloud status cards, live activity feed, and a distinct Exit control.
+- Adds `ExitButton`, which blocks exit while a visible Steam Cloud pull/push is running so a save transfer is not cut off mid-operation.
+- Adds a confirmation step for full launcher exit.
+- Adds an explicit achievement-service safe-shutdown broadcast. If pending achievement writes exist, the service attempts the final Steam `StoreStats` flow before closing JavaSteam and the IPC socket.
+- Removes the foreground achievement notification during successful shutdown and explicitly cancels it before the launcher process is terminated.
+- Terminates the dedicated `:launcher` process after safe service cleanup, while leaving the separate game process untouched.
+- If the achievement service is not running, Exit removes the launcher task and closes the `:launcher` process immediately.
+- Preserves the revision-5 keep-awake behavior, persistent in-service achievement status notification, official Steam icon staging, and revision-4 Steam ABI aliases.
+
 ## 1.0.3-achievements.5
 
 Refreshes the launcher experience and game-session behavior while retaining the revision-4 Steam ABI fixes.
