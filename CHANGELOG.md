@@ -2,6 +2,21 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.9
+
+Replaces the launcher frontend with the portrait-first Silksong dashboard requested from the visual reference, using official Steam-hosted Hollow Knight: Silksong artwork rather than generated imagery.
+
+Changes in this revision:
+
+- Rebuilds the launcher as a single-column phone dashboard instead of the previous desktop-like split layout.
+- Adds a large official Silksong hero-art panel, official Steam library logo overlay, official game icon, compact top app bar, large red `Play Game` button, and stacked Steam / Cloud Saves / Achievements / Game Settings / About cards.
+- Fetches the official Steam library hero (`70d7e70ae2fd0f8a46661d4a425cd84479dc7a61`) and library logo (`98878a81ca9047352403db7e19e3942239ea8bf1`) at build time and stages them into Android resources without committing Team Cherry artwork to the repository.
+- Keeps the existing official Steam desktop/client icon staging for the Android launcher icon.
+- Adds a unified Cloud Saves card that opens Pull, Push, or Steam Save History while reusing the existing cloud-sync implementation underneath.
+- Preserves the existing Steam login, achievement diagnostics, game settings, logs, controller focus, safe-exit lifecycle, save-history restore flow, and game launch behavior.
+- Keeps the existing hidden Pull/Push/log controls in the view hierarchy so cloud-job state, safe-exit blocking, and existing launcher logic continue to work without duplicating the synchronization engine.
+- Adds native vector dashboard icons and a portrait-safe scroll layout for smaller Android displays.
+
 ## 1.0.3-achievements.8
 
 Fixes Steam Save History discovery and prevents normal cloud pushes from deleting useful remote-only historical save files.
