@@ -83,6 +83,12 @@ jobs:
           echo "Android versionCode: $version_code"
           echo "Source commit: $short_sha"
 
+      - name: Stage official Steam desktop icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 tools/depot-to-apk/fetch-steam-icon.py tools/depot-to-apk/shell/res
+
       - name: Restore fallback signing key
         uses: actions/cache@v4
         with:
