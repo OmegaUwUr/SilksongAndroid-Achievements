@@ -6,6 +6,7 @@ import android.content.res.Configuration;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.WindowManager;
 
 import com.unity3d.player.IUnityPlayerLifecycleEvents;
 import com.unity3d.player.UnityPlayerForActivityOrService;
@@ -43,6 +44,14 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     @Override protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+
+        // A controller-only session can go for a long time without Android
+        // seeing touch input. Keep the panel awake for the lifetime of the
+        // game Activity; Android automatically clears this when the Activity
+        // leaves the foreground, so normal device sleep behaviour returns as
+        // soon as the player exits or switches away from the game.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         // Constructing the player is what starts the engine: it loads the
         // native libraries and brings up the render surface. Everything that
         // has to be in place first -- the staged libraries, the data package --
