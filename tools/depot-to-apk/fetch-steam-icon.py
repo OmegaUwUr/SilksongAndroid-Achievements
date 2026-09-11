@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Stage Silksong's official Steam desktop shortcut icon for Android packaging.
+"""Stage official Hollow Knight: Silksong Steam artwork for Android packaging.
 
-Steam identifies the desktop/client icon by a content hash. The corresponding
-ICO normally contains a 256x256 PNG frame, which Android can use directly. If
-Steam ever serves a legacy BMP-only ICO, fall back to the game's official Steam
-app/community icon rather than making the whole APK build fail.
+Nothing fetched here is committed to the repository. Steam identifies the
+client icon and library artwork by immutable content hashes; CI/local Docker
+fetch the official files immediately before resource compilation.
+
+Asset metadata for app 1030300:
+  clienticon   28f5a41307a55aa9151db0b4104ac327039d2683
+  community    b4a999c1302e3ac123c041fd41bb8a34528c6ab5
+  library hero 70d7e70ae2fd0f8a46661d4a425cd84479dc7a61
+  library logo 98878a81ca9047352403db7e19e3942239ea8bf1
 """
 
 from __future__ import annotations
@@ -17,17 +22,54 @@ import urllib.request
 APP_ID = 1030300
 CLIENT_ICON = "28f5a41307a55aa9151db0b4104ac327039d2683"
 APP_ICON = "b4a999c1302e3ac123c041fd41bb8a34528c6ab5"
-BASE = "https://shared.fastly.steamstatic.com/community_assets/images/apps"
-ICO_URL = f"{BASE}/{APP_ID}/{CLIENT_ICON}.ico"
-JPG_URL = f"{BASE}/{APP_ID}/{APP_ICON}.jpg"
+LIBRARY_HERO = "70d7e70ae2fd0f8a46661d4a425cd84479dc7a61"
+LIBRARY_LOGO = "98878a81ca9047352403db7e19e3942239ea8bf1"
+
+COMMUNITY_BASE = "https://shared.fastly.steamstatic.com/community_assets/images/apps"
+STORE_BASE = "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps"
+ICO_URL = f"{COMMUNITY_BASE}/{APP_ID}/{CLIENT_ICON}.ico"
+JPG_URL = f"{COMMUNITY_BASE}/{APP_ID}/{APP_ICON}.jpg"
+HERO_URLS = (
+    f"{STORE_BASE}/{APP_ID}/{LIBRARY_HERO}/library_hero.jpg",
+    f"{STORE_BASE}/{APP_ID}/{LIBRARY_HERO}/library_hero_2x.jpg",
+)
+LOGO_URLS = (
+    f"{STORE_BASE}/{APP_ID}/{LIBRARY_LOGO}/logo.png",
+    f"{STORE_BASE}/{APP_ID}/{LIBRARY_LOGO}/logo_2x.png",
+)
+
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 JPEG_MAGIC = b"\xff\xd8\xff"
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+LAUNCHER_DRAWABLES = (
+    REPO_ROOT
+    / "src"
+    / "SilksongLauncher.Launcher"
+    / "app"
+    / "src"
+    / "main"
+    / "res"
+    / "drawable-nodpi"
+)
 
 
 def fetch(url: str) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": "SilksongAndroid-build/1"})
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read()
+
+
+def fetch_first(urls: tuple[str, ...], magic: bytes, label: str) -> bytes:
+    errors: list[str] = []
+    for url in urls:
+        try:
+            payload = fetch(url)
+            if payload.startswith(magic):
+                return payload
+            errors.append(f"{url}: unexpected file signature")
+        except Exception as exc:  # Build output should say every attempted source.
+            errors.append(f"{url}: {exc}")
+    raise RuntimeError(f"could not fetch official Steam {label}: " + "; ".join(errors))
 
 
 def largest_png_frame(ico: bytes) -> bytes | None:
@@ -59,7 +101,7 @@ def largest_png_frame(ico: bytes) -> bytes | None:
     return max(candidates, key=lambda item: (item[0], item[1]))[2]
 
 
-def stage(root: pathlib.Path, payload: bytes, extension: str) -> int:
+def stage_icon(root: pathlib.Path, payload: bytes, extension: str) -> int:
     changed = 0
     for density in ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"):
         directory = root / f"mipmap-{density}"
@@ -76,8 +118,17 @@ def stage(root: pathlib.Path, payload: bytes, extension: str) -> int:
     return changed
 
 
+def stage_launcher_art() -> tuple[int, int]:
+    LAUNCHER_DRAWABLES.mkdir(parents=True, exist_ok=True)
+    hero = fetch_first(HERO_URLS, JPEG_MAGIC, "library hero")
+    logo = fetch_first(LOGO_URLS, PNG_MAGIC, "library logo")
+    (LAUNCHER_DRAWABLES / "launcher_hero.jpg").write_bytes(hero)
+    (LAUNCHER_DRAWABLES / "launcher_logo.png").write_bytes(logo)
+    return len(hero), len(logo)
+
+
 def main() -> int:
-    root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "tools/depot-to-apk/shell/res")
+    icon_root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "tools/depot-to-apk/shell/res")
 
     ico = fetch(ICO_URL)
     png = largest_png_frame(ico)
@@ -92,10 +143,16 @@ def main() -> int:
         extension = "jpg"
         source = f"Steam app icon fallback {APP_ICON}"
 
-    changed = stage(root, payload, extension)
+    changed = stage_icon(icon_root, payload, extension)
     if changed == 0:
-        raise RuntimeError(f"no launcher mipmap directories found under {root}")
-    print(f"Staged {source}: {len(payload)} bytes into {changed} Android resources")
+        raise RuntimeError(f"no launcher mipmap directories found under {icon_root}")
+
+    hero_size, logo_size = stage_launcher_art()
+    print(f"Staged {source}: {len(payload)} bytes into {changed} Android icon resources")
+    print(
+        "Staged official Steam library artwork: "
+        f"hero={hero_size} bytes, logo={logo_size} bytes -> {LAUNCHER_DRAWABLES}"
+    )
     return 0
 
 
