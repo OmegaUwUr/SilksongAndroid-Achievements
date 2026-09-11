@@ -24,20 +24,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * Long-lived bridge between Silksong's native Steamworks calls and Steam.
- *
- * The Unity game runs in the default Android process while the authenticated
- * JavaSteam session lives in :launcher. The ARM64 libsteam_api.so shim forwards
- * the small SteamUserStats surface over a private abstract AF_UNIX socket.
- *
- * Unlike the old implementation, this does not pretend JavaSteam has the
- * desktop Steamworks SetAchievement/StoreStats API. GameNative's JavaSteam fork
- * exposes the actual ClientStoreUserStats2 protocol. Steam achievements are
- * represented as bits in Steam's user-stats schema, so we resolve the game's
- * exact achievement API name to (stat block id, bit index), merge it into the
- * latest server bitmask, then wait for Steam's store response.
- */
+/** Bridges Silksong's Android Steamworks shim to the authenticated JavaSteam session. */
 class AchievementService : Service() {
     companion object {
         const val APP_ID = 1030300
@@ -50,11 +37,8 @@ class AchievementService : Service() {
             LauncherLog.log("Achievements: requesting synchronization service start")
             val intent = Intent(context, AchievementService::class.java)
             try {
-                val component = if (Build.VERSION.SDK_INT >= 26) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                val component = if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent)
+                else context.startService(intent)
                 LauncherLog.log("Achievements: service start accepted: $component")
             } catch (t: Throwable) {
                 LauncherLog.log("Achievements: service start failed", t)
@@ -83,9 +67,6 @@ class AchievementService : Service() {
         LauncherLog.log("Achievements: service created")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, notification("Connecting to Steam…"))
-
-        // Open IPC immediately so the game can distinguish "service exists but
-        // Steam is not ready" from "there is no bridge at all".
         executor.execute { serve() }
         executor.execute { initializeSteam() }
     }
@@ -111,32 +92,31 @@ class AchievementService : Service() {
             session.logOn(credentials)
             LauncherLog.log("Achievements: authenticated with Steam")
 
-            val licenses = session.licenses()
-            LauncherLog.log("Achievements: received ${licenses.size} Steam licence(s); checking Silksong ownership")
-
+            // The depot was downloaded through DepotDownloader using the account's
+            // real Steam licence list. Do not try to prove ownership again by
+            // reflecting JavaSteam License.toString()/private fields: those are
+            // implementation details and do not contain app IDs reliably.
             val depot = DepotLocation.resolve(this)
             if (depot == null || !DepotFetcher.isPresent(depot)) {
                 throw IllegalStateException("game was not installed through the launcher Steam depot path")
             }
             LauncherLog.log("Achievements: launcher Steam depot verified")
 
-            if (!ownsSilksong(licenses)) {
-                throw IllegalStateException("Steam license does not prove ownership of $APP_ID")
-            }
-            LauncherLog.log("Achievements: Steam ownership verified for app $APP_ID")
-
             val user = session.steamClient.getHandler(SteamUser::class.java)
                 ?: throw IllegalStateException("JavaSteam SteamUser handler unavailable")
             val stats = session.steamClient.getHandler(SteamUserStats::class.java)
                 ?: throw IllegalStateException("JavaSteam SteamUserStats handler unavailable")
-            if (user.steamID == null) {
-                throw IllegalStateException("Steam logged on but account SteamID is unavailable")
-            }
+            if (user.steamID == null) throw IllegalStateException("Steam logged on but account SteamID is unavailable")
             steamUser = user
             steamUserStats = stats
 
-            LauncherLog.log("Achievements: requesting authoritative Steam achievement state")
+            // This is the authoritative server-side gate. If this authenticated
+            // account cannot access Silksong user stats, Steam returns a non-OK
+            // result and fetchUserStats throws. A successful response is much
+            // stronger evidence than inspecting JavaSteam's local License model.
+            LauncherLog.log("Achievements: requesting authoritative Steam achievement state for app $APP_ID")
             val snapshot = fetchUserStats()
+            LauncherLog.log("Achievements: Steam authorized user-stats access for app $APP_ID")
             rebuildAchievementIndex(snapshot)
             if (achievementLocations.isEmpty()) {
                 throw IllegalStateException("Steam returned no named Silksong achievements in the user-stats schema")
@@ -156,31 +136,18 @@ class AchievementService : Service() {
         updateNotification("Steam achievement synchronization unavailable")
     }
 
-    /** Fetch current server state. This is the Steamworks RequestCurrentStats equivalent. */
     private fun fetchUserStats(): UserStatsCallback {
         val user = steamUser ?: throw IllegalStateException("SteamUser not initialized")
         val stats = steamUserStats ?: throw IllegalStateException("SteamUserStats not initialized")
         val steamId = user.steamID ?: throw IllegalStateException("SteamID unavailable")
-
-        val callback = stats.getUserStats(APP_ID, steamId)
-            .toFuture()
-            .get(STEAM_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        if (callback.result != EResult.OK) {
-            throw IllegalStateException("getUserStats($APP_ID) failed: ${callback.result}")
-        }
+        val callback = stats.getUserStats(APP_ID, steamId).toFuture().get(STEAM_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        if (callback.result != EResult.OK) throw IllegalStateException("getUserStats($APP_ID) failed: ${callback.result}")
         return callback
     }
 
-    /**
-     * JavaSteam expands each Steam achievement bit into an AchievementBlocks
-     * item whose synthetic id is blockId * 100 + bitIndex. This is exactly the
-     * mapping GameNative generates on disk; keeping it in memory lets us accept
-     * Silksong's native API name directly without guessing from save data.
-     */
     private fun rebuildAchievementIndex(snapshot: UserStatsCallback) {
         val newLocations = HashMap<String, AchievementLocation>()
         val newUnlocked = HashSet<String>()
-
         for (achievement in snapshot.getExpandedAchievements()) {
             val name = achievement.name?.takeIf { it.isNotBlank() } ?: continue
             val encoded = achievement.achievementId
@@ -193,15 +160,11 @@ class AchievementService : Service() {
             newLocations[name] = AchievementLocation(statId, bitIndex)
             if (achievement.isUnlocked) newUnlocked.add(name)
         }
-
         achievementLocations.clear()
         achievementLocations.putAll(newLocations)
         remotelyUnlocked.clear()
         remotelyUnlocked.addAll(newUnlocked)
-
-        LauncherLog.log(
-            "Achievements: schema mapped ${newLocations.size} name(s), ${newUnlocked.size} already unlocked on Steam"
-        )
+        LauncherLog.log("Achievements: schema mapped ${newLocations.size} name(s), ${newUnlocked.size} already unlocked on Steam")
     }
 
     private fun setAchievement(name: String): Boolean {
@@ -214,12 +177,10 @@ class AchievementService : Service() {
             LauncherLog.log("SetAchievement($name) rejected: name is not present in Steam's Silksong schema")
             return false
         }
-
         if (remotelyUnlocked.contains(name)) {
             LauncherLog.log("SetAchievement($name): already unlocked on Steam")
             return true
         }
-
         pendingUnlocks.add(name)
         LauncherLog.log("SetAchievement($name): queued as stat ${location.statId} bit ${location.bitIndex}")
         return true
@@ -227,8 +188,7 @@ class AchievementService : Service() {
 
     private fun getAchievement(name: String): Boolean {
         if (!ready.get()) return false
-        val known = achievementLocations.containsKey(name)
-        if (!known) {
+        if (!achievementLocations.containsKey(name)) {
             LauncherLog.log("GetAchievement($name): unknown Steam achievement name")
             return false
         }
@@ -237,25 +197,16 @@ class AchievementService : Service() {
         return unlocked
     }
 
-    /**
-     * Stores all queued native SetAchievement calls. We always fetch a fresh
-     * snapshot first, merge into Steam's current bitmasks, and include the CRC
-     * Steam returned for that schema. If Steam says the stats are stale we
-     * refetch and retry once. Pending achievements are removed only after an OK
-     * response with no failed validation entries.
-     */
     private fun storeStats(): Boolean = synchronized(storeLock) {
         if (!ready.get()) {
             LauncherLog.log("StoreStats rejected: Steam bridge is not ready")
             return@synchronized false
         }
-
         val names = pendingUnlocks.toSet()
         if (names.isEmpty()) {
             LauncherLog.log("StoreStats: no pending achievement changes")
             return@synchronized true
         }
-
         val statsHandler = steamUserStats ?: return@synchronized false
         val user = steamUser ?: return@synchronized false
         val steamId = user.steamID ?: return@synchronized false
@@ -265,57 +216,33 @@ class AchievementService : Service() {
                 LauncherLog.log("StoreStats: refreshing Steam state (attempt $attempt/2)")
                 val snapshot = fetchUserStats()
                 rebuildAchievementIndex(snapshot)
-
                 val blockMasks = HashMap<Int, Int>()
                 for (block in snapshot.achievementBlocks) {
                     var mask = 0
-                    for (i in block.unlockTime.indices.take(32)) {
-                        if (block.unlockTime[i] != 0) mask = mask or (1 shl i)
-                    }
+                    for (i in block.unlockTime.indices.take(32)) if (block.unlockTime[i] != 0) mask = mask or (1 shl i)
                     blockMasks[block.achievementId] = mask
                 }
-
                 val changedBlocks = HashSet<Int>()
                 for (name in names) {
-                    val location = achievementLocations[name]
-                    if (location == null) {
+                    val location = achievementLocations[name] ?: run {
                         LauncherLog.log("StoreStats: $name disappeared from Steam schema; refusing unsafe write")
                         return@synchronized false
                     }
-                    val current = blockMasks[location.statId] ?: 0
-                    blockMasks[location.statId] = current or (1 shl location.bitIndex)
+                    blockMasks[location.statId] = (blockMasks[location.statId] ?: 0) or (1 shl location.bitIndex)
                     changedBlocks.add(location.statId)
                 }
-
-                val payload = changedBlocks.sorted().map { statId ->
-                    Stats(statId = statId, statValue = blockMasks.getValue(statId))
-                }
+                val payload = changedBlocks.sorted().map { statId -> Stats(statId = statId, statValue = blockMasks.getValue(statId)) }
                 LauncherLog.log("StoreStats: submitting ${names.size} achievement(s) in ${payload.size} stat block(s) to Steam")
-
-                val callback = statsHandler.storeUserStats(
-                    APP_ID,
-                    payload,
-                    steamId,
-                    steamId,
-                    snapshot.crcStats,
-                ).toFuture().get(STEAM_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-
-                LauncherLog.log(
-                    "StoreStats: Steam response=${callback.result}, outOfDate=${callback.statsOutOfDate}, " +
-                        "failedValidation=${callback.statsFailedValidation.size}"
-                )
-
-                if (callback.result == EResult.OK &&
-                    !callback.statsOutOfDate &&
-                    callback.statsFailedValidation.isEmpty()
-                ) {
+                val callback = statsHandler.storeUserStats(APP_ID, payload, steamId, steamId, snapshot.crcStats)
+                    .toFuture().get(STEAM_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                LauncherLog.log("StoreStats: Steam response=${callback.result}, outOfDate=${callback.statsOutOfDate}, failedValidation=${callback.statsFailedValidation.size}")
+                if (callback.result == EResult.OK && !callback.statsOutOfDate && callback.statsFailedValidation.isEmpty()) {
                     pendingUnlocks.removeAll(names)
                     remotelyUnlocked.addAll(names)
                     LauncherLog.log("StoreStats: SUCCESS — Steam accepted ${names.joinToString()}")
                     updateNotification("Connected to Steam — achievements synchronized")
                     return@synchronized true
                 }
-
                 if (!callback.statsOutOfDate || attempt == 2) {
                     callback.statsFailedValidation.forEach {
                         LauncherLog.log("StoreStats validation failure: stat ${it.statId} reverted to ${it.revertedStatValue}")
@@ -323,7 +250,6 @@ class AchievementService : Service() {
                     LauncherLog.log("StoreStats: FAILED — Steam did not accept achievement update")
                     return@synchronized false
                 }
-
                 LauncherLog.log("StoreStats: Steam state was out of date; retrying with fresh state")
             } catch (t: Throwable) {
                 LauncherLog.log("StoreStats attempt $attempt failed", t)
@@ -336,14 +262,9 @@ class AchievementService : Service() {
     private fun handle(line: String): Boolean {
         val parts = line.trimEnd('\n').split('\t', limit = 2)
         val command = parts[0]
-        if (command != "PING") {
-            LauncherLog.log("Achievements IPC: $command${parts.getOrNull(1)?.let { " $it" } ?: ""}")
-        }
+        if (command != "PING") LauncherLog.log("Achievements IPC: $command${parts.getOrNull(1)?.let { " $it" } ?: ""}")
         return when (command) {
-            "PING" -> ready.get()
-            // Initial state was already fetched before ready=true, so the
-            // Steamworks RequestCurrentStats call can acknowledge immediately.
-            "REQUEST" -> ready.get()
+            "PING", "REQUEST" -> ready.get()
             "SET" -> parts.getOrNull(1)?.let(::setAchievement) ?: false
             "GET" -> parts.getOrNull(1)?.let(::getAchievement) ?: false
             "STORE" -> storeStats()
@@ -366,8 +287,6 @@ class AchievementService : Service() {
 
     private fun handleClient(socket: LocalSocket) {
         socket.use { s ->
-            // STORE waits for a real Steam server response, so allow more than
-            // the old two-second local-only timeout.
             s.soTimeout = 30_000
             val reader = BufferedReader(InputStreamReader(s.inputStream, Charsets.UTF_8))
             val writer = PrintWriter(OutputStreamWriter(s.outputStream, Charsets.UTF_8), true)
@@ -377,38 +296,18 @@ class AchievementService : Service() {
         }
     }
 
-    private fun ownsSilksong(licenses: List<*>): Boolean {
-        if (licenses.isEmpty()) return false
-        return licenses.any { license ->
-            val item = license ?: return@any false
-            val text = item.toString()
-            if (text.contains(APP_ID.toString())) return@any true
-            val fields = item.javaClass.declaredFields
-            fields.any { f ->
-                runCatching {
-                    f.isAccessible = true
-                    val value = f.get(item)
-                    value is Iterable<*> && value.any {
-                        it?.toString() == APP_ID.toString() || it?.toString() == "1030303"
-                    }
-                }.getOrDefault(false)
-            }
-        }
-    }
-
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "Steam achievements", NotificationManager.IMPORTANCE_DEFAULT).apply {
                     description = "Shows whether Silksong achievements are connected to Steam"
-                },
+                }
             )
         }
     }
 
     private fun updateNotification(text: String) {
-        getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, notification(text))
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
     }
 
     private fun notification(text: String): Notification {
@@ -432,7 +331,6 @@ class AchievementService : Service() {
 
     override fun onDestroy() {
         LauncherLog.log("Achievements: synchronization service stopping")
-        // Try to flush anything the game queued before tearing down readiness.
         if (ready.get() && pendingUnlocks.isNotEmpty()) runCatching { storeStats() }
         running.set(false)
         ready.set(false)
