@@ -2,6 +2,21 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.5
+
+Refreshes the launcher experience and game-session behavior while retaining the revision-4 Steam ABI fixes.
+
+Changes in this revision:
+
+- Redesigns the launcher as a modern dark dashboard with a clearer Silksong header, grouped quick actions, a large primary Play button, and a dedicated live activity/status panel.
+- Preserves all existing launcher view IDs and actions so Steam login, cloud pull/push, settings, logs, controller focus, and game launch continue using the existing launcher logic.
+- Keeps the Android display awake for as long as the game Activity is in the foreground, including controller-only sessions with no touch input.
+- Strengthens the Steam-achievement foreground notification with ongoing/no-clear service flags, low-noise service presentation, live status text, and automatic restoration if it is dismissed while the synchronization service is still active.
+- Makes the achievement notification distinguish connecting, ready, queued, synchronized, and attention/error states.
+- Stages Hollow Knight: Silksong's official Steam desktop/client shortcut icon during GitHub APK builds using Steam app `1030300` clienticon `28f5a41307a55aa9151db0b4104ac327039d2683`.
+- Extracts the largest PNG frame from the official content-addressed Steam ICO and uses it for both legacy and adaptive Android launcher icon resources without committing the third-party artwork to this repository.
+- Uses a launcher-owned vector mark inside the AAR UI so the launcher module remains independently compilable before the final Steam icon resources are overlaid during APK packaging.
+
 ## 1.0.3-achievements.4
 
 Fixes the native Steamworks module-name mismatch exposed after revision 3 successfully reached READY.
