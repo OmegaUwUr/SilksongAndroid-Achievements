@@ -3,8 +3,12 @@ package dev.silksong.launcher
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.os.Build
@@ -32,6 +36,7 @@ class AchievementService : Service() {
         private const val NOTIFICATION_ID = 1030300
         private const val SOCKET_NAME = "silksong-achievements-v1"
         private const val STEAM_TIMEOUT_SECONDS = 25L
+        private const val ACTION_NOTIFICATION_DISMISSED = "dev.silksong.launcher.ACHIEVEMENT_NOTIFICATION_DISMISSED"
 
         fun start(context: android.content.Context) {
             LauncherLog.log("Achievements: requesting synchronization service start")
@@ -61,12 +66,27 @@ class AchievementService : Service() {
     private var steam: SteamSession? = null
     @Volatile private var steamUser: SteamUser? = null
     @Volatile private var steamUserStats: SteamUserStats? = null
+    @Volatile private var notificationText = "Connecting to Steam…"
+
+    private val notificationDismissReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_NOTIFICATION_DISMISSED || !running.get()) return
+            LauncherLog.log("Achievements: status notification dismissed; restoring while service is active")
+            android.os.Handler(mainLooper).postDelayed({
+                if (running.get()) {
+                    getSystemService(NotificationManager::class.java)
+                        .notify(NOTIFICATION_ID, notification(notificationText))
+                }
+            }, 250)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         LauncherLog.log("Achievements: service created")
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, notification("Connecting to Steam…"))
+        registerDismissReceiver()
+        startForeground(NOTIFICATION_ID, notification(notificationText))
         executor.execute { serve() }
         executor.execute { initializeSteam() }
     }
@@ -92,10 +112,6 @@ class AchievementService : Service() {
             session.logOn(credentials)
             LauncherLog.log("Achievements: authenticated with Steam")
 
-            // The depot was downloaded through DepotDownloader using the account's
-            // real Steam licence list. Do not try to prove ownership again by
-            // reflecting JavaSteam License.toString()/private fields: those are
-            // implementation details and do not contain app IDs reliably.
             val depot = DepotLocation.resolve(this)
             if (depot == null || !DepotFetcher.isPresent(depot)) {
                 throw IllegalStateException("game was not installed through the launcher Steam depot path")
@@ -110,10 +126,6 @@ class AchievementService : Service() {
             steamUser = user
             steamUserStats = stats
 
-            // This is the authoritative server-side gate. If this authenticated
-            // account cannot access Silksong user stats, Steam returns a non-OK
-            // result and fetchUserStats throws. A successful response is much
-            // stronger evidence than inspecting JavaSteam's local License model.
             LauncherLog.log("Achievements: requesting authoritative Steam achievement state for app $APP_ID")
             val snapshot = fetchUserStats()
             LauncherLog.log("Achievements: Steam authorized user-stats access for app $APP_ID")
@@ -124,7 +136,7 @@ class AchievementService : Service() {
 
             ready.set(true)
             LauncherLog.log("Achievements: READY — ${achievementLocations.size} Steam achievement API names mapped")
-            updateNotification("Connected to Steam — achievements will synchronize")
+            updateNotification("Connected to Steam • ${achievementLocations.size} achievements tracked")
         } catch (t: Throwable) {
             failReady("Achievement Steam session failed", t)
         }
@@ -183,6 +195,7 @@ class AchievementService : Service() {
         }
         pendingUnlocks.add(name)
         LauncherLog.log("SetAchievement($name): queued as stat ${location.statId} bit ${location.bitIndex}")
+        updateNotification("Achievement queued • waiting for Steam confirmation")
         return true
     }
 
@@ -240,7 +253,7 @@ class AchievementService : Service() {
                     pendingUnlocks.removeAll(names)
                     remotelyUnlocked.addAll(names)
                     LauncherLog.log("StoreStats: SUCCESS — Steam accepted ${names.joinToString()}")
-                    updateNotification("Connected to Steam — achievements synchronized")
+                    updateNotification("Connected to Steam • achievements synchronized")
                     return@synchronized true
                 }
                 if (!callback.statsOutOfDate || attempt == 2) {
@@ -248,12 +261,16 @@ class AchievementService : Service() {
                         LauncherLog.log("StoreStats validation failure: stat ${it.statId} reverted to ${it.revertedStatValue}")
                     }
                     LauncherLog.log("StoreStats: FAILED — Steam did not accept achievement update")
+                    updateNotification("Steam achievement synchronization needs attention")
                     return@synchronized false
                 }
                 LauncherLog.log("StoreStats: Steam state was out of date; retrying with fresh state")
             } catch (t: Throwable) {
                 LauncherLog.log("StoreStats attempt $attempt failed", t)
-                if (attempt == 2) return@synchronized false
+                if (attempt == 2) {
+                    updateNotification("Steam achievement synchronization needs attention")
+                    return@synchronized false
+                }
             }
         }
         false
@@ -296,36 +313,61 @@ class AchievementService : Service() {
         }
     }
 
+    private fun registerDismissReceiver() {
+        val filter = IntentFilter(ACTION_NOTIFICATION_DISMISSED)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(notificationDismissReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(notificationDismissReceiver, filter)
+        }
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Steam achievements", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                    description = "Shows whether Silksong achievements are connected to Steam"
+                NotificationChannel(CHANNEL_ID, "Steam achievements", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Persistent status for Silksong Steam achievement synchronization"
+                    setShowBadge(false)
                 }
             )
         }
     }
 
     private fun updateNotification(text: String) {
+        notificationText = text
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
     }
 
     private fun notification(text: String): Notification {
-        return if (Build.VERSION.SDK_INT >= 26) {
-            Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("Silksong Steam achievements")
-                .setContentText(text)
-                .setSmallIcon(android.R.drawable.stat_sys_upload_done)
-                .setOngoing(true)
-                .setOnlyAlertOnce(false)
-                .build()
-        } else {
-            Notification.Builder(this)
-                .setContentTitle("Silksong Steam achievements")
-                .setContentText(text)
-                .setSmallIcon(android.R.drawable.stat_sys_upload_done)
-                .setOngoing(true)
-                .build()
+        val dismissIntent = Intent(ACTION_NOTIFICATION_DISMISSED).setPackage(packageName)
+        val dismissPendingIntent = PendingIntent.getBroadcast(
+            this,
+            NOTIFICATION_ID,
+            dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL_ID)
+        else Notification.Builder(this)
+
+        builder
+            .setContentTitle("Silksong achievements")
+            .setContentText(text)
+            .setSubText("Steam synchronization service active")
+            .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
+            .setDeleteIntent(dismissPendingIntent)
+
+        if (Build.VERSION.SDK_INT >= 31) {
+            builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+        }
+
+        return builder.build().apply {
+            flags = flags or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR
         }
     }
 
@@ -339,6 +381,7 @@ class AchievementService : Service() {
         steam = null
         steamUser = null
         steamUserStats = null
+        runCatching { unregisterReceiver(notificationDismissReceiver) }
         executor.shutdownNow()
         super.onDestroy()
     }
