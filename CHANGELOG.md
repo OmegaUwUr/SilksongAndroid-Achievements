@@ -2,6 +2,17 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.3
+
+Fixes the next achievement-service startup blocker exposed by revision 2.
+
+Changes in this revision:
+
+- Removes the brittle reflection-based ownership check against JavaSteam `License` objects. The account had already authenticated and downloaded the protected Silksong Linux depot successfully, but the local `License` model does not reliably expose app/depot IDs through `toString()` or private iterable fields.
+- Uses Steam's authenticated `getUserStats(1030300, steamId)` response as the authoritative server-side gate before enabling achievement synchronization.
+- Adds explicit logging when Steam authorizes Silksong user-stats access.
+- Preserves the downloaded-depot verification before any achievement bridge becomes READY.
+
 ## 1.0.3-achievements.2
 
 Fixes achievement synchronization service startup in the final packaged APK.
