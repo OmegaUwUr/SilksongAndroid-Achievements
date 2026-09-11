@@ -10,16 +10,19 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Exposes Silksong's Steam-synchronized Restore_Points* files as safe,
- * slot-aware historical saves on Android.
+ * Exposes Silksong's Steam-synchronized historical save files as safe,
+ * slot-aware versions on Android.
  *
- * Steam Cloud itself exposes the current remote files, not a generic revision
- * API. Silksong already writes historical copies into Restore_Points folders,
- * so those real cloud files are the history source here.
+ * Steam Cloud exposes stored files rather than a generic revision API. Silksong
+ * keeps useful history in several forms: Restore_Points subfolders, rotating
+ * userN.dat.bakM files, and version-stamped userN_<game-version>.dat files.
  */
 object SaveHistory {
-    private val userFile = Regex("^(user(\\d+)\\.dat)(?:\\.bak\\d+)?$", RegexOption.IGNORE_CASE)
-    private val restoreFolder = Regex("(?:^|/)(Restore_Points[^/]*)/", RegexOption.IGNORE_CASE)
+    private val userSave = Regex(
+        "^user(\\d+)(?:_[A-Za-z0-9._-]+)?\\.dat(?:\\.bak\\d+)?$",
+        RegexOption.IGNORE_CASE,
+    )
+    private val plainActive = Regex("^user(\\d+)\\.dat$", RegexOption.IGNORE_CASE)
 
     data class Version(
         val cloudPath: String,
@@ -39,25 +42,67 @@ object SaveHistory {
         SteamSession().use { session ->
             session.logOn(credentials)
             val cloud = SteamCloudClient(session)
-            cloud.enumerateFiles(CloudSync.APP_ID)
-                .mapNotNull { file ->
-                    val folder = restoreFolder.find(file.filename)?.groupValues?.getOrNull(1) ?: return@mapNotNull null
-                    val source = file.filename.substringAfterLast('/')
-                    val match = userFile.matchEntire(source) ?: return@mapNotNull null
-                    val active = match.groupValues[1]
-                    val slot = match.groupValues[2].toIntOrNull() ?: return@mapNotNull null
-                    Version(
-                        cloudPath = file.filename,
-                        restoreFolder = folder,
-                        sourceName = source,
-                        activeName = active,
-                        slot = slot,
-                        timestampUnix = file.timestampUnix,
-                        size = file.size,
-                    )
+            val all = cloud.enumerateFiles(CloudSync.APP_ID)
+            LauncherLog.log("Save history: Steam returned ${all.size} cloud file(s)")
+
+            val candidates = all.mapNotNull { file ->
+                val source = file.filename.substringAfterLast('/')
+                val match = userSave.matchEntire(source) ?: return@mapNotNull null
+                val slot = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
+                Triple(file, source, slot)
+            }
+
+            // Root active saves have the shallowest user-save path. Anything
+            // deeper is a Steam/Silksong subfolder copy. At root depth we still
+            // keep rotating .bakN and version-stamped files as history, while
+            // excluding only the canonical live userN.dat itself.
+            val rootDepth = candidates.minOfOrNull { (file, _, _) -> file.filename.count { it == '/' } }
+            val versions = candidates.mapNotNull { (file, source, slot) ->
+                val depth = file.filename.count { it == '/' }
+                val isCanonicalLive = depth == rootDepth && plainActive.matches(source)
+                if (isCanonicalLive) return@mapNotNull null
+
+                val parent = file.filename.substringBeforeLast('/', missingDelimiterValue = "")
+                val rootParent = if (rootDepth == null) "" else {
+                    val parts = parent.split('/')
+                    parts.take(rootDepth).joinToString("/")
                 }
+                val relativeParent = when {
+                    parent.isEmpty() -> "Steam Cloud"
+                    rootParent.isNotEmpty() && parent.startsWith(rootParent) ->
+                        parent.removePrefix(rootParent).trim('/').ifEmpty { "Steam Cloud backup" }
+                    else -> parent.substringAfterLast('/')
+                }
+                val label = relativeParent.ifEmpty {
+                    when {
+                        source.contains(".bak", ignoreCase = true) -> "Rotating backup"
+                        source.contains('_') -> "Version snapshot"
+                        else -> "Steam Cloud backup"
+                    }
+                }
+
+                Version(
+                    cloudPath = file.filename,
+                    restoreFolder = label,
+                    sourceName = source,
+                    activeName = "user$slot.dat",
+                    slot = slot,
+                    timestampUnix = file.timestampUnix,
+                    size = file.size,
+                )
+            }
                 .distinctBy { Triple(it.cloudPath, it.timestampUnix, it.size) }
                 .sortedWith(compareBy<Version> { it.slot }.thenByDescending { it.timestampUnix })
+
+            LauncherLog.log(
+                "Save history: ${candidates.size} user-save cloud file(s), ${versions.size} historical version(s) recognized"
+            )
+            if (versions.isEmpty() && candidates.isNotEmpty()) {
+                candidates.take(40).forEach { (file, source, _) ->
+                    LauncherLog.log("Save history diagnostic: $source depth=${file.filename.count { it == '/' }} ts=${file.timestampUnix}")
+                }
+            }
+            versions
         }
     }
 
@@ -106,13 +151,7 @@ object SaveHistory {
                 throw IllegalStateException("Could not install historical ${version.activeName}")
             }
 
-            // The new active file is fully in place. The hidden rollback copy is
-            // redundant with the timestamped full safety backup and can go away.
             previous.delete()
-
-            // Treat the restored content as a new local choice. Normal Play will
-            // therefore surface a cloud conflict instead of silently pulling the
-            // newer root save over the restored version.
             active.setLastModified(System.currentTimeMillis())
         } catch (t: Throwable) {
             temp.delete()
@@ -131,11 +170,6 @@ object SaveHistory {
         RestoreResult(version, safety, active)
     }
 
-    /**
-     * Before any historical file is installed, copy every current plain save
-     * file. This is intentionally wider than just userN.dat because shared.dat,
-     * restoreData files, and game-version sidecars can be part of the same state.
-     */
     private fun backupCurrentSaveSet(context: Context, saveDir: File): File? {
         val current = saveDir.listFiles()
             ?.filter { it.isFile && !it.name.startsWith(".") }
