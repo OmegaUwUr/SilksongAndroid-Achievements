@@ -2,6 +2,17 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.4
+
+Fixes the native Steamworks module-name mismatch exposed after revision 3 successfully reached READY.
+
+Changes in this revision:
+
+- Ships both `libsteam_api.so` and `libsteam_api64.so` from the same Android ARM64 compatibility shim.
+- Matches Steamworks.NET/IL2CPP P/Invokes that target the module name `steam_api64`, instead of relying on the non-64 alias being resolved implicitly on Android.
+- Keeps the original `libsteam_api.so` alias for compatibility with older/generated Steamworks paths.
+- Targets the revision-3 symptom where the Java achievement service authenticated, mapped all 52 achievements, and became READY, but received no `REQUEST`, `GET`, `SET`, or `STORE` IPC commands from the game process.
+
 ## 1.0.3-achievements.3
 
 Fixes the next achievement-service startup blocker exposed by revision 2.
