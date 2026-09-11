@@ -2,6 +2,19 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.8
+
+Fixes Steam Save History discovery and prevents normal cloud pushes from deleting useful remote-only historical save files.
+
+Changes in this revision:
+
+- Broadens Save History beyond only `Restore_Points*` + `userN.dat(.bakM)` patterns.
+- Recognizes version-stamped Silksong saves such as `user1_1.0.30000.dat`, rotating `userN.dat.bakM` files, and deeper Steam/Silksong subfolder copies.
+- Determines the canonical live `userN.dat` files by cloud path depth and excludes only those active root copies from the history list.
+- Adds history diagnostics showing how many Steam user-save files were discovered and how many were recognized as historical versions.
+- Preserves remote-only Steam save files instead of deleting them during normal push cleanup. Earlier builds could delete version-stamped or rotated backup files once the Android local copy disappeared.
+- Keeps the transactional restore, full local safety snapshot, and isolated `Play restored save` behavior introduced in revision 7.
+
 ## 1.0.3-achievements.7
 
 Adds Steam-backed historical save browsing and safe restore/test sessions.
