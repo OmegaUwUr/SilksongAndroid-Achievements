@@ -2,10 +2,13 @@
 <resources>
     <color name="hornet_red">#D93A45</color>
     <color name="hornet_red_dim">#A82B35</color>
+    <color name="danger_red">#C92F3D</color>
+    <color name="danger_red_dim">#6E1F28</color>
 
-    <color name="surface">#090B0F</color>
-    <color name="surface_panel">#0E1117</color>
+    <color name="surface">#080A0E</color>
+    <color name="surface_panel">#0D1016</color>
     <color name="surface_card">#151A22</color>
+    <color name="surface_card_alt">#11161D</color>
     <color name="surface_border">#2A313D</color>
     <color name="surface_control">#202631</color>
 
@@ -14,4 +17,5 @@
     <color name="text_muted">#AAB2BE</color>
     <color name="text_dim">#77808D</color>
     <color name="status_green">#45D483</color>
+    <color name="status_blue">#6EB8FF</color>
 </resources>
