@@ -38,6 +38,9 @@ class AchievementService : Service() {
         private const val STEAM_TIMEOUT_SECONDS = 25L
         private const val ACTION_NOTIFICATION_DISMISSED = "dev.silksong.launcher.ACHIEVEMENT_NOTIFICATION_DISMISSED"
         private const val ACTION_SAFE_SHUTDOWN = "dev.silksong.launcher.ACHIEVEMENT_SAFE_SHUTDOWN"
+        @Volatile private var active = false
+
+        fun isActive(): Boolean = active
 
         fun start(context: Context) {
             LauncherLog.log("Achievements: requesting synchronization service start")
@@ -54,10 +57,9 @@ class AchievementService : Service() {
 
         /**
          * Requests an orderly stop without starting the service if it is not
-         * already running. The live service receives this process-local
-         * broadcast, flushes any pending Steam achievement write, tears down
-         * JavaSteam and its socket, removes the foreground notification, then
-         * stops itself.
+         * already running. The live service receives this app-local broadcast,
+         * flushes any pending Steam achievement write, tears down JavaSteam and
+         * its socket, removes the foreground notification, then stops itself.
          */
         fun stopSafely(context: Context) {
             LauncherLog.log("Achievements: safe shutdown requested")
@@ -103,6 +105,7 @@ class AchievementService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        active = true
         LauncherLog.log("Achievements: service created")
         createNotificationChannel()
         registerReceivers()
@@ -430,12 +433,20 @@ class AchievementService : Service() {
                     }
                     getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
                     stopSelf()
+                    // This service shares :launcher with the UI. By the time we
+                    // reach here all Steam/socket/notification work is finished,
+                    // so terminating that process completes an explicit Exit
+                    // without touching the separate game process.
+                    android.os.Handler(mainLooper).postDelayed({
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                    }, 150)
                 }
             }
         }
     }
 
     override fun onDestroy() {
+        active = false
         LauncherLog.log("Achievements: synchronization service stopping")
         if (!shuttingDown.get() && ready.get() && pendingUnlocks.isNotEmpty()) {
             runCatching { storeStats() }
