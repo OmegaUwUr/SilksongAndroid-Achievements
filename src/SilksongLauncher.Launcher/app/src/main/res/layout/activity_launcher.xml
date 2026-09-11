@@ -1,17 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Sized for the Ayn Thor's effective landscape area (~832dp x 420dp after
-  status/nav bars). Left = the menu, right = the log.
-
-  Launch sits at the bottom of the left column, separated from the rest by the
-  space between them: it is the thing this screen exists for, and everything
-  above it is housekeeping. It is the only white button, which is what makes it
-  findable on a red page without reading.
-
-  Download and upload share a row. They are two halves of one idea, they are
-  the only actions here that can be waiting on a network, and pairing them
-  buys the height that the rest of the buttons spend on padding.
--->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -22,17 +9,56 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="14dp"
+        android:padding="18dp"
         android:visibility="gone">
 
-        <TextView
-            android:id="@+id/txt_login_status"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text=""
-            android:textColor="@color/text_muted"
-            android:textSize="13sp"
-            android:layout_marginBottom="10dp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginBottom="14dp">
+
+            <ImageView
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@mipmap/ic_launcher"
+                android:contentDescription="Silksong"
+                android:scaleType="fitCenter" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingStart="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Hollow Knight: Silksong"
+                    android:textColor="@color/text_primary"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Android launcher • Steam cloud • Achievements"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/txt_login_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/launcher_card"
+                android:textColor="@color/status_green"
+                android:textSize="12sp"
+                android:maxLines="1" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -40,54 +66,62 @@
             android:layout_weight="1"
             android:orientation="horizontal">
 
-            <!-- ── Left: the menu ──────────────────────────────────── -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.58"
+                android:layout_weight="0.60"
                 android:orientation="vertical"
-                android:paddingEnd="14dp">
+                android:paddingEnd="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="QUICK ACTIONS"
+                    android:textColor="@color/text_dim"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.12"
+                    android:layout_marginBottom="8dp" />
 
                 <Button
                     android:id="@+id/btn_login"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/action_log_in"
-                    android:textSize="16sp"
-                    android:textColor="@color/text_on_control"
-                    android:backgroundTint="@color/surface_control"
-                    android:foreground="@drawable/focus_on_light"
-                    android:paddingTop="18dp"
-                    android:paddingBottom="18dp"
                     android:minHeight="0dp"
-                    android:layout_marginBottom="10dp" />
+                    android:background="@drawable/launcher_card"
+                    android:foreground="@drawable/focus_on_dark"
+                    android:text="@string/action_log_in"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    android:textAllCaps="false"
+                    android:gravity="center_vertical|start"
+                    android:padding="16dp"
+                    android:layout_marginBottom="8dp" />
 
-                <!-- Download / upload, paired. The spinner replaces the arrow
-                     while the operation runs; the button keeps its label. -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:layout_marginBottom="10dp">
+                    android:layout_marginBottom="8dp">
 
                     <FrameLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginEnd="10dp">
+                        android:layout_marginEnd="8dp">
 
                         <Button
                             android:id="@+id/btn_pull"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/action_pull_saves"
-                            android:textSize="16sp"
-                            android:textColor="@color/text_on_control"
-                            android:backgroundTint="@color/surface_control"
-                            android:foreground="@drawable/focus_on_light"
-                            android:paddingTop="18dp"
-                            android:paddingBottom="18dp"
                             android:minHeight="0dp"
+                            android:background="@drawable/launcher_card"
+                            android:foreground="@drawable/focus_on_dark"
+                            android:text="@string/action_pull_saves"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp"
+                            android:textAllCaps="false"
+                            android:padding="16dp"
                             android:enabled="false" />
 
                         <ProgressBar
@@ -95,9 +129,9 @@
                             style="?android:attr/progressBarStyleSmall"
                             android:layout_width="18dp"
                             android:layout_height="18dp"
-                            android:layout_gravity="center_vertical|start"
-                            android:layout_marginStart="16dp"
-                            android:indeterminateTint="@color/text_on_control"
+                            android:layout_gravity="center_vertical|end"
+                            android:layout_marginEnd="14dp"
+                            android:indeterminateTint="@color/text_primary"
                             android:visibility="gone" />
                     </FrameLayout>
 
@@ -110,14 +144,14 @@
                             android:id="@+id/btn_push"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/action_push_saves"
-                            android:textSize="16sp"
-                            android:textColor="@color/text_on_control"
-                            android:backgroundTint="@color/surface_control"
-                            android:foreground="@drawable/focus_on_light"
-                            android:paddingTop="18dp"
-                            android:paddingBottom="18dp"
                             android:minHeight="0dp"
+                            android:background="@drawable/launcher_card"
+                            android:foreground="@drawable/focus_on_dark"
+                            android:text="@string/action_push_saves"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp"
+                            android:textAllCaps="false"
+                            android:padding="16dp"
                             android:enabled="false" />
 
                         <ProgressBar
@@ -125,93 +159,101 @@
                             style="?android:attr/progressBarStyleSmall"
                             android:layout_width="18dp"
                             android:layout_height="18dp"
-                            android:layout_gravity="center_vertical|start"
-                            android:layout_marginStart="16dp"
-                            android:indeterminateTint="@color/text_on_control"
+                            android:layout_gravity="center_vertical|end"
+                            android:layout_marginEnd="14dp"
+                            android:indeterminateTint="@color/text_primary"
                             android:visibility="gone" />
                     </FrameLayout>
                 </LinearLayout>
 
-                <Button
-                    android:id="@+id/btn_settings"
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/action_settings"
-                    android:textSize="16sp"
-                    android:textColor="@color/text_on_control"
-                    android:backgroundTint="@color/surface_control"
-                    android:foreground="@drawable/focus_on_light"
-                    android:paddingTop="18dp"
-                    android:paddingBottom="18dp"
-                    android:minHeight="0dp" />
+                    android:orientation="horizontal">
 
-                <!-- Quiet, because it is for the rare day something has gone
-                     wrong and somebody has asked for the log. -->
-                <Button
-                    android:id="@+id/btn_logs"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/action_logs"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_dim"
-                    android:backgroundTint="@android:color/transparent"
-                    android:foreground="@drawable/focus_on_dark"
-                    android:paddingTop="8dp"
-                    android:paddingBottom="8dp"
-                    android:minHeight="0dp" />
+                    <Button
+                        android:id="@+id/btn_settings"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        android:minHeight="0dp"
+                        android:background="@drawable/launcher_card"
+                        android:foreground="@drawable/focus_on_dark"
+                        android:text="@string/action_settings"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        android:textAllCaps="false"
+                        android:padding="16dp" />
+
+                    <Button
+                        android:id="@+id/btn_logs"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="0dp"
+                        android:background="@drawable/launcher_card"
+                        android:foreground="@drawable/focus_on_dark"
+                        android:text="@string/action_logs"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        android:textAllCaps="false"
+                        android:padding="16dp" />
+                </LinearLayout>
 
                 <Space
                     android:layout_width="match_parent"
                     android:layout_height="0dp"
                     android:layout_weight="1" />
 
-                <!--
-                  focusedByDefault, so a controller lands here rather than on
-                  whatever happens to be first in the tree. Declarative on
-                  purpose: requestFocus() from code is what put this activity
-                  into non-touch mode and cost every button a second press.
-                -->
                 <Button
                     android:id="@+id/btn_launch"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/action_launch"
-                    android:textSize="19sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary"
-                    android:backgroundTint="@color/hornet_red"
+                    android:minHeight="0dp"
+                    android:background="@drawable/launcher_primary"
                     android:foreground="@drawable/focus_on_dark"
+                    android:text="▶   Play Silksong"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="false"
                     android:paddingTop="18dp"
                     android:paddingBottom="18dp"
-                    android:minHeight="0dp"
                     android:focusedByDefault="true" />
             </LinearLayout>
 
-            <!-- ── Right: the log ──────────────────────────────────── -->
-            <!--
-              Nothing here takes focus. A ScrollView is focusable by default so
-              that a D-pad can scroll it, and textIsSelectable quietly makes a
-              TextView focusable too, so on a handheld the first stick movement
-              landed in the log and stayed there: the buttons could not be
-              reached at all. The log is a status feed, not a control, and
-              selecting text in it belongs to the Logs screen, which does it
-              properly with Share and Copy.
-
-              blocksDescendants rather than focusable="false" alone, because
-              that only excuses the ScrollView itself and the TextView inside it
-              was the other half of the problem.
-            -->
-            <FrameLayout
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.42"
-                android:background="@color/surface_panel"
-                android:padding="8dp">
+                android:layout_weight="0.40"
+                android:orientation="vertical"
+                android:background="@drawable/launcher_card">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ACTIVITY"
+                    android:textColor="@color/text_dim"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.12"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Live launcher status"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
 
                 <ScrollView
                     android:id="@+id/log_scroll"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
                     android:fillViewport="true"
                     android:scrollbars="vertical"
                     android:focusable="false"
@@ -223,13 +265,13 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="@string/launcher_status_idle"
-                        android:textColor="@color/text_dim"
+                        android:textColor="@color/text_muted"
                         android:textSize="10sp"
                         android:fontFamily="monospace"
+                        android:lineSpacingExtra="2dp"
                         android:focusable="false" />
                 </ScrollView>
-            </FrameLayout>
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
-
 </FrameLayout>
