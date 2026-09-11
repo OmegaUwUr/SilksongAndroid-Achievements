@@ -2,6 +2,24 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.7
+
+Adds Steam-backed historical save browsing and safe restore/test sessions.
+
+Changes in this revision:
+
+- Adds a `Steam Save History` entry to the modern launcher dashboard.
+- Enumerates Silksong's real Steam Cloud `Restore_Points*` files instead of pretending Steam provides a generic revision-history API.
+- Groups historical `userN.dat` / `userN.dat.bakM` files by save slot and shows their Steam timestamp, restore-point folder, source filename, and size.
+- Downloads the selected historical save directly through the existing authenticated JavaSteam cloud client.
+- Restores `.bakM` historical files as the active `userN.dat` for the matching slot.
+- Creates a timestamped local safety snapshot of the entire current save set before replacing any active save file.
+- Installs the historical file transactionally through a synced temp file and hidden rollback rename so an interrupted replacement cannot leave the active slot half-written.
+- Marks restored content as a new local choice. If the user later uses the normal Play path, cloud analysis surfaces a conflict instead of silently replacing the restored save with the current Steam root file.
+- Adds `Play restored save`, which launches an isolated test session directly from Save History. That session bypasses the launcher's normal pre-launch auto-pull and does not arm its automatic post-game push, preventing a test restore from silently overwriting Steam Cloud.
+- Keeps normal root-level Steam Cloud pull/push behavior unchanged; `Restore_Points*` remain excluded from ordinary synchronization and are only read by Save History.
+- Requires Steam sign-in before Save History can enumerate or download synchronized restore points.
+
 ## 1.0.3-achievements.6
 
 Adds the full modern launcher dashboard and an explicit safe-exit lifecycle.
