@@ -12,6 +12,7 @@
         android:padding="18dp"
         android:visibility="gone">
 
+        <!-- Brand / account row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -19,12 +20,19 @@
             android:orientation="horizontal"
             android:layout_marginBottom="14dp">
 
-            <ImageView
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:src="@drawable/launcher_mark"
-                android:contentDescription="Silksong"
-                android:scaleType="fitCenter" />
+            <FrameLayout
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:background="@drawable/launcher_card">
+
+                <ImageView
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/launcher_mark"
+                    android:contentDescription="Silksong"
+                    android:scaleType="fitCenter" />
+            </FrameLayout>
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -38,16 +46,18 @@
                     android:layout_height="wrap_content"
                     android:text="Hollow Knight: Silksong"
                     android:textColor="@color/text_primary"
-                    android:textSize="22sp"
+                    android:textSize="23sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Android launcher • Steam cloud • Achievements"
-                    android:textColor="@color/text_muted"
-                    android:textSize="12sp"
-                    android:layout_marginTop="2dp" />
+                    android:text="ANDROID • STEAM CLOUD • ACHIEVEMENTS"
+                    android:textColor="@color/text_dim"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.12"
+                    android:layout_marginTop="3dp" />
             </LinearLayout>
 
             <TextView
@@ -57,15 +67,21 @@
                 android:background="@drawable/launcher_card"
                 android:textColor="@color/status_green"
                 android:textSize="12sp"
-                android:maxLines="1" />
+                android:maxLines="1"
+                android:paddingLeft="14dp"
+                android:paddingRight="14dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp" />
         </LinearLayout>
 
+        <!-- Main dashboard -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
             android:orientation="horizontal">
 
+            <!-- Left: primary actions -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -76,11 +92,38 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="QUICK ACTIONS"
+                    android:text="PLAY"
                     android:textColor="@color/text_dim"
                     android:textSize="10sp"
                     android:textStyle="bold"
-                    android:letterSpacing="0.12"
+                    android:letterSpacing="0.14"
+                    android:layout_marginBottom="8dp" />
+
+                <Button
+                    android:id="@+id/btn_launch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="0dp"
+                    android:background="@drawable/launcher_primary"
+                    android:foreground="@drawable/focus_on_dark"
+                    android:text="▶   Play Silksong"
+                    android:textColor="@color/text_primary"
+                    android:textSize="19sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="false"
+                    android:paddingTop="18dp"
+                    android:paddingBottom="18dp"
+                    android:focusedByDefault="true"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ACCOUNT &amp; SAVES"
+                    android:textColor="@color/text_dim"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.14"
                     android:layout_marginBottom="8dp" />
 
                 <Button
@@ -169,7 +212,8 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal">
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="8dp">
 
                     <Button
                         android:id="@+id/btn_settings"
@@ -180,7 +224,7 @@
                         android:minHeight="0dp"
                         android:background="@drawable/launcher_card"
                         android:foreground="@drawable/focus_on_dark"
-                        android:text="@string/action_settings"
+                        android:text="⚙  Game settings"
                         android:textColor="@color/text_primary"
                         android:textSize="14sp"
                         android:textAllCaps="false"
@@ -194,7 +238,7 @@
                         android:minHeight="0dp"
                         android:background="@drawable/launcher_card"
                         android:foreground="@drawable/focus_on_dark"
-                        android:text="@string/action_logs"
+                        android:text="ⓘ  Logs &amp; diagnostics"
                         android:textColor="@color/text_primary"
                         android:textSize="14sp"
                         android:textAllCaps="false"
@@ -206,71 +250,130 @@
                     android:layout_height="0dp"
                     android:layout_weight="1" />
 
-                <Button
-                    android:id="@+id/btn_launch"
+                <dev.silksong.launcher.ExitButton
+                    android:id="@+id/btn_exit"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:minHeight="0dp"
-                    android:background="@drawable/launcher_primary"
+                    android:background="@drawable/launcher_exit"
                     android:foreground="@drawable/focus_on_dark"
-                    android:text="▶   Play Silksong"
+                    android:text="⏻   Exit launcher safely"
                     android:textColor="@color/text_primary"
-                    android:textSize="18sp"
+                    android:textSize="14sp"
                     android:textStyle="bold"
                     android:textAllCaps="false"
-                    android:paddingTop="18dp"
-                    android:paddingBottom="18dp"
-                    android:focusedByDefault="true" />
+                    android:paddingTop="13dp"
+                    android:paddingBottom="13dp" />
             </LinearLayout>
 
+            <!-- Right: service status / live feed -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="0.40"
-                android:orientation="vertical"
-                android:background="@drawable/launcher_card">
+                android:orientation="vertical">
 
                 <TextView
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="ACTIVITY"
+                    android:text="STATUS"
                     android:textColor="@color/text_dim"
                     android:textSize="10sp"
                     android:textStyle="bold"
-                    android:letterSpacing="0.12"
+                    android:letterSpacing="0.14"
                     android:layout_marginBottom="8dp" />
 
-                <TextView
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Live launcher status"
-                    android:textColor="@color/text_primary"
-                    android:textSize="15sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="8dp" />
+                    android:orientation="vertical"
+                    android:background="@drawable/launcher_card"
+                    android:padding="14dp"
+                    android:layout_marginBottom="8dp">
 
-                <ScrollView
-                    android:id="@+id/log_scroll"
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="●  Steam achievements"
+                        android:textColor="@color/status_green"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Persistent notification shows when the Steam synchronization service is active."
+                        android:textColor="@color/text_muted"
+                        android:textSize="11sp"
+                        android:layout_marginTop="5dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/launcher_card"
+                    android:padding="14dp"
+                    android:layout_marginBottom="8dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="☁  Steam Cloud"
+                        android:textColor="@color/status_blue"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Pull before play and push after play from the controls on the left."
+                        android:textColor="@color/text_muted"
+                        android:textSize="11sp"
+                        android:layout_marginTop="5dp" />
+                </LinearLayout>
+
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="0dp"
                     android:layout_weight="1"
-                    android:fillViewport="true"
-                    android:scrollbars="vertical"
-                    android:focusable="false"
-                    android:focusableInTouchMode="false"
-                    android:descendantFocusability="blocksDescendants">
+                    android:orientation="vertical"
+                    android:background="@drawable/launcher_card"
+                    android:padding="14dp">
 
                     <TextView
-                        android:id="@+id/txt_log"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/launcher_status_idle"
-                        android:textColor="@color/text_muted"
+                        android:text="LIVE ACTIVITY"
+                        android:textColor="@color/text_dim"
                         android:textSize="10sp"
-                        android:fontFamily="monospace"
-                        android:lineSpacingExtra="2dp"
-                        android:focusable="false" />
-                </ScrollView>
+                        android:textStyle="bold"
+                        android:letterSpacing="0.12"
+                        android:layout_marginBottom="8dp" />
+
+                    <ScrollView
+                        android:id="@+id/log_scroll"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:fillViewport="true"
+                        android:scrollbars="vertical"
+                        android:focusable="false"
+                        android:focusableInTouchMode="false"
+                        android:descendantFocusability="blocksDescendants">
+
+                        <TextView
+                            android:id="@+id/txt_log"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/launcher_status_idle"
+                            android:textColor="@color/text_muted"
+                            android:textSize="10sp"
+                            android:fontFamily="monospace"
+                            android:lineSpacingExtra="2dp"
+                            android:focusable="false" />
+                    </ScrollView>
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
