@@ -2,6 +2,33 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.15
+
+Injects an Android-native implementation of Silksong's own `DesktopOnlineSubsystem` achievement path while preserving the proven launcher-side Steam/JavaSteam backend and revision-14 popup/reconciliation safety layers.
+
+Changes in this revision:
+
+- Adds `AndroidSteamOnlineSubsystem : DesktopOnlineSubsystem` and injects it into the private `DesktopPlatform.onlineSubsystem` field by reflection after `DesktopPlatform.Awake()` has completed.
+- Leaves Team Cherry's original Windows packaging test untouched; the Android subsystem is installed only when the normal desktop subsystem is absent, or when an original `SteamOnlineSubsystem` exists but failed to initialize.
+- Never overwrites an already-working or unknown online subsystem.
+- Routes Silksong's normal `Platform.Current.IsAchievementUnlocked()` calls to the existing Android `GET` IPC path, so Steam's authoritative state participates in the game's own `AwardAchievementToPlayer()` decision.
+- Routes Silksong's normal `Platform.Current.PushAchievementUnlock()` calls directly through the existing `SET` + `STORE` bridge, making the game's own achievement call path the primary synchronization path again.
+- Queues unlocks in-process if Silksong awards one before the Android Steam bridge is ready, then flushes them as soon as the proven revision-12 bridge becomes available.
+- Preserves local `shared.dat` state because ordinary unlocks still pass through `DesktopPlatform.PushAchievementUnlock()`, which records the local achievement flag after the online-subsystem call.
+- Keeps `UserId = null`, `HandlesGameSaves = false`, and `HandlesRoamingSharedData = false` so injecting the subsystem cannot move saves out of the existing `default` folder or take over Steam Cloud/save handling from the launcher.
+- Keeps the subsystem unlock-only; `ResetAchievements()` cannot destructively clear the user's Steam achievements.
+- Handles Team Cherry's Steam stat-progress achievement path. The desktop build writes `<achievement>_STAT` and relies on Steam's configured threshold to unlock some achievements; on Android, when Silksong itself reports `value >= max`, revision 15 routes that final completion through `DesktopPlatform.PushAchievementUnlock()` so both Steam and Silksong's local shared state are updated.
+- Keeps revision 14's Steam-style in-game notification. The direct subsystem shows it only after Steam was confirmed locked before the write and the existing `StoreStats` path succeeded.
+- Keeps `SteamAchievementRepair` startup/lifecycle reconciliation as a recovery layer for old missed achievements or transient IPC failures rather than as the primary normal-game unlock mechanism.
+- Does not modify `AchievementService`, JavaSteam user-stat writes, Steam schema validation, the native IPC protocol, Steam Cloud synchronization, or Save History.
+
+Audit notes for Silksong's own award path:
+
+- `DemoHelper.IsDemoMode` is hard-coded false in this build, so demo mode is not blocking achievements.
+- `AchievementHandler` intentionally refuses unknown achievement keys and applies a `GODS_GLORY` map-zone whitelist to a small set of Pantheon/ending achievements; these are game rules and are left unchanged.
+- The `showNativeAchievementPopups` option only controls `AwardAchievementEvent`; it does not gate `PushAchievementUnlock`, so revision 15 no longer depends on that UI preference for normal Steam synchronization.
+- A previously local-only completed achievement can still skip the game's one-time award event, which is why revision 12+ reconciliation remains enabled as a repair mechanism.
+
 ## 1.0.3-achievements.14
 
 Adds an in-game Steam-style achievement notification while keeping the proven launcher-side Steam/JavaSteam backend unchanged.
