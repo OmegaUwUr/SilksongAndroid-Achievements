@@ -5,14 +5,10 @@
 // can reach the launcher-side Steam session while the game's own desktop
 // Steam subsystem may never be selected/initialized.
 //
-// Revision 13 keeps the proven Steam backend from revision 12 unchanged and
-// only optimizes the game-side trigger logic:
-//   * one full reconciliation after startup repairs previously missed unlocks;
-//   * AchievementHandler's award event synchronizes new unlocks immediately;
-//   * save/scene/resume events trigger cheap reconciliation at natural points;
-//   * a 120-second safety pass catches configurations where Silksong suppresses
-//     AwardAchievementEvent (notably when native achievement popups are off);
-//   * there is no per-frame Update and no 4-second polling loop.
+// Revision 14 keeps the proven launcher/JavaSteam backend unchanged. The
+// game-side layer remains event-driven and now also distinguishes an already
+// unlocked Steam achievement from a genuinely new Steam unlock. Only a new,
+// successfully stored unlock is handed to SteamAchievementToast for display.
 //
 // The repair remains deliberately one-way and conservative:
 //   * Silksong itself is the authority for whether an achievement was earned.
@@ -47,8 +43,8 @@ namespace SilksongPatches
         private IntPtr userStats = IntPtr.Zero;
         private bool bridgeReady;
 
-        // Keys successfully handed to StoreStats during this game process.
-        // If StoreStats fails, they are deliberately NOT added and a later
+        // Keys already known to be synchronized during this game process.
+        // If StoreStats fails they are deliberately NOT added and a later
         // lifecycle/safety pass retries them.
         private readonly HashSet<string> synchronizedLocalKeys =
             new HashSet<string>(StringComparer.Ordinal);
@@ -73,6 +69,13 @@ namespace SilksongPatches
         [DllImport(SteamLibrary, CallingConvention = CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)]
         private static extern bool SteamAPI_ISteamUserStats_RequestCurrentStats(IntPtr self);
+
+        [DllImport(SteamLibrary, CallingConvention = CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private static extern bool SteamAPI_ISteamUserStats_GetAchievement(
+            IntPtr self,
+            [MarshalAs(UnmanagedType.LPStr)] string name,
+            [MarshalAs(UnmanagedType.I1)] out bool achieved);
 
         [DllImport(SteamLibrary, CallingConvention = CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)]
@@ -137,20 +140,15 @@ namespace SilksongPatches
                 yield break;
             }
 
-            // Bind lifecycle signals before the first reconciliation so a scene
-            // transition that happens during startup cannot leave us waiting for
-            // the fallback timer.
             SceneManager.sceneLoaded += OnSceneLoaded;
 
-            // Give Silksong a moment to finish loading shared data and its
-            // AchievementHandler, then repair achievements missed by old builds.
+            // Repair anything missed by an older build after shared state and
+            // AchievementHandler have had time to appear.
             yield return new WaitForSecondsRealtime(0.5f);
             Reconcile("startup");
 
-            // This is a safety net, not the primary trigger. The normal path is
-            // event-driven; this wakes only once every two minutes and performs
-            // at most 52 in-memory boolean reads (usually fewer after the startup
-            // pass because synchronizedLocalKeys skips completed keys).
+            // Normal unlocks are event-driven. This is only a low-frequency
+            // fallback for game configurations that suppress AwardAchievementEvent.
             safetyLoop = StartCoroutine(SafetyLoop());
             Debug.Log(Tag + "event-driven synchronization active; safety reconciliation every 120s");
         }
@@ -181,7 +179,6 @@ namespace SilksongPatches
         private void OnSavePersistentObjects()
         {
             if (!bridgeReady) return;
-            // Coalesce with any scene/resume reconciliation already queued.
             ScheduleReconcile("game save lifecycle", 0.05f);
         }
 
@@ -191,9 +188,8 @@ namespace SilksongPatches
 
             // This is the fast path. Silksong raises this after its own
             // PushAchievementUnlock call, so RoamingSharedData should already
-            // contain the local fulfilled flag. The event is suppressed by the
-            // game when native achievement popups are disabled, which is why the
-            // save/scene/resume + slow fallback paths still exist.
+            // contain the local fulfilled flag. The event can be suppressed by
+            // the game's native-popup preference, hence the lifecycle fallback.
             if (!DiscoverGameAchievementState())
             {
                 ScheduleReconcile("achievement event (state not ready)", 0.25f);
@@ -208,8 +204,6 @@ namespace SilksongPatches
 
             if (!IsLocallyFulfilled(key))
             {
-                // Be conservative if the local shared-state write has not become
-                // visible yet. A short deferred full pass will verify it again.
                 ScheduleReconcile("achievement event confirmation: " + key, 0.25f);
                 return;
             }
@@ -244,10 +238,23 @@ namespace SilksongPatches
                 if (!DiscoverGameAchievementState()) return;
 
                 var toStore = new List<string>();
+                var showAfterStore = new List<string>();
+
                 foreach (string key in platformKeys)
                 {
                     if (string.IsNullOrEmpty(key) || synchronizedLocalKeys.Contains(key)) continue;
                     if (!IsLocallyFulfilled(key)) continue;
+
+                    bool remoteUnlocked;
+                    bool remoteStateKnown = TryGetSteamAchievementState(key, out remoteUnlocked);
+                    if (remoteStateKnown && remoteUnlocked)
+                    {
+                        // Already present on the Steam account. Mark it locally
+                        // synchronized without issuing SET/STORE and, critically,
+                        // without showing a duplicate unlock popup.
+                        synchronizedLocalKeys.Add(key);
+                        continue;
+                    }
 
                     bool accepted = false;
                     try
@@ -262,6 +269,10 @@ namespace SilksongPatches
                     if (accepted)
                     {
                         toStore.Add(key);
+                        // Only a confirmed pre-store locked state is eligible for
+                        // a Steam-style popup. If GET failed we still synchronize,
+                        // but do not risk announcing an old achievement as new.
+                        if (remoteStateKnown && !remoteUnlocked) showAfterStore.Add(key);
                     }
                 }
 
@@ -279,6 +290,12 @@ namespace SilksongPatches
                 {
                     synchronizedLocalKeys.Add(toStore[i]);
                 }
+
+                for (int i = 0; i < showAfterStore.Count; i++)
+                {
+                    SteamAchievementToast.ShowConfirmed(achievementHandler, showAfterStore[i]);
+                }
+
                 Debug.Log(Tag + "reconciled " + toStore.Count +
                     " fulfilled local achievement(s) with Steam (" + reason + ")");
             }
@@ -294,6 +311,15 @@ namespace SilksongPatches
 
             try
             {
+                bool remoteUnlocked;
+                bool remoteStateKnown = TryGetSteamAchievementState(key, out remoteUnlocked);
+                if (remoteStateKnown && remoteUnlocked)
+                {
+                    synchronizedLocalKeys.Add(key);
+                    Debug.Log(Tag + key + " was already unlocked on Steam; no duplicate popup");
+                    return;
+                }
+
                 if (!SteamAPI_ISteamUserStats_SetAchievement(userStats, key))
                 {
                     Debug.LogWarning(Tag + "SetAchievement(" + key + ") rejected during " + reason);
@@ -310,11 +336,30 @@ namespace SilksongPatches
 
                 synchronizedLocalKeys.Add(key);
                 Debug.Log(Tag + "synchronized newly awarded achievement immediately: " + key);
+
+                if (remoteStateKnown && !remoteUnlocked)
+                {
+                    SteamAchievementToast.ShowConfirmed(achievementHandler, key);
+                }
             }
             catch (Exception ex)
             {
                 Debug.LogWarning(Tag + "immediate synchronization failed for " + key + ": " + ex);
                 ScheduleReconcile("retry after award exception: " + key, 5f);
+            }
+        }
+
+        private bool TryGetSteamAchievementState(string key, out bool unlocked)
+        {
+            unlocked = false;
+            try
+            {
+                return SteamAPI_ISteamUserStats_GetAchievement(userStats, key, out unlocked);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(Tag + "GetAchievement(" + key + ") failed: " + ex.Message);
+                return false;
             }
         }
 
