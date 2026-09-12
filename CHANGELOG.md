@@ -2,6 +2,22 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.14
+
+Adds an in-game Steam-style achievement notification while keeping the proven launcher-side Steam/JavaSteam backend unchanged.
+
+Changes in this revision:
+
+- Adds `SteamAchievementToast`, a Unity overlay that appears in the bottom-right after a genuinely new Steam achievement has been stored successfully.
+- Uses Silksong's own `Achievement.Icon`, localized achievement title, and localized achievement description directly from the player's game data; no generated artwork or hard-coded achievement catalog is bundled.
+- Styles the notification as a dark Steam-like card with a blue accent, `STEAM • ACHIEVEMENT UNLOCKED` header, official Silksong achievement icon, title, description, slide/fade-in animation, timed hold, and slide/fade-out animation.
+- Queues multiple unlock notifications so simultaneous achievements do not overlap.
+- Adds a game-side `GetAchievement` check before `SetAchievement`/`StoreStats`. Achievements already unlocked on the Steam account are marked synchronized locally without redundant writes or duplicate popups.
+- Shows a popup only when Steam reported the achievement locked before the write and the existing `StoreStats` path then succeeded.
+- Startup/lifecycle reconciliation can therefore show a popup for a genuinely missed achievement that gets repaired, while existing Steam achievements do not spam notifications on every game launch.
+- Keeps revision 13's event-driven synchronization, save/scene/resume reconciliation, and 120-second safety fallback.
+- Does not modify `AchievementService`, JavaSteam user-stat writes, Steam schema validation, the native IPC protocol, or any server-side achievement-write logic.
+
 ## 1.0.3-achievements.13
 
 Optimizes the proven revision-12 in-game achievement repair so normal synchronization is event-driven instead of scanning all achievement state every four seconds. The launcher-side Steam/JavaSteam backend and its validated write path are unchanged.
