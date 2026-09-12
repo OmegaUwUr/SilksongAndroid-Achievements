@@ -23,14 +23,18 @@ namespace SilksongPatches
     {
         private const string Tag = "[SilksongPatches] AndroidSteamOnlineSubsystem: ";
         private const string SteamLibrary = "steam_api64";
+        private const float PendingRetrySeconds = 10f;
 
         private readonly DesktopPlatform platform;
         private readonly HashSet<string> pendingUnlocks =
+            new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> pendingPopupUnlocks =
             new HashSet<string>(StringComparer.Ordinal);
 
         private IntPtr userStats = IntPtr.Zero;
         private bool ready;
         private float nextReadyProbeAt;
+        private float nextPendingRetryAt;
 
         public AndroidSteamOnlineSubsystem(DesktopPlatform platform)
         {
@@ -98,12 +102,27 @@ namespace SilksongPatches
 
         public override void Update()
         {
-            // DesktopPlatform calls this once per frame. The body is intentionally
-            // just a time comparison while the bridge is not ready, then empty.
-            if (ready) return;
-            if (Time.realtimeSinceStartup < nextReadyProbeAt) return;
-            nextReadyProbeAt = Time.realtimeSinceStartup + 1f;
-            TryBecomeReady();
+            float now = Time.realtimeSinceStartup;
+
+            if (!ready)
+            {
+                if (now < nextReadyProbeAt) return;
+                nextReadyProbeAt = now + 1f;
+                TryBecomeReady();
+                return;
+            }
+
+            // A successful SET followed by a failed STORE remains queued in the
+            // launcher service. Its GET result intentionally reads as true while
+            // pending, so retries must be driven by our own pending set rather
+            // than by treating that GET as proof Steam accepted the write.
+            if (pendingUnlocks.Count > 0 && now >= nextPendingRetryAt)
+            {
+                nextPendingRetryAt = now + PendingRetrySeconds;
+                Debug.Log(Tag + "retrying " + pendingUnlocks.Count +
+                    " pending achievement write(s)");
+                FlushPendingUnlocks();
+            }
         }
 
         private void TryBecomeReady()
@@ -122,6 +141,7 @@ namespace SilksongPatches
 
                 userStats = stats;
                 ready = true;
+                nextPendingRetryAt = Time.realtimeSinceStartup;
                 Debug.Log(Tag + "READY; Silksong achievement calls now route through the Android Steam bridge");
 
                 try
@@ -174,6 +194,7 @@ namespace SilksongPatches
             if (!ready)
             {
                 pendingUnlocks.Add(achievementId);
+                nextPendingRetryAt = Time.realtimeSinceStartup + PendingRetrySeconds;
                 Debug.LogWarning(Tag + "queued " + achievementId + " until Steam bridge is ready");
                 return;
             }
@@ -181,6 +202,7 @@ namespace SilksongPatches
             if (!TrySynchronizeUnlock(achievementId))
             {
                 pendingUnlocks.Add(achievementId);
+                nextPendingRetryAt = Time.realtimeSinceStartup + PendingRetrySeconds;
             }
         }
 
@@ -190,15 +212,31 @@ namespace SilksongPatches
 
             try
             {
+                // If this key is already in our pending set, a previous attempt
+                // may have completed SET but failed STORE. In that situation the
+                // launcher service reports GET=true for its pending queue. Do not
+                // mistake that for an already-confirmed Steam achievement; issue
+                // SET again (idempotent) and retry STORE.
+                bool retryingPendingWrite = pendingUnlocks.Contains(achievementId);
                 bool wasUnlocked = false;
                 bool remoteKnown = SteamAPI_ISteamUserStats_GetAchievement(
                     userStats, achievementId, out wasUnlocked);
 
-                if (remoteKnown && wasUnlocked)
+                if (remoteKnown && wasUnlocked && !retryingPendingWrite)
                 {
                     pendingUnlocks.Remove(achievementId);
+                    pendingPopupUnlocks.Remove(achievementId);
                     Debug.Log(Tag + achievementId + " already unlocked on Steam");
                     return true;
+                }
+
+                if (remoteKnown && !wasUnlocked)
+                {
+                    // Preserve the original locked state across a failed STORE.
+                    // On retry the service may report GET=true because the SET is
+                    // still pending, but a later successful STORE is still the
+                    // same genuine unlock and should get exactly one toast.
+                    pendingPopupUnlocks.Add(achievementId);
                 }
 
                 if (!SteamAPI_ISteamUserStats_SetAchievement(userStats, achievementId))
@@ -209,17 +247,16 @@ namespace SilksongPatches
 
                 if (!SteamAPI_ISteamUserStats_StoreStats(userStats))
                 {
-                    Debug.LogWarning(Tag + "StoreStats rejected for " + achievementId);
+                    Debug.LogWarning(Tag + "StoreStats rejected for " + achievementId +
+                        "; keeping it pending for retry");
                     return false;
                 }
 
                 pendingUnlocks.Remove(achievementId);
+                bool showPopup = pendingPopupUnlocks.Remove(achievementId);
                 Debug.Log(Tag + "Silksong directly synchronized achievement: " + achievementId);
 
-                // Only announce a confirmed transition from Steam-locked to
-                // Steam-unlocked. If GET failed, sync still happens but no toast
-                // is shown to avoid a false duplicate notification.
-                if (remoteKnown && !wasUnlocked)
+                if (showPopup)
                 {
                     AchievementHandler handler = null;
                     try
@@ -264,18 +301,37 @@ namespace SilksongPatches
             // achievement writes, not arbitrary stat mutation. Reaching the game's
             // own declared maximum is therefore translated into the equivalent
             // final achievement unlock, while intermediate progress stays local.
-            if (string.IsNullOrEmpty(achievementId) || max <= 0) return;
-            if (value >= max)
-            {
-                Debug.Log(Tag + "progress reached " + value + "/" + max +
-                    " for " + achievementId + "; routing final unlock through DesktopPlatform");
+            if (string.IsNullOrEmpty(achievementId) || max <= 0 || value < max) return;
 
-                // Go back through DesktopPlatform rather than calling this
-                // subsystem directly. DesktopPlatform.PushAchievementUnlock()
-                // invokes us and then records RoamingSharedData.SetBool(key,true),
-                // preserving Silksong's local/shared.dat achievement state too.
-                platform.PushAchievementUnlock(achievementId);
+            // Some gameplay systems may use progress-like keys that are not real
+            // achievements. If Silksong's own list is available and positively
+            // says this is not an achievement, do not turn it into a Steam unlock.
+            try
+            {
+                GameManager gm = GameManager.instance;
+                AchievementHandler handler = gm != null ? gm.achievementHandler : null;
+                AchievementsList list = handler != null ? handler.AchievementsList : null;
+                if (list != null && list.FindAchievement(achievementId) == null)
+                {
+                    Debug.Log(Tag + "progress reached " + value + "/" + max + " for " +
+                        achievementId + ", but it is not a Silksong achievement key; not converting it");
+                    return;
+                }
             }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(Tag + "could not validate progress achievement " + achievementId +
+                    ": " + ex.Message + "; allowing Steam schema validation to decide");
+            }
+
+            Debug.Log(Tag + "progress reached " + value + "/" + max +
+                " for " + achievementId + "; routing final unlock through DesktopPlatform");
+
+            // Go back through DesktopPlatform rather than calling this subsystem
+            // directly. DesktopPlatform.PushAchievementUnlock() invokes us and
+            // then records RoamingSharedData.SetBool(key,true), preserving
+            // Silksong's local/shared.dat achievement state too.
+            platform.PushAchievementUnlock(achievementId);
         }
 
         public override void ResetAchievements()
@@ -289,6 +345,7 @@ namespace SilksongPatches
         {
             ready = false;
             pendingUnlocks.Clear();
+            pendingPopupUnlocks.Clear();
             userStats = IntPtr.Zero;
             // Do NOT call SteamAPI_Shutdown here. SteamAchievementRepair and the
             // launcher service own the shared Android bridge lifetime.
