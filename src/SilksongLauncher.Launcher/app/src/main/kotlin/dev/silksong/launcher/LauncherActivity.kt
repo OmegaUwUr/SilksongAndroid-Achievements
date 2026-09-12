@@ -69,6 +69,10 @@ class LauncherActivity : Activity() {
     // the same Steam account.
     private var cloudJob: Job? = null
 
+    // The readiness sequence is separate from ordinary cloud jobs because it
+    // also waits for the achievement service and prepares local game data.
+    private var launchJob: Job? = null
+
     // Mirrors LauncherLog into the on-screen log panel.
     private val logListener = LauncherLog.Listener { _, snapshot ->
         runOnUiThread {
@@ -219,9 +223,10 @@ class LauncherActivity : Activity() {
      * or pulls NOTHING — never a per-slot mix.
      *
      * Returns true if the caller may proceed (synced, nothing to do, or
-     * the conflict was resolved by keeping local/remote); false only
-     * when the user cancelled an unresolved conflict — the pre-launch
-     * path uses that to abort the game launch.
+     * the conflict was resolved by keeping local/remote); false if the
+     * conflict was cancelled OR the operation itself failed. The strict
+     * result matters to launch readiness: the game must not start while
+     * the requested pre-launch Cloud check is incomplete.
      */
     private suspend fun pullFlow(c: TokenStore.Credentials, source: String): Boolean {
         try {
@@ -259,7 +264,7 @@ class LauncherActivity : Activity() {
         } catch (t: Throwable) {
             LauncherLog.log("Pull failed: ${t.message ?: t.javaClass.simpleName}")
             android.util.Log.e("SilksongLauncher.Cloud", "pull flow failed ($source)", t)
-            return true
+            return false
         }
     }
 
@@ -397,7 +402,7 @@ class LauncherActivity : Activity() {
      * Forced full push (no prompt): the user chose "keep local", so
      * upload the entire local set, clobbering cloud — including files
      * where cloud was newer. Re-analyses from scratch because the
-     * originating flow may have been a pull, which has no push picture.
+     * originating flow may have been a pull, which has no pull picture.
      */
     private suspend fun pushLocalOverCloud(c: TokenStore.Credentials) {
         val analysis = CloudSync.analyzePush(this@LauncherActivity, c)
@@ -472,75 +477,59 @@ class LauncherActivity : Activity() {
     // ── Launch the game ────────────────────────────────────────────────
 
     /**
-     * Launch button handler. Steam-style: if auto-pull is on and we're
-     * logged in, sync the latest cloud saves DOWN first (resolving any
-     * conflict via the dialog), then launch — so the player always
-     * starts on the freshest save. Cancelling the conflict aborts the
-     * launch. With auto-pull off or not logged in, we launch straight
-     * away.
+     * The launch button now enters one strict preparation sequence. Auto-pull,
+     * installed content, the authenticated achievement service, game settings,
+     * and local save preparation all complete before GameActivity is started.
      */
     private fun onLaunchClicked() {
-        val c = creds
-        if (c == null || !settings.autoPull) {
-            launchGame()
+        if (launchJob?.isActive == true) {
+            LauncherLog.log("Launch preparation already running")
             return
         }
-        runCloudJob(spinPull, btnPull, R.string.action_pull_saves_busy) {
-            LauncherLog.log("Pre-launch sync: pulling latest cloud saves…")
-            if (pullFlow(c, source = "pre-launch")) {
-                launchGame()
-            } else {
-                LauncherLog.log("Launch aborted — unresolved save conflict")
-            }
+        if (cloudJob?.isActive == true) {
+            LauncherLog.log("Launch waiting: a cloud operation is still running")
+            return
+        }
+
+        val c = creds
+        launchJob = uiScope.launch {
+            val prepared = LaunchReadiness.prepare(
+                activity = this@LauncherActivity,
+                credentials = c,
+                settings = settings,
+                syncCloud = c != null && settings.autoPull,
+                syncSaves = {
+                    if (c == null || !settings.autoPull) {
+                        true
+                    } else {
+                        LauncherLog.log("Pre-launch sync: pulling latest cloud saves…")
+                        pullFlow(c, source = "pre-launch")
+                    }
+                },
+            ) ?: return@launch
+
+            launchPreparedGame(prepared)
         }
     }
 
-    private fun launchGame() {
-        // The content is not inside the app: it is the depot's own bundle
-        // tree, read through <files>/aa every time the game runs, and the
-        // catalog can point nowhere else. So a depot that has been deleted or
-        // moved is checked for here rather than being discovered by the engine
-        // as an empty world, and the link is remade in case it moved.
-        val depot = DepotLocation.resolve(this)?.takeIf { PlayerImage.depotData(it) != null }
-        if (depot == null) {
-            LauncherLog.log("Launch aborted: the game's files are not on this device")
-            missingGameFiles()
-            return
-        }
-        runCatching { DepotLocation.relink(this, depot) }
-            .onFailure { LauncherLog.log("could not relink the content", it) }
+    private fun launchPreparedGame(prepared: LaunchReadiness.Prepared) {
         try {
-            LauncherLog.log("Launching $UNITY_ACTIVITY_CLASS")
-            // No FLAG_ACTIVITY_NEW_TASK / CLEAR_TASK and no finish()
-            // here — we want Unity's activity ON TOP of ours in the
-            // same task so the system back stack returns to us on
-            // exit. Our `:launcher` process keeps us alive even
-            // when Unity calls System.exit(0) on quit, so the
-            // returning activity transition is just an OS-driven
-            // resume of the still-living launcher.
+            prepared.screen.stage(100, "Starting Silksong", "Everything is ready")
+            LauncherLog.log("Launching $UNITY_ACTIVITY_CLASS after readiness gate")
+
+            // No FLAG_ACTIVITY_NEW_TASK / CLEAR_TASK and no finish(): Unity's
+            // activity stays above this launcher in the same task so returning
+            // from the game resumes this still-living :launcher process.
             val intent = Intent().apply {
                 setClassName(packageName, UNITY_ACTIVITY_CLASS)
             }
-            // Written here rather than when the user changes a setting: this
-            // is the moment the game will read them, so it is the moment they
-            // cannot be stale.
-            settings.exportForGame(this)
-            // Keep the authenticated JavaSteam session alive in :launcher while
-            // Unity runs in the game process. Manual-file launches have no
-            // credentials and therefore never start this service.
-            if (TokenStore(this).read() != null) {
-                AchievementService.start(this)
-            }
-            // Same reason, and the more important one: this is the last moment
-            // before the engine owns the save directory. See SaveDir -- the
-            // game promotes a stranded save temp over the real save without
-            // saying so, and clearing them is only possible from out here.
-            SaveDir.prepare(this)
             returningFromGame = true
             startActivity(intent)
+            prepared.screen.dismiss()
         } catch (t: Throwable) {
             returningFromGame = false
             LauncherLog.log("Failed to launch game: ${t.message}")
+            prepared.screen.fail("Android could not start the game activity: ${t.message ?: t.javaClass.simpleName}")
         }
     }
 
