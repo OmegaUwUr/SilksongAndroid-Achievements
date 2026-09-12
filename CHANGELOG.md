@@ -2,6 +2,24 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.13
+
+Optimizes the proven revision-12 in-game achievement repair so normal synchronization is event-driven instead of scanning all achievement state every four seconds. The launcher-side Steam/JavaSteam backend and its validated write path are unchanged.
+
+Changes in this revision:
+
+- Removes the `SteamAchievementRepair.Update()` loop and the four-second reconciliation timer entirely.
+- Subscribes to Silksong's `AchievementHandler.AwardAchievementEvent` and synchronizes a newly awarded achievement immediately when that event is available.
+- Reads the canonical local completion flag from `Platform.Current.RoamingSharedData.GetBool(PlatformKey, false)`, matching Silksong's own `DesktopPlatform.PushAchievementUnlock()` fallback behavior.
+- Retains revision 12's `GameManager.GetStatusRecordInt(PlatformKey)` check only as a compatibility fallback because that path has already been proven on-device.
+- Keeps one startup reconciliation so achievements missed by older builds are still repaired when a save is loaded.
+- Adds reconciliation at natural lifecycle points: game persistent-save events, Unity scene loads, and application resume.
+- Keeps a low-frequency 120-second safety reconciliation for cases where Silksong suppresses `AwardAchievementEvent` (for example when native achievement popups are disabled).
+- Caches successfully synchronized keys for the lifetime of the game process, so lifecycle/safety passes skip achievements already handled in that session.
+- Coalesces overlapping save/scene/resume requests into one delayed reconciliation instead of starting duplicate scans.
+- Preserves retry behavior after a rejected `SetAchievement`/`StoreStats` operation.
+- Does not modify `AchievementService`, JavaSteam user-stat writes, Steam schema validation, the native IPC protocol, or the Steam account backend that revision 12 successfully proved.
+
 ## 1.0.3-achievements.12
 
 Adds a game-side Steam achievement reconciliation layer so achievements Silksong itself has already marked as fulfilled can still reach Steam even when the translated desktop platform bootstrap never calls Steamworks.NET on Android.
