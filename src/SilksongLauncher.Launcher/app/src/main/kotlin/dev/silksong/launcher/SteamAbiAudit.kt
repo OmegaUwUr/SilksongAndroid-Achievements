@@ -26,13 +26,6 @@ object SteamAbiAudit {
         val interfaceVersions: Set<String>,
     )
 
-    // A resolver expression normally looks roughly like:
-    // il2cpp_codegen_resolve_pinvoke<...>(
-    //     IL2CPP_NATIVE_STRING("steam_api64"),
-    //     "SteamAPI_ISteamUserStats_SetAchievement", ...);
-    // Read a bounded expression instead of grepping every SteamAPI_* token in
-    // the generated source. This deliberately excludes managed symbols such as
-    // SteamAPI_Init_m1234... and delegate helper names.
     private val resolverRegex = Regex(
         "il2cpp_codegen_resolve_pinvoke[\\s\\S]{0,8192}?\\);",
         setOf(RegexOption.MULTILINE)
@@ -51,6 +44,7 @@ object SteamAbiAudit {
         "SteamAPI_Init",
         "SteamAPI_InitSafe",
         "SteamInternal_SteamAPI_Init",
+        "SteamInternal_ContextInit",
         "SteamAPI_Shutdown",
         "SteamAPI_RunCallbacks",
         "SteamAPI_IsSteamRunning",
@@ -60,12 +54,52 @@ object SteamAbiAudit {
         "Steam_GetHSteamUserCurrent",
         "SteamAPI_RestartAppIfNecessary",
         "SteamInternal_FindOrCreateUserInterface",
+        "SteamInternal_FindOrCreateGameServerInterface",
         "SteamInternal_CreateInterface",
+
+        // Steamworks.NET CSteamAPIContext bootstrap. These getters return
+        // stable non-null opaque interface handles; the game-facing behavior
+        // we support is implemented by the corresponding flat SteamAPI calls.
+        "SteamAPI_ISteamClient_GetISteamUser",
+        "SteamAPI_ISteamClient_GetISteamFriends",
+        "SteamAPI_ISteamClient_GetISteamUtils",
+        "SteamAPI_ISteamClient_GetISteamMatchmaking",
+        "SteamAPI_ISteamClient_GetISteamMatchmakingServers",
+        "SteamAPI_ISteamClient_GetISteamUserStats",
+        "SteamAPI_ISteamClient_GetISteamApps",
+        "SteamAPI_ISteamClient_GetISteamNetworking",
+        "SteamAPI_ISteamClient_GetISteamRemoteStorage",
+        "SteamAPI_ISteamClient_GetISteamScreenshots",
+        "SteamAPI_ISteamClient_GetISteamHTTP",
+        "SteamAPI_ISteamClient_GetISteamUGC",
+        "SteamAPI_ISteamClient_GetISteamMusic",
+        "SteamAPI_ISteamClient_GetISteamHTMLSurface",
+        "SteamAPI_ISteamClient_GetISteamInventory",
+        "SteamAPI_ISteamClient_GetISteamVideo",
+        "SteamAPI_ISteamClient_GetISteamParentalSettings",
+        "SteamAPI_ISteamClient_GetISteamInput",
+        "SteamAPI_ISteamClient_GetISteamParties",
+        "SteamAPI_ISteamClient_GetISteamRemotePlay",
+
+        "SteamAPI_ISteamUser_BLoggedOn",
+        "SteamAPI_ISteamUser_GetSteamID",
+        "SteamAPI_ISteamUtils_GetAppID",
+        "SteamAPI_ISteamUtils_IsOverlayEnabled",
+        "SteamAPI_ISteamApps_BIsSubscribed",
+        "SteamAPI_ISteamApps_BIsSubscribedApp",
+        "SteamAPI_ISteamApps_BIsAppInstalled",
+        "SteamAPI_ISteamApps_BIsDlcInstalled",
+        "SteamAPI_ISteamApps_BIsVACBanned",
+        "SteamAPI_ISteamApps_GetAppBuildId",
+        "SteamAPI_ISteamApps_GetCurrentGameLanguage",
+        "SteamAPI_ISteamApps_GetAvailableGameLanguages",
+
         "SteamAPI_ManualDispatch_Init",
         "SteamAPI_ManualDispatch_RunFrame",
         "SteamAPI_ManualDispatch_GetNextCallback",
         "SteamAPI_ManualDispatch_FreeLastCallback",
         "SteamAPI_ManualDispatch_GetAPICallResult",
+
         "SteamAPI_SteamUserStats_v001",
         "SteamAPI_SteamUserStats_v002",
         "SteamAPI_SteamUserStats_v003",
@@ -89,6 +123,12 @@ object SteamAbiAudit {
         "SteamAPI_ISteamUserStats_GetNumAchievements",
         "SteamAPI_ISteamUserStats_GetAchievementName",
         "SteamAPI_ISteamUserStats_IndicateAchievementProgress",
+        "SteamAPI_ISteamUserStats_GetStatInt32",
+        "SteamAPI_ISteamUserStats_GetStatFloat",
+        "SteamAPI_ISteamUserStats_SetStatInt32",
+        "SteamAPI_ISteamUserStats_SetStatFloat",
+        "SteamAPI_ISteamUserStats_UpdateAvgRateStat",
+
         "SteamAPI_RegisterCallback",
         "SteamAPI_UnregisterCallback",
         "SteamAPI_RegisterCallResult",
@@ -104,10 +144,6 @@ object SteamAbiAudit {
             .forEach { file ->
                 runCatching {
                     val text = file.readText()
-
-                    // Interface-version literals are harmless metadata and are
-                    // useful even when no P/Invoke resolver is present in this
-                    // particular generated file.
                     interfaceRegex.findAll(text).forEach { versions += it.value }
 
                     resolverRegex.findAll(text).forEach { resolver ->
@@ -125,12 +161,6 @@ object SteamAbiAudit {
         return Result(required, missing, versions)
     }
 
-    /**
-     * Retained under the old name because NativeBuild already calls it.
-     * Missing symbols are reported but are no longer fatal: this parser is a
-     * diagnostic aid and must not reject a valid IL2CPP conversion merely
-     * because generated source formatting changed.
-     */
     fun requireCompatible(cppDir: File) {
         val result = inspect(cppDir)
         val reportDir = cppDir.parentFile ?: cppDir
