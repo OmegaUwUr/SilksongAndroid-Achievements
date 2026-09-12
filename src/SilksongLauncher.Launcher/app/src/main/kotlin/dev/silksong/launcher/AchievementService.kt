@@ -13,12 +13,17 @@ import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.os.Build
 import android.os.IBinder
+import `in`.dragonbra.javasteam.enums.EOSType
 import `in`.dragonbra.javasteam.enums.EResult
+import `in`.dragonbra.javasteam.steam.handlers.steamapps.GamePlayedInfo
+import `in`.dragonbra.javasteam.steam.handlers.steamapps.SteamApps
 import `in`.dragonbra.javasteam.steam.handlers.steamuser.SteamUser
+import `in`.dragonbra.javasteam.steam.handlers.steamuser.callback.PlayingSessionStateCallback
 import `in`.dragonbra.javasteam.steam.handlers.steamuserstats.Stats
 import `in`.dragonbra.javasteam.steam.handlers.steamuserstats.SteamUserStats
 import `in`.dragonbra.javasteam.steam.handlers.steamuserstats.callback.UserStatsCallback
 import java.io.BufferedReader
+import java.io.Closeable
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.io.PrintWriter
@@ -38,6 +43,8 @@ class AchievementService : Service() {
         private const val STEAM_TIMEOUT_SECONDS = 25L
         private const val ACTION_NOTIFICATION_DISMISSED = "dev.silksong.launcher.ACHIEVEMENT_NOTIFICATION_DISMISSED"
         private const val ACTION_SAFE_SHUTDOWN = "dev.silksong.launcher.ACHIEVEMENT_SAFE_SHUTDOWN"
+        private const val ACTION_GAME_ACTIVE = "dev.silksong.launcher.SILKSONG_GAME_ACTIVE"
+        private const val ACTION_GAME_INACTIVE = "dev.silksong.launcher.SILKSONG_GAME_INACTIVE"
         @Volatile private var active = false
 
         fun isActive(): Boolean = active
@@ -53,6 +60,19 @@ class AchievementService : Service() {
                 LauncherLog.log("Achievements: service start failed", t)
                 throw t
             }
+        }
+
+        /**
+         * Called from the Application's ActivityLifecycleCallbacks in the game
+         * process. This is deliberately a package-scoped broadcast rather than
+         * process-local state: GameActivity and AchievementService live in
+         * different Android processes.
+         */
+        fun reportGameActivity(context: Context, playing: Boolean) {
+            context.sendBroadcast(
+                Intent(if (playing) ACTION_GAME_ACTIVE else ACTION_GAME_INACTIVE)
+                    .setPackage(context.packageName)
+            )
         }
 
         /**
@@ -72,16 +92,22 @@ class AchievementService : Service() {
     private val running = AtomicBoolean(true)
     private val ready = AtomicBoolean(false)
     private val shuttingDown = AtomicBoolean(false)
+    private val gameWantsPlaying = AtomicBoolean(false)
+    private val steamPlaying = AtomicBoolean(false)
+    private val playingBlocked = AtomicBoolean(false)
     private val executor: ExecutorService = Executors.newCachedThreadPool()
     private val achievementLocations = ConcurrentHashMap<String, AchievementLocation>()
     private val remotelyUnlocked = ConcurrentHashMap.newKeySet<String>()
     private val pendingUnlocks = ConcurrentHashMap.newKeySet<String>()
     private val storeLock = Any()
+    private val presenceLock = Any()
 
     private var server: LocalServerSocket? = null
     private var steam: SteamSession? = null
+    private var playingSessionSubscription: Closeable? = null
     @Volatile private var steamUser: SteamUser? = null
     @Volatile private var steamUserStats: SteamUserStats? = null
+    @Volatile private var steamApps: SteamApps? = null
     @Volatile private var notificationText = "Connecting to Steam…"
 
     private val notificationDismissReceiver = object : BroadcastReceiver() {
@@ -100,6 +126,21 @@ class AchievementService : Service() {
     private val shutdownReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ACTION_SAFE_SHUTDOWN) beginSafeShutdown()
+        }
+    }
+
+    private val gameActivityReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                ACTION_GAME_ACTIVE -> {
+                    gameWantsPlaying.set(true)
+                    if (!shuttingDown.get()) executor.execute { applySteamPlayingState(true) }
+                }
+                ACTION_GAME_INACTIVE -> {
+                    gameWantsPlaying.set(false)
+                    if (!shuttingDown.get()) executor.execute { applySteamPlayingState(false) }
+                }
+            }
         }
     }
 
@@ -132,6 +173,24 @@ class AchievementService : Service() {
             LauncherLog.log("Achievements: connecting to Steam CM")
             val session = SteamSession()
             steam = session
+
+            // Steam warns clients before another logged-in session's game would
+            // conflict with this one. Respect that state: never kick or steal a
+            // playing session from the user's PC/another device just to show
+            // Android presence.
+            playingSessionSubscription = session.subscribe(PlayingSessionStateCallback::class.java) { state ->
+                playingBlocked.set(state.isPlayingBlocked)
+                if (state.isPlayingBlocked) {
+                    steamPlaying.set(false)
+                    LauncherLog.log(
+                        "Steam presence: another Steam session is already playing app ${state.playingAppID}; " +
+                            "Silksong presence will wait"
+                    )
+                } else if (gameWantsPlaying.get() && ready.get() && !shuttingDown.get()) {
+                    runCatching { executor.execute { applySteamPlayingState(true) } }
+                }
+            }
+
             session.logOn(credentials)
             LauncherLog.log("Achievements: authenticated with Steam")
 
@@ -145,9 +204,12 @@ class AchievementService : Service() {
                 ?: throw IllegalStateException("JavaSteam SteamUser handler unavailable")
             val stats = session.steamClient.getHandler(SteamUserStats::class.java)
                 ?: throw IllegalStateException("JavaSteam SteamUserStats handler unavailable")
+            val apps = session.steamClient.getHandler(SteamApps::class.java)
+                ?: throw IllegalStateException("JavaSteam SteamApps handler unavailable")
             if (user.steamID == null) throw IllegalStateException("Steam logged on but account SteamID is unavailable")
             steamUser = user
             steamUserStats = stats
+            steamApps = apps
 
             LauncherLog.log("Achievements: requesting authoritative Steam achievement state for app $APP_ID")
             val snapshot = fetchUserStats()
@@ -161,9 +223,80 @@ class AchievementService : Service() {
             ready.set(true)
             LauncherLog.log("Achievements: READY — ${achievementLocations.size} Steam achievement API names mapped")
             updateNotification("Connected to Steam • ${achievementLocations.size} achievements tracked")
+
+            // If GameActivity became active while Steam was still authenticating,
+            // honor that lifecycle signal now rather than losing the session.
+            if (gameWantsPlaying.get()) applySteamPlayingState(true)
         } catch (t: Throwable) {
             if (!shuttingDown.get()) failReady("Achievement Steam session failed", t)
         }
+    }
+
+    /**
+     * Announces AppID 1030300 through Steam's normal ClientGamesPlayed path.
+     * Steam uses this presence session for the visible "Playing" state and is
+     * the server-side source of playtime; we never fabricate a minute counter.
+     */
+    private fun applySteamPlayingState(playing: Boolean) = synchronized(presenceLock) {
+        if (shuttingDown.get()) return@synchronized
+
+        val apps = steamApps ?: return@synchronized
+
+        if (!playing) {
+            steamPlaying.set(false)
+            // While another client owns the playing session, JavaSteam warns
+            // that ANY ClientGamesPlayed message can log this session off with
+            // LoggedInElsewhere. Do not send even an empty list in that state.
+            if (playingBlocked.get()) {
+                LauncherLog.log("Steam presence: game inactive; remote playing session remains untouched")
+                return@synchronized
+            }
+            try {
+                apps.notifyGamesPlayed(emptyList(), EOSType.AndroidUnknown)
+                LauncherLog.log("Steam presence: Silksong playing state cleared")
+                if (ready.get()) {
+                    updateNotification("Connected to Steam • ${achievementLocations.size} achievements tracked")
+                }
+            } catch (t: Throwable) {
+                LauncherLog.log("Steam presence: could not clear playing state", t)
+            }
+            return@synchronized
+        }
+
+        if (!gameWantsPlaying.get() || !ready.get() || steamPlaying.get()) return@synchronized
+        if (playingBlocked.get()) {
+            LauncherLog.log("Steam presence: Silksong is active, but another Steam session currently owns playing state")
+            return@synchronized
+        }
+
+        val user = steamUser ?: return@synchronized
+        val steamId = user.steamID ?: return@synchronized
+        val played = GamePlayedInfo(
+            gameId = APP_ID.toLong(),
+            processId = android.os.Process.myPid(),
+            ownerId = steamId.accountID.toInt(),
+            gameBuildId = 0,
+        )
+
+        try {
+            apps.notifyGamesPlayed(listOf(played), EOSType.AndroidUnknown)
+            steamPlaying.set(true)
+            LauncherLog.log("Steam presence: announced Playing Hollow Knight: Silksong (AppID $APP_ID)")
+            updateNotification("Playing Silksong • Steam activity active")
+        } catch (t: Throwable) {
+            steamPlaying.set(false)
+            LauncherLog.log("Steam presence: failed to announce Silksong", t)
+        }
+    }
+
+    private fun clearSteamPresenceForShutdown() = synchronized(presenceLock) {
+        gameWantsPlaying.set(false)
+        steamPlaying.set(false)
+        val apps = steamApps ?: return@synchronized
+        if (playingBlocked.get()) return@synchronized
+        runCatching { apps.notifyGamesPlayed(emptyList(), EOSType.AndroidUnknown) }
+            .onSuccess { LauncherLog.log("Steam presence: cleared before service shutdown") }
+            .onFailure { LauncherLog.log("Steam presence: final clear failed", it) }
     }
 
     private fun failReady(message: String, error: Throwable? = null) {
@@ -341,14 +474,21 @@ class AchievementService : Service() {
     private fun registerReceivers() {
         val dismissFilter = IntentFilter(ACTION_NOTIFICATION_DISMISSED)
         val shutdownFilter = IntentFilter(ACTION_SAFE_SHUTDOWN)
+        val gameFilter = IntentFilter().apply {
+            addAction(ACTION_GAME_ACTIVE)
+            addAction(ACTION_GAME_INACTIVE)
+        }
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(notificationDismissReceiver, dismissFilter, Context.RECEIVER_NOT_EXPORTED)
             registerReceiver(shutdownReceiver, shutdownFilter, Context.RECEIVER_NOT_EXPORTED)
+            registerReceiver(gameActivityReceiver, gameFilter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             @Suppress("DEPRECATION")
             registerReceiver(notificationDismissReceiver, dismissFilter)
             @Suppress("DEPRECATION")
             registerReceiver(shutdownReceiver, shutdownFilter)
+            @Suppress("DEPRECATION")
+            registerReceiver(gameActivityReceiver, gameFilter)
         }
     }
 
@@ -414,14 +554,18 @@ class AchievementService : Service() {
                     runCatching { storeStats() }
                         .onFailure { LauncherLog.log("Achievements: final Steam flush failed", it) }
                 }
+                clearSteamPresenceForShutdown()
             } finally {
                 running.set(false)
                 ready.set(false)
+                runCatching { playingSessionSubscription?.close() }
+                playingSessionSubscription = null
                 runCatching { server?.close() }
                 steam?.close()
                 steam = null
                 steamUser = null
                 steamUserStats = null
+                steamApps = null
 
                 android.os.Handler(mainLooper).post {
                     LauncherLog.log("Achievements: safe shutdown complete")
@@ -451,15 +595,20 @@ class AchievementService : Service() {
         if (!shuttingDown.get() && ready.get() && pendingUnlocks.isNotEmpty()) {
             runCatching { storeStats() }
         }
+        clearSteamPresenceForShutdown()
         running.set(false)
         ready.set(false)
+        runCatching { playingSessionSubscription?.close() }
+        playingSessionSubscription = null
         runCatching { server?.close() }
         steam?.close()
         steam = null
         steamUser = null
         steamUserStats = null
+        steamApps = null
         runCatching { unregisterReceiver(notificationDismissReceiver) }
         runCatching { unregisterReceiver(shutdownReceiver) }
+        runCatching { unregisterReceiver(gameActivityReceiver) }
         if (Build.VERSION.SDK_INT >= 24) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
