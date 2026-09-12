@@ -2,6 +2,24 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.17
+
+Adds a strict pre-launch readiness gate so the Unity game process is not started while required launcher-side services or game data are still being prepared.
+
+Changes in this revision:
+
+- Adds a full-screen launch preparation UI with a horizontal determinate progress bar and short human-readable stages rather than exposing low-level logs.
+- Uses concise stages such as `Preparing game files`, `Checking Steam Cloud saves`, `Connecting to Steam`, `Preparing game data`, and `Starting Silksong`.
+- Verifies that the installed Silksong depot is still present and re-links the content tree before launch. Missing or unusable content stops the launch instead of allowing Unity to start against an incomplete content path.
+- Makes the optional pre-launch Steam Cloud pull fail closed: if the requested Cloud check fails or the user leaves a conflict unresolved, the game does not start.
+- Starts `AchievementService` before Unity when the user is signed in and waits for the exact abstract-socket `PING` used by the native Steam shim to return ready.
+- A successful readiness `PING` therefore means the service has authenticated with Steam, verified the depot, fetched authoritative user stats, mapped the Silksong achievement schema, and is ready to answer game-side achievement calls.
+- Uses a bounded 60-second readiness wait rather than a guessed fixed delay. On failure, the preparation screen remains visible with a readable error and a Back action.
+- Preserves offline/manual launches: when no Steam credentials are present, Steam synchronization is treated as optional and the game can still launch after local prerequisites are prepared.
+- Exports current game settings and runs `SaveDir.prepare()` before starting `GameActivity`, eliminating the previous race where those steps and achievement-service initialization happened immediately adjacent to `startActivity()`.
+- Applies the same service/game-data readiness gate to `Play restored save` while preserving Save History's isolated behavior: restored sessions still skip the normal automatic Cloud pull/push cycle.
+- Does not modify the proven `AchievementService` Steam write implementation, JavaSteam user-stat writes, the native achievement IPC protocol, or revision-16 game-side achievement synchronization logic.
+
 ## 1.0.3-achievements.16
 
 Hardens the revision-15 game-driven achievement path after auditing the remaining gates between Silksong gameplay and the proven Steam backend. The launcher-side `AchievementService`, JavaSteam writes, IPC protocol, Steam schema validation, Cloud synchronization, and Save History remain unchanged.
@@ -204,7 +222,7 @@ Refreshes the launcher experience and game-session behavior while retaining the 
 Changes in this revision:
 
 - Redesigns the launcher as a modern dark dashboard with a clearer Silksong header, grouped quick actions, a large primary Play button, and a dedicated live activity/status panel.
-- Preserves all existing launcher view IDs and actions so Steam login, cloud pull/push, settings, logs, controller focus, and game launch continue using the existing launcher logic.
+- Preserves all existing view IDs and actions so Steam login, cloud pull/push, settings, logs, controller focus, and game launch continue using the existing launcher logic.
 - Keeps the Android display awake for as long as the game Activity is in the foreground, including controller-only sessions with no touch input.
 - Strengthens the Steam-achievement foreground notification with ongoing/no-clear service flags, low-noise service presentation, live status text, and automatic restoration if it is dismissed while the synchronization service is still active.
 - Makes the achievement notification distinguish connecting, ready, queued, synchronized, and attention/error states.
