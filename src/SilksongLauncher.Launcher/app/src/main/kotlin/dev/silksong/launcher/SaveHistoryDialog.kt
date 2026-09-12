@@ -102,32 +102,36 @@ object SaveHistoryDialog {
         }
 
         fun launchRestored() {
-            val depot = DepotLocation.resolve(activity)?.takeIf { PlayerImage.depotData(it) != null }
-            if (depot == null) {
-                AlertDialog.Builder(activity)
-                    .setTitle("Game files are missing")
-                    .setMessage("The historical save was restored, but Silksong's game files could not be found.")
-                    .setPositiveButton("OK", null)
-                    .show()
-                return
-            }
-            try {
-                DepotLocation.relink(activity, depot)
-                SettingsStore(activity).exportForGame(activity)
-                AchievementService.start(activity)
-                SaveDir.prepare(activity)
-                LauncherLog.log("Save history: launching isolated restored-save session")
-                dialog.dismiss()
-                activity.startActivity(Intent().apply {
-                    setClassName(activity.packageName, UNITY_ACTIVITY_CLASS)
-                })
-            } catch (t: Throwable) {
-                LauncherLog.log("Save history: restored-save launch failed", t)
-                AlertDialog.Builder(activity)
-                    .setTitle("Could not launch restored save")
-                    .setMessage(t.message ?: t.javaClass.simpleName)
-                    .setPositiveButton("OK", null)
-                    .show()
+            setHistoryButtonsEnabled(false)
+            scope.launch {
+                val prepared = LaunchReadiness.prepare(
+                    activity = activity,
+                    credentials = credentials,
+                    settings = SettingsStore(activity),
+                    // Historical sessions intentionally bypass normal Cloud
+                    // pull/push so the restored snapshot is not replaced.
+                    syncCloud = false,
+                    syncSaves = { true },
+                )
+
+                if (prepared == null) {
+                    setHistoryButtonsEnabled(true)
+                    return@launch
+                }
+
+                try {
+                    prepared.screen.stage(100, "Starting Silksong", "Opening the restored save")
+                    LauncherLog.log("Save history: launching isolated restored-save session after readiness gate")
+                    activity.startActivity(Intent().apply {
+                        setClassName(activity.packageName, UNITY_ACTIVITY_CLASS)
+                    })
+                    prepared.screen.dismiss()
+                    dialog.dismiss()
+                } catch (t: Throwable) {
+                    LauncherLog.log("Save history: restored-save launch failed", t)
+                    prepared.screen.fail("Android could not start the restored save: ${t.message ?: t.javaClass.simpleName}")
+                    setHistoryButtonsEnabled(true)
+                }
             }
         }
 
