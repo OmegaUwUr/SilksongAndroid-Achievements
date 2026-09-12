@@ -6,10 +6,16 @@
 
 package dev.silksong.launcher
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.os.Bundle
 
 class SilksongApp : Application() {
+
+    private companion object {
+        private const val GAME_ACTIVITY = "dev.silksong.shell.GameActivity"
+    }
 
     // Before any class in this app is loaded, which rules out onCreate.
     //
@@ -36,5 +42,31 @@ class SilksongApp : Application() {
         // registers itself the first time it is touched, and on Android it
         // registers the wrong thing unless this has run first. See SteamCrypto.
         SteamCrypto.install()
+
+        // The launcher and Unity game deliberately live in different Android
+        // processes, but this Application class is created in both. Watch the
+        // real GameActivity lifecycle rather than assuming that pressing Play
+        // means the game is still running. Steam presence/playtime therefore
+        // starts only while GameActivity is actually visible and is cleared
+        // when it stops (background, return to launcher, or normal exit).
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityStarted(activity: Activity) {
+                if (activity.javaClass.name != GAME_ACTIVITY) return
+                LauncherLog.log("Steam presence: GameActivity started")
+                AchievementService.reportGameActivity(applicationContext, true)
+            }
+
+            override fun onActivityStopped(activity: Activity) {
+                if (activity.javaClass.name != GAME_ACTIVITY) return
+                LauncherLog.log("Steam presence: GameActivity stopped")
+                AchievementService.reportGameActivity(applicationContext, false)
+            }
+
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        })
     }
 }
