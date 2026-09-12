@@ -19,7 +19,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-/** Full Steam Restore_Points browser hosted inside LauncherActivity. */
+/** Full Steam historical-save browser hosted inside LauncherActivity. */
 object SaveHistoryDialog {
     private const val UNITY_ACTIVITY_CLASS = "dev.silksong.shell.GameActivity"
 
@@ -28,7 +28,7 @@ object SaveHistoryDialog {
         if (credentials == null) {
             AlertDialog.Builder(activity)
                 .setTitle("Steam sign-in required")
-                .setMessage("Sign in to Steam first so the launcher can read your synchronized Restore_Points saves.")
+                .setMessage("Sign in to Steam first so the launcher can read your synchronized historical saves.")
                 .setPositiveButton("OK", null)
                 .show()
             return
@@ -56,7 +56,7 @@ object SaveHistoryDialog {
             setTextColor(Color.WHITE)
         })
         root.addView(TextView(activity).apply {
-            text = "Real Silksong Restore_Points files synchronized by Steam. Restoring a version first backs up your current local saves."
+            text = "Historical Silksong saves synchronized by Steam. The launcher also restores matching shared.dat state when Steam kept it, so in-game achievements/global progress match the old save."
             textSize = 12f
             setTextColor(Color.rgb(170, 178, 190))
             setPadding(0, dp(4), 0, dp(12))
@@ -70,7 +70,7 @@ object SaveHistoryDialog {
         }
         val spinner = ProgressBar(activity).apply { isIndeterminate = true }
         val status = TextView(activity).apply {
-            text = "Loading Steam restore points…"
+            text = "Loading Steam save history…"
             textSize = 12f
             setTextColor(Color.rgb(69, 212, 131))
             setPadding(dp(10), 0, 0, 0)
@@ -101,7 +101,7 @@ object SaveHistoryDialog {
             }
         }
 
-        fun launchRestored() {
+        fun launchRestored(version: SaveHistory.Version) {
             val depot = DepotLocation.resolve(activity)?.takeIf { PlayerImage.depotData(it) != null }
             if (depot == null) {
                 AlertDialog.Builder(activity)
@@ -114,9 +114,17 @@ object SaveHistoryDialog {
             try {
                 DepotLocation.relink(activity, depot)
                 SettingsStore(activity).exportForGame(activity)
-                AchievementService.start(activity)
+                // A historical session gets a timestamp-bounded, sandboxed
+                // Steam-achievement view. Normal Play automatically clears it.
+                AchievementService.start(
+                    activity,
+                    historicalCutoffUnix = version.timestampUnix,
+                    historicalLabel = "Slot ${version.slot} • ${version.displayTime}",
+                )
                 SaveDir.prepare(activity)
-                LauncherLog.log("Save history: launching isolated restored-save session")
+                LauncherLog.log(
+                    "Save history: launching isolated restored-save session with historical achievement cutoff ${version.timestampUnix}"
+                )
                 dialog.dismiss()
                 activity.startActivity(Intent().apply {
                     setClassName(activity.packageName, UNITY_ACTIVITY_CLASS)
@@ -139,17 +147,27 @@ object SaveHistoryDialog {
                 try {
                     val result = SaveHistory.restore(activity, credentials, version)
                     spinner.visibility = View.GONE
-                    status.text = "Slot ${version.slot} restored and ready to test"
-                    val backup = result.safetyBackup?.absolutePath ?: "No previous active file existed"
+                    status.text = if (result.restoredHistoricalSharedState) {
+                        "Slot ${version.slot} + historical shared state restored"
+                    } else {
+                        "Slot ${version.slot} restored • historical shared.dat unavailable"
+                    }
+                    val backup = result.safetyBackup?.absolutePath ?: "No previous local save set existed"
+                    val stateNote = if (result.restoredHistoricalSharedState) {
+                        "The matching historical shared.dat was restored too, including Silksong's in-game achievement/global progression state."
+                    } else {
+                        "Steam did not retain a matching historical shared.dat for this snapshot. The slot itself is old, but local shared/global flags may still be newer. During Play restored save, Steam achievement queries are still sandboxed to this save's date."
+                    }
                     AlertDialog.Builder(activity)
                         .setTitle("Historical save restored")
                         .setMessage(
                             "Slot ${version.slot} now uses the Steam version from ${version.displayTime}.\n\n" +
+                                "$stateNote\n\n" +
                                 "Safety backup: $backup\n\n" +
-                                "Play restored save starts an isolated session: no automatic cloud pull before launch and no automatic cloud push when you return."
+                                "Play restored save starts an isolated session: no automatic cloud pull, no automatic cloud push, and no historical-test achievement writes to your real Steam account."
                         )
                         .setNegativeButton("Stay here", null)
-                        .setPositiveButton("Play restored save") { _, _ -> launchRestored() }
+                        .setPositiveButton("Play restored save") { _, _ -> launchRestored(version) }
                         .show()
                 } catch (t: Throwable) {
                     spinner.visibility = View.GONE
@@ -162,12 +180,18 @@ object SaveHistoryDialog {
         }
 
         fun confirm(version: SaveHistory.Version) {
+            val sharedState = if (version.hasHistoricalSharedState) {
+                "Matching historical shared.dat found — in-game achievement/global state will be restored with the slot."
+            } else {
+                "No matching historical shared.dat was found in Steam Cloud. The launcher can restore the slot, but some shared in-game state may remain newer."
+            }
             AlertDialog.Builder(activity)
                 .setTitle("Restore Slot ${version.slot}?")
                 .setMessage(
-                    "Use the Steam restore point from ${version.displayTime}?\n\n" +
+                    "Use the Steam save from ${version.displayTime}?\n\n" +
                         "${version.restoreFolder}/${version.sourceName}\n\n" +
-                        "The current local save is backed up before anything is replaced."
+                        "$sharedState\n\n" +
+                        "The complete current local save set is backed up before anything is replaced."
                 )
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Restore") { _, _ -> restore(version) }
@@ -179,10 +203,11 @@ object SaveHistoryDialog {
                 val versions = SaveHistory.list(credentials)
                 spinner.visibility = View.GONE
                 if (versions.isEmpty()) {
-                    status.text = "No Steam Restore_Points saves were found for this account."
+                    status.text = "No historical Steam saves were found for this account."
                     return@launch
                 }
-                status.text = "${versions.size} historical save version(s) found"
+                val complete = versions.count { it.hasHistoricalSharedState }
+                status.text = "${versions.size} historical version(s) • $complete with matching shared state"
                 for ((slot, slotVersions) in versions.groupBy { it.slot }.toSortedMap()) {
                     list.addView(TextView(activity).apply {
                         text = "SLOT $slot"
@@ -193,16 +218,17 @@ object SaveHistoryDialog {
                         setPadding(0, dp(12), 0, dp(6))
                     })
                     for (version in slotVersions.sortedByDescending { it.timestampUnix }) {
+                        val completeness = if (version.hasHistoricalSharedState) "FULL STATE" else "SLOT ONLY"
                         list.addView(Button(activity).apply {
                             isAllCaps = false
                             gravity = Gravity.CENTER_VERTICAL or Gravity.START
-                            text = "${version.displayTime}\n${version.restoreFolder} • ${version.sourceName} • ${SaveHistory.humanSize(version.size)}"
+                            text = "${version.displayTime}  •  $completeness\n${version.restoreFolder} • ${version.sourceName} • ${SaveHistory.humanSize(version.size)}"
                             textSize = 12f
                             setTextColor(Color.WHITE)
                             background = card()
                             setPadding(dp(14), dp(10), dp(14), dp(10))
                             setOnClickListener { confirm(version) }
-                        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(66)).apply {
+                        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(70)).apply {
                             bottomMargin = dp(7)
                         })
                     }
