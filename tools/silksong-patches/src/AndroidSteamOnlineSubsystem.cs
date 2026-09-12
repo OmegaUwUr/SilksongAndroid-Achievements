@@ -268,8 +268,13 @@ namespace SilksongPatches
             if (value >= max)
             {
                 Debug.Log(Tag + "progress reached " + value + "/" + max +
-                    " for " + achievementId + "; synchronizing final unlock");
-                PushAchievementUnlock(achievementId);
+                    " for " + achievementId + "; routing final unlock through DesktopPlatform");
+
+                // Go back through DesktopPlatform rather than calling this
+                // subsystem directly. DesktopPlatform.PushAchievementUnlock()
+                // invokes us and then records RoamingSharedData.SetBool(key,true),
+                // preserving Silksong's local/shared.dat achievement state too.
+                platform.PushAchievementUnlock(achievementId);
             }
         }
 
