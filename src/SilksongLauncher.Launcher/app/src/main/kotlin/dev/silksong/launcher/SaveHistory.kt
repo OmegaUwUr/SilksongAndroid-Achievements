@@ -293,12 +293,12 @@ object SaveHistory {
     /**
      * Match the profile snapshot to the best shared-state snapshot Steam has.
      *
-     * Strongest match: same version token / same cloud folder. Otherwise the
-     * best available historical approximation is the newest shared snapshot at
-     * or before the selected profile timestamp. If Steam has no earlier copy,
-     * the earliest later snapshot is accepted only when it is within seven
-     * days; this handles restore-point upload skew without pairing a 2025 save
-     * with a much newer 2026 shared state.
+     * Strongest match: same version token, or the same non-root restore folder.
+     * Root-level versioned profiles share a folder with live files, so root
+     * folder equality is deliberately NOT treated as a snapshot match. Those
+     * use timestamps instead: newest shared state at/before the selected save,
+     * or (only when no earlier state exists) the earliest later state within
+     * seven days.
      */
     private fun findHistoricalSharedCompanion(
         all: List<SteamCloudClient.CloudFile>,
@@ -309,6 +309,11 @@ object SaveHistory {
             ?.takeIf { it.isNotEmpty() }
         val shared = all.filter { sharedSave.matches(baseName(it.filename)) }
         if (shared.isEmpty()) return null
+
+        val currentRootParent = all.asSequence()
+            .filter { plainActive.matches(baseName(it.filename)) }
+            .minByOrNull { normalized(it.filename).count { ch -> ch == '/' } }
+            ?.let { parentPath(normalized(it.filename)) }
 
         if (versionToken != null) {
             shared.firstOrNull { file ->
@@ -326,9 +331,9 @@ object SaveHistory {
             }?.let { return SharedMatch(it, exact = true, reason = "same version token") }
         }
 
-        if (selectedParent.isNotEmpty()) {
+        if (selectedParent.isNotEmpty() && selectedParent != currentRootParent) {
             shared.filter { parentPath(normalized(it.filename)) == selectedParent }
-                .maxByOrNull { it.timestampUnix }
+                .minByOrNull { kotlin.math.abs(it.timestampUnix - version.timestampUnix) }
                 ?.let {
                     return SharedMatch(
                         it,
