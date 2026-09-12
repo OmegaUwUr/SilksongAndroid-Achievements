@@ -22,7 +22,7 @@ Unity calls during startup. Nothing hooks, detours or rewrites the game's own
 code, so there is no BepInEx, no Harmony and no IL rewriting.
 
 The one catch is that a player does not scan assemblies for that attribute —
-the Editor does it at build time and writes the result into
+the Editor does that at build time and writes the result into
 `RuntimeInitializeOnLoads.json`. There is no Editor here, so the list is
 written by hand in `entrypoints.json` and appended to the depot's own.
 
@@ -59,6 +59,9 @@ property spelled differently in Team Cherry's fork, and a missing
 | `WormAnimatorFix` | the off-camera frozen sand worm in Blasted Steps |
 | `ShaderWarmup` | prewarm shader variants to cut first-encounter hitches |
 | `InventoryTouchInput` | touch control for the game's own inventory |
+| `SteamAchievementRepair` | startup/lifecycle reconciliation for achievements missed by older builds or transient failures |
+| `AndroidSteamOnlineSubsystem` | reflection-injected Android implementation of Silksong's `DesktopOnlineSubsystem` achievement path |
+| `SteamAchievementToast` | Steam-style in-game notification after a confirmed new Steam unlock |
 | `PerfOverlay`, `ProfilerTopMarkers` | on-device performance readouts |
 | `InjectionProbe` | proves the assembly is live, and logs the settings it sees |
 | `Settings` | reads the launcher's settings file |
