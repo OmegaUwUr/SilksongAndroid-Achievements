@@ -1,25 +1,29 @@
 // Steam achievement reliability layer for the Android port.
 //
 // Silksong's normal PC platform path is allowed to keep doing whatever it
-// normally does.  This component exists because the translated Android player
-// can reach the launcher-side Steam session while the game's own platform
-// bootstrap never reaches Steamworks.NET at all.  In that failure mode the
-// game correctly records an achievement in RoamingSharedData/shared.dat, but
-// no SetAchievement/StoreStats call is ever made.
+// normally does. This component exists because the translated Android player
+// can reach the launcher-side Steam session while the game's own desktop
+// Steam subsystem may never be selected/initialized.
 //
-// The repair is deliberately one-way and conservative:
+// Revision 13 keeps the proven Steam backend from revision 12 unchanged and
+// only optimizes the game-side trigger logic:
+//   * one full reconciliation after startup repairs previously missed unlocks;
+//   * AchievementHandler's award event synchronizes new unlocks immediately;
+//   * save/scene/resume events trigger cheap reconciliation at natural points;
+//   * a 120-second safety pass catches configurations where Silksong suppresses
+//     AwardAchievementEvent (notably when native achievement popups are off);
+//   * there is no per-frame Update and no 4-second polling loop.
+//
+// The repair remains deliberately one-way and conservative:
 //   * Silksong itself is the authority for whether an achievement was earned.
 //   * Achievement definitions come from the game's own AchievementHandler.
-//   * GameManager.GetStatusRecordInt(PlatformKey) reads RoamingSharedData, the
-//     same shared state that backs the in-game Achievements screen.
-//   * Only keys whose local value is > 0 are offered to Steam.
+//   * Local fulfillment is read from Platform.Current.RoamingSharedData, which
+//     DesktopPlatform itself writes in PushAchievementUnlock().
+//   * The older GameManager status-record lookup remains as a compatibility
+//     fallback because revision 12 was already proven on a real device.
 //   * Nothing is ever cleared/relocked on Steam.
 //   * The launcher-side AchievementService still validates every key against
 //     Steam's authoritative Silksong schema before it can be stored.
-//
-// Calling the shim directly instead of Steamworks.NET is intentional.  It
-// removes the last dependency on Team Cherry's desktop platform-selection code
-// while preserving the normal Steam server write path in AchievementService.
 
 using System;
 using System.Collections;
@@ -27,6 +31,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace SilksongPatches
 {
@@ -34,24 +39,29 @@ namespace SilksongPatches
     {
         private const string Tag = "[SilksongPatches] SteamAchievementRepair: ";
         private const string SteamLibrary = "steam_api64";
-        private const float ReconcileIntervalSeconds = 4f;
+        private const float SafetyReconcileSeconds = 120f;
         private const int InitAttempts = 20;
 
         private static bool bootstrapped;
 
         private IntPtr userStats = IntPtr.Zero;
         private bool bridgeReady;
-        private float nextReconcileAt;
 
         // Keys successfully handed to StoreStats during this game process.
-        // If StoreStats fails, they are deliberately NOT added and the next
-        // pass retries them.
+        // If StoreStats fails, they are deliberately NOT added and a later
+        // lifecycle/safety pass retries them.
         private readonly HashSet<string> synchronizedLocalKeys =
             new HashSet<string>(StringComparer.Ordinal);
 
         private AchievementHandler achievementHandler;
+        private AchievementHandler subscribedAchievementHandler;
         private GameManager gameManager;
+        private GameManager subscribedGameManager;
         private List<string> platformKeys;
+        private HashSet<string> platformKeySet;
+        private Coroutine delayedReconcile;
+        private Coroutine safetyLoop;
+        private string pendingReconcileReason;
 
         [DllImport(SteamLibrary, CallingConvention = CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)]
@@ -74,9 +84,6 @@ namespace SilksongPatches
         [return: MarshalAs(UnmanagedType.I1)]
         private static extern bool SteamAPI_ISteamUserStats_StoreStats(IntPtr self);
 
-        [DllImport(SteamLibrary, CallingConvention = CallingConvention.Cdecl)]
-        private static extern void SteamAPI_RunCallbacks();
-
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         public static void Bootstrap()
         {
@@ -92,9 +99,9 @@ namespace SilksongPatches
         private IEnumerator Start()
         {
             // AchievementService starts immediately before GameActivity, but
-            // Steam authentication happens asynchronously in :launcher.  The
+            // Steam authentication happens asynchronously in :launcher. The
             // native shim already waits for several PING attempts; this outer
-            // retry makes startup robust on a slow network as well.
+            // retry keeps startup robust on a slow connection.
             for (int attempt = 1; attempt <= InitAttempts && !bridgeReady; attempt++)
             {
                 try
@@ -130,38 +137,107 @@ namespace SilksongPatches
                 yield break;
             }
 
-            // Give the RequestCurrentStats callback a frame or two to drain,
-            // then perform an immediate repair pass.  Subsequent passes catch
-            // achievements earned while this process remains alive.
+            // Bind lifecycle signals before the first reconciliation so a scene
+            // transition that happens during startup cannot leave us waiting for
+            // the fallback timer.
+            SceneManager.sceneLoaded += OnSceneLoaded;
+
+            // Give Silksong a moment to finish loading shared data and its
+            // AchievementHandler, then repair achievements missed by old builds.
             yield return new WaitForSecondsRealtime(0.5f);
-            PumpCallbacks();
-            Reconcile();
-            nextReconcileAt = Time.realtimeSinceStartup + ReconcileIntervalSeconds;
+            Reconcile("startup");
+
+            // This is a safety net, not the primary trigger. The normal path is
+            // event-driven; this wakes only once every two minutes and performs
+            // at most 52 in-memory boolean reads (usually fewer after the startup
+            // pass because synchronizedLocalKeys skips completed keys).
+            safetyLoop = StartCoroutine(SafetyLoop());
+            Debug.Log(Tag + "event-driven synchronization active; safety reconciliation every 120s");
         }
 
-        private void Update()
+        private IEnumerator SafetyLoop()
+        {
+            while (bridgeReady)
+            {
+                yield return new WaitForSecondsRealtime(SafetyReconcileSeconds);
+                Reconcile("safety fallback");
+            }
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             if (!bridgeReady) return;
-
-            PumpCallbacks();
-            if (Time.realtimeSinceStartup < nextReconcileAt) return;
-            nextReconcileAt = Time.realtimeSinceStartup + ReconcileIntervalSeconds;
-            Reconcile();
+            ScheduleReconcile("scene loaded: " + scene.name, 0.35f);
         }
 
-        private void PumpCallbacks()
+        private void OnApplicationFocus(bool hasFocus)
         {
-            try
+            if (hasFocus && bridgeReady)
             {
-                SteamAPI_RunCallbacks();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning(Tag + "RunCallbacks failed: " + ex.Message);
+                ScheduleReconcile("application resumed", 0.35f);
             }
         }
 
-        private void Reconcile()
+        private void OnSavePersistentObjects()
+        {
+            if (!bridgeReady) return;
+            // Coalesce with any scene/resume reconciliation already queued.
+            ScheduleReconcile("game save lifecycle", 0.05f);
+        }
+
+        private void OnAchievementAwarded(string key)
+        {
+            if (!bridgeReady || string.IsNullOrEmpty(key)) return;
+
+            // This is the fast path. Silksong raises this after its own
+            // PushAchievementUnlock call, so RoamingSharedData should already
+            // contain the local fulfilled flag. The event is suppressed by the
+            // game when native achievement popups are disabled, which is why the
+            // save/scene/resume + slow fallback paths still exist.
+            if (!DiscoverGameAchievementState())
+            {
+                ScheduleReconcile("achievement event (state not ready)", 0.25f);
+                return;
+            }
+
+            if (platformKeySet == null || !platformKeySet.Contains(key))
+            {
+                Debug.LogWarning(Tag + "ignored unknown game achievement event: " + key);
+                return;
+            }
+
+            if (!IsLocallyFulfilled(key))
+            {
+                // Be conservative if the local shared-state write has not become
+                // visible yet. A short deferred full pass will verify it again.
+                ScheduleReconcile("achievement event confirmation: " + key, 0.25f);
+                return;
+            }
+
+            SyncSingleAchievement(key, "game award event");
+        }
+
+        private void ScheduleReconcile(string reason, float delaySeconds)
+        {
+            pendingReconcileReason = reason;
+            if (delayedReconcile != null) return;
+            delayedReconcile = StartCoroutine(DelayedReconcile(delaySeconds));
+        }
+
+        private IEnumerator DelayedReconcile(float delaySeconds)
+        {
+            if (delaySeconds > 0f)
+            {
+                yield return new WaitForSecondsRealtime(delaySeconds);
+            }
+
+            string reason = pendingReconcileReason ?? "lifecycle event";
+            pendingReconcileReason = null;
+            delayedReconcile = null;
+            Reconcile(reason);
+        }
+
+        private void Reconcile(string reason)
         {
             try
             {
@@ -171,10 +247,7 @@ namespace SilksongPatches
                 foreach (string key in platformKeys)
                 {
                     if (string.IsNullOrEmpty(key) || synchronizedLocalKeys.Contains(key)) continue;
-
-                    // This is the important safety boundary: the game's own
-                    // shared-status record must say the achievement is earned.
-                    if (gameManager.GetStatusRecordInt(key) <= 0) continue;
+                    if (!IsLocallyFulfilled(key)) continue;
 
                     bool accepted = false;
                     try
@@ -189,7 +262,6 @@ namespace SilksongPatches
                     if (accepted)
                     {
                         toStore.Add(key);
-                        Debug.Log(Tag + "local fulfilled achievement queued for Steam: " + key);
                     }
                 }
 
@@ -198,7 +270,8 @@ namespace SilksongPatches
                 bool stored = SteamAPI_ISteamUserStats_StoreStats(userStats);
                 if (!stored)
                 {
-                    Debug.LogWarning(Tag + "StoreStats rejected; will retry " + toStore.Count + " local achievement(s)");
+                    Debug.LogWarning(Tag + "StoreStats rejected during " + reason +
+                        "; will retry " + toStore.Count + " local achievement(s)");
                     return;
                 }
 
@@ -206,42 +279,182 @@ namespace SilksongPatches
                 {
                     synchronizedLocalKeys.Add(toStore[i]);
                 }
-                Debug.Log(Tag + "reconciled " + toStore.Count + " fulfilled local achievement(s) with Steam");
+                Debug.Log(Tag + "reconciled " + toStore.Count +
+                    " fulfilled local achievement(s) with Steam (" + reason + ")");
             }
             catch (Exception ex)
             {
-                Debug.LogWarning(Tag + "reconcile failed: " + ex);
+                Debug.LogWarning(Tag + "reconcile failed during " + reason + ": " + ex);
+            }
+        }
+
+        private void SyncSingleAchievement(string key, string reason)
+        {
+            if (synchronizedLocalKeys.Contains(key)) return;
+
+            try
+            {
+                if (!SteamAPI_ISteamUserStats_SetAchievement(userStats, key))
+                {
+                    Debug.LogWarning(Tag + "SetAchievement(" + key + ") rejected during " + reason);
+                    ScheduleReconcile("retry after rejected award: " + key, 5f);
+                    return;
+                }
+
+                if (!SteamAPI_ISteamUserStats_StoreStats(userStats))
+                {
+                    Debug.LogWarning(Tag + "StoreStats rejected for " + key + " during " + reason);
+                    ScheduleReconcile("retry after failed store: " + key, 5f);
+                    return;
+                }
+
+                synchronizedLocalKeys.Add(key);
+                Debug.Log(Tag + "synchronized newly awarded achievement immediately: " + key);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(Tag + "immediate synchronization failed for " + key + ": " + ex);
+                ScheduleReconcile("retry after award exception: " + key, 5f);
             }
         }
 
         private bool DiscoverGameAchievementState()
         {
-            if (achievementHandler == null)
+            GameManager currentGameManager = gameManager;
+            if (currentGameManager == null)
+            {
+                currentGameManager = UnityEngine.Object.FindObjectOfType<GameManager>();
+            }
+
+            if (currentGameManager != subscribedGameManager)
+            {
+                UnsubscribeGameManager();
+                gameManager = currentGameManager;
+                subscribedGameManager = currentGameManager;
+                if (subscribedGameManager != null)
+                {
+                    subscribedGameManager.SavePersistentObjects += OnSavePersistentObjects;
+                    Debug.Log(Tag + "subscribed to game save lifecycle");
+                }
+            }
+            else
+            {
+                gameManager = currentGameManager;
+            }
+
+            AchievementHandler currentHandler = null;
+            if (gameManager != null)
+            {
+                currentHandler = gameManager.achievementHandler;
+            }
+            if (currentHandler == null)
             {
                 var handlers = Resources.FindObjectsOfTypeAll<AchievementHandler>();
-                if (handlers == null || handlers.Length == 0) return false;
-                achievementHandler = handlers[0];
-                Debug.Log(Tag + "found AchievementHandler");
+                if (handlers != null && handlers.Length > 0) currentHandler = handlers[0];
             }
 
-            if (gameManager == null)
+            if (currentHandler != subscribedAchievementHandler)
             {
-                gameManager = UnityEngine.Object.FindObjectOfType<GameManager>();
-                if (gameManager == null) return false;
-                Debug.Log(Tag + "found GameManager shared-status source");
+                UnsubscribeAchievementHandler();
+                achievementHandler = currentHandler;
+                subscribedAchievementHandler = currentHandler;
+                platformKeys = null;
+                platformKeySet = null;
+
+                if (subscribedAchievementHandler != null)
+                {
+                    subscribedAchievementHandler.AwardAchievementEvent += OnAchievementAwarded;
+                    Debug.Log(Tag + "subscribed to Silksong achievement award events");
+                }
+            }
+            else
+            {
+                achievementHandler = currentHandler;
             }
 
+            if (achievementHandler == null || gameManager == null) return false;
             if (platformKeys != null && platformKeys.Count > 0) return true;
 
             platformKeys = ReadPlatformKeys(achievementHandler);
             if (platformKeys.Count == 0)
             {
                 platformKeys = null;
+                platformKeySet = null;
                 return false;
             }
 
+            platformKeySet = new HashSet<string>(platformKeys, StringComparer.Ordinal);
             Debug.Log(Tag + "discovered " + platformKeys.Count + " game achievement PlatformKey(s)");
             return true;
+        }
+
+        private bool IsLocallyFulfilled(string key)
+        {
+            // This is the canonical Silksong desktop fallback: even with no
+            // online subsystem, DesktopPlatform.PushAchievementUnlock writes
+            // RoamingSharedData.SetBool(achievementId, true).
+            try
+            {
+                Platform platform = Platform.Current;
+                if (platform != null && platform.RoamingSharedData != null &&
+                    platform.RoamingSharedData.GetBool(key, false))
+                {
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(Tag + "shared achievement lookup failed for " + key + ": " + ex.Message);
+            }
+
+            // Preserve revision-12 behavior as a compatibility fallback. It was
+            // proven on-device and costs nothing unless the canonical bool path
+            // did not report the key as fulfilled.
+            try
+            {
+                return gameManager != null && gameManager.GetStatusRecordInt(key) > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void UnsubscribeAchievementHandler()
+        {
+            if (subscribedAchievementHandler == null) return;
+            try
+            {
+                subscribedAchievementHandler.AwardAchievementEvent -= OnAchievementAwarded;
+            }
+            catch
+            {
+            }
+            subscribedAchievementHandler = null;
+        }
+
+        private void UnsubscribeGameManager()
+        {
+            if (subscribedGameManager == null) return;
+            try
+            {
+                subscribedGameManager.SavePersistentObjects -= OnSavePersistentObjects;
+            }
+            catch
+            {
+            }
+            subscribedGameManager = null;
+        }
+
+        private void OnDestroy()
+        {
+            bridgeReady = false;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            UnsubscribeAchievementHandler();
+            UnsubscribeGameManager();
+            if (delayedReconcile != null) StopCoroutine(delayedReconcile);
+            if (safetyLoop != null) StopCoroutine(safetyLoop);
+            bootstrapped = false;
         }
 
         // AchievementHandler/AchievementsList have kept the same semantic
