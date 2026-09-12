@@ -38,11 +38,41 @@ class AchievementService : Service() {
         private const val STEAM_TIMEOUT_SECONDS = 25L
         private const val ACTION_NOTIFICATION_DISMISSED = "dev.silksong.launcher.ACHIEVEMENT_NOTIFICATION_DISMISSED"
         private const val ACTION_SAFE_SHUTDOWN = "dev.silksong.launcher.ACHIEVEMENT_SAFE_SHUTDOWN"
+        private const val SESSION_PREFS = "achievement-session-mode"
+        private const val KEY_HISTORICAL_CUTOFF = "historical-cutoff-unix"
+        private const val KEY_HISTORICAL_LABEL = "historical-label"
         @Volatile private var active = false
 
         fun isActive(): Boolean = active
 
-        fun start(context: Context) {
+        /**
+         * Starts/re-notifies the achievement bridge. A historical cutoff turns
+         * the service into a read/test sandbox: Steam achievements unlocked
+         * after that Unix timestamp are reported as locked to the game and
+         * StoreStats never writes historical-test changes to Steam.
+         *
+         * Calling start(context) normally clears any previous historical mode,
+         * so the standard Play button always returns to current Steam state.
+         */
+        @JvmOverloads
+        fun start(
+            context: Context,
+            historicalCutoffUnix: Long = 0L,
+            historicalLabel: String? = null,
+        ) {
+            val prefs = context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+            if (historicalCutoffUnix > 0L) {
+                prefs.edit()
+                    .putLong(KEY_HISTORICAL_CUTOFF, historicalCutoffUnix)
+                    .putString(KEY_HISTORICAL_LABEL, historicalLabel)
+                    .commit()
+                LauncherLog.log(
+                    "Achievements: historical sandbox requested; cutoff=$historicalCutoffUnix${historicalLabel?.let { " ($it)" } ?: ""}"
+                )
+            } else {
+                prefs.edit().clear().commit()
+            }
+
             LauncherLog.log("Achievements: requesting synchronization service start")
             val intent = Intent(context, AchievementService::class.java)
             try {
@@ -58,8 +88,8 @@ class AchievementService : Service() {
         /**
          * Requests an orderly stop without starting the service if it is not
          * already running. The live service receives this app-local broadcast,
-         * flushes any pending Steam achievement write, tears down JavaSteam and
-         * its socket, removes the foreground notification, then stops itself.
+         * flushes any pending real Steam achievement write, tears down JavaSteam
+         * and its socket, removes the foreground notification, then stops itself.
          */
         fun stopSafely(context: Context) {
             LauncherLog.log("Achievements: safe shutdown requested")
@@ -75,7 +105,9 @@ class AchievementService : Service() {
     private val executor: ExecutorService = Executors.newCachedThreadPool()
     private val achievementLocations = ConcurrentHashMap<String, AchievementLocation>()
     private val remotelyUnlocked = ConcurrentHashMap.newKeySet<String>()
+    private val remoteUnlockTimes = ConcurrentHashMap<String, Long>()
     private val pendingUnlocks = ConcurrentHashMap.newKeySet<String>()
+    private val historicalSessionUnlocks = ConcurrentHashMap.newKeySet<String>()
     private val storeLock = Any()
 
     private var server: LocalServerSocket? = null
@@ -83,6 +115,8 @@ class AchievementService : Service() {
     @Volatile private var steamUser: SteamUser? = null
     @Volatile private var steamUserStats: SteamUserStats? = null
     @Volatile private var notificationText = "Connecting to Steam…"
+    @Volatile private var historicalCutoffUnix = 0L
+    @Volatile private var historicalLabel: String? = null
 
     private val notificationDismissReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -106,6 +140,7 @@ class AchievementService : Service() {
     override fun onCreate() {
         super.onCreate()
         active = true
+        refreshHistoricalMode()
         LauncherLog.log("Achievements: service created")
         createNotificationChannel()
         registerReceivers()
@@ -115,11 +150,49 @@ class AchievementService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        refreshHistoricalMode()
         LauncherLog.log("Achievements: service onStartCommand")
-        return START_STICKY
+        // A historical test must not silently restart later without the game
+        // session that requested it. Normal synchronization remains sticky.
+        return if (historicalCutoffUnix > 0L) START_NOT_STICKY else START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun refreshHistoricalMode() {
+        val prefs = getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+        val cutoff = prefs.getLong(KEY_HISTORICAL_CUTOFF, 0L)
+        val label = prefs.getString(KEY_HISTORICAL_LABEL, null)
+        val changed = cutoff != historicalCutoffUnix || label != historicalLabel
+        if (!changed) return
+
+        val enteringHistorical = historicalCutoffUnix <= 0L && cutoff > 0L
+        if (enteringHistorical && pendingUnlocks.isNotEmpty()) {
+            // Do not let a later historical sandbox swallow a real unlock that
+            // was already queued by a normal session but not yet stored.
+            executor.execute {
+                LauncherLog.log(
+                    "Achievements: historical mode switch found ${pendingUnlocks.size} pending real unlock(s); flushing them first"
+                )
+                runCatching { storeStatsToSteam() }
+                    .onFailure { LauncherLog.log("Achievements: pre-sandbox Steam flush failed", it) }
+            }
+        }
+
+        historicalCutoffUnix = cutoff
+        historicalLabel = label
+        historicalSessionUnlocks.clear()
+
+        if (cutoff > 0L) {
+            LauncherLog.log(
+                "Achievements: HISTORICAL SANDBOX active — cutoff=$cutoff${label?.let { " ($it)" } ?: ""}; Steam writes disabled"
+            )
+            if (ready.get()) updateNotification("Historical save • achievements sandboxed")
+        } else {
+            LauncherLog.log("Achievements: current Steam achievement mode active")
+            if (ready.get()) updateNotification("Connected to Steam • ${achievementLocations.size} achievements tracked")
+        }
+    }
 
     private fun initializeSteam() {
         val credentials = TokenStore(this).read()
@@ -160,7 +233,11 @@ class AchievementService : Service() {
             if (shuttingDown.get()) return
             ready.set(true)
             LauncherLog.log("Achievements: READY — ${achievementLocations.size} Steam achievement API names mapped")
-            updateNotification("Connected to Steam • ${achievementLocations.size} achievements tracked")
+            if (historicalCutoffUnix > 0L) {
+                updateNotification("Historical save • achievements sandboxed")
+            } else {
+                updateNotification("Connected to Steam • ${achievementLocations.size} achievements tracked")
+            }
         } catch (t: Throwable) {
             if (!shuttingDown.get()) failReady("Achievement Steam session failed", t)
         }
@@ -184,6 +261,7 @@ class AchievementService : Service() {
     private fun rebuildAchievementIndex(snapshot: UserStatsCallback) {
         val newLocations = HashMap<String, AchievementLocation>()
         val newUnlocked = HashSet<String>()
+        val newUnlockTimes = HashMap<String, Long>()
         for (achievement in snapshot.getExpandedAchievements()) {
             val name = achievement.name?.takeIf { it.isNotBlank() } ?: continue
             val encoded = achievement.achievementId
@@ -194,13 +272,26 @@ class AchievementService : Service() {
                 continue
             }
             newLocations[name] = AchievementLocation(statId, bitIndex)
+            val unlockedAt = achievement.unlockTimestamp.toLong()
+            newUnlockTimes[name] = unlockedAt
             if (achievement.isUnlocked) newUnlocked.add(name)
         }
         achievementLocations.clear()
         achievementLocations.putAll(newLocations)
         remotelyUnlocked.clear()
         remotelyUnlocked.addAll(newUnlocked)
-        LauncherLog.log("Achievements: schema mapped ${newLocations.size} name(s), ${newUnlocked.size} already unlocked on Steam")
+        remoteUnlockTimes.clear()
+        remoteUnlockTimes.putAll(newUnlockTimes)
+
+        if (historicalCutoffUnix > 0L) {
+            val visibleAtCutoff = newUnlockTimes.values.count { it > 0L && it <= historicalCutoffUnix }
+            LauncherLog.log(
+                "Achievements: schema mapped ${newLocations.size} name(s), ${newUnlocked.size} currently unlocked on Steam, " +
+                    "$visibleAtCutoff visible at historical cutoff $historicalCutoffUnix"
+            )
+        } else {
+            LauncherLog.log("Achievements: schema mapped ${newLocations.size} name(s), ${newUnlocked.size} already unlocked on Steam")
+        }
     }
 
     private fun setAchievement(name: String): Boolean {
@@ -213,6 +304,20 @@ class AchievementService : Service() {
             LauncherLog.log("SetAchievement($name) rejected: name is not present in Steam's Silksong schema")
             return false
         }
+
+        if (historicalCutoffUnix > 0L) {
+            if (getAchievement(name)) {
+                LauncherLog.log("SetAchievement($name): already unlocked in historical session")
+                return true
+            }
+            historicalSessionUnlocks.add(name)
+            LauncherLog.log(
+                "SetAchievement($name): unlocked in historical sandbox only; real Steam account unchanged"
+            )
+            updateNotification("Historical save • achievement unlocked in sandbox")
+            return true
+        }
+
         if (remotelyUnlocked.contains(name)) {
             LauncherLog.log("SetAchievement($name): already unlocked on Steam")
             return true
@@ -229,12 +334,40 @@ class AchievementService : Service() {
             LauncherLog.log("GetAchievement($name): unknown Steam achievement name")
             return false
         }
-        val unlocked = remotelyUnlocked.contains(name) || pendingUnlocks.contains(name)
-        LauncherLog.log("GetAchievement($name): $unlocked")
+
+        val unlocked = if (historicalCutoffUnix > 0L) {
+            val unlockedAt = remoteUnlockTimes[name] ?: 0L
+            historicalSessionUnlocks.contains(name) ||
+                (unlockedAt > 0L && unlockedAt <= historicalCutoffUnix)
+        } else {
+            remotelyUnlocked.contains(name) || pendingUnlocks.contains(name)
+        }
+        LauncherLog.log(
+            if (historicalCutoffUnix > 0L) {
+                "GetAchievement($name): $unlocked (historical cutoff=$historicalCutoffUnix)"
+            } else {
+                "GetAchievement($name): $unlocked"
+            }
+        )
         return unlocked
     }
 
-    private fun storeStats(): Boolean = synchronized(storeLock) {
+    private fun storeStats(): Boolean {
+        if (historicalCutoffUnix > 0L) {
+            if (!ready.get()) {
+                LauncherLog.log("StoreStats rejected: Steam bridge is not ready")
+                return false
+            }
+            LauncherLog.log(
+                "StoreStats: HISTORICAL SANDBOX — ${historicalSessionUnlocks.size} session unlock(s) kept local; no Steam write"
+            )
+            updateNotification("Historical save • Steam account unchanged")
+            return true
+        }
+        return storeStatsToSteam()
+    }
+
+    private fun storeStatsToSteam(): Boolean = synchronized(storeLock) {
         if (!ready.get()) {
             LauncherLog.log("StoreStats rejected: Steam bridge is not ready")
             return@synchronized false
@@ -276,8 +409,12 @@ class AchievementService : Service() {
                 if (callback.result == EResult.OK && !callback.statsOutOfDate && callback.statsFailedValidation.isEmpty()) {
                     pendingUnlocks.removeAll(names)
                     remotelyUnlocked.addAll(names)
+                    val now = System.currentTimeMillis() / 1000L
+                    names.forEach { remoteUnlockTimes[it] = now }
                     LauncherLog.log("StoreStats: SUCCESS — Steam accepted ${names.joinToString()}")
-                    if (!shuttingDown.get()) updateNotification("Connected to Steam • achievements synchronized")
+                    if (!shuttingDown.get() && historicalCutoffUnix <= 0L) {
+                        updateNotification("Connected to Steam • achievements synchronized")
+                    }
                     return@synchronized true
                 }
                 if (!callback.statsOutOfDate || attempt == 2) {
@@ -285,14 +422,18 @@ class AchievementService : Service() {
                         LauncherLog.log("StoreStats validation failure: stat ${it.statId} reverted to ${it.revertedStatValue}")
                     }
                     LauncherLog.log("StoreStats: FAILED — Steam did not accept achievement update")
-                    if (!shuttingDown.get()) updateNotification("Steam achievement synchronization needs attention")
+                    if (!shuttingDown.get() && historicalCutoffUnix <= 0L) {
+                        updateNotification("Steam achievement synchronization needs attention")
+                    }
                     return@synchronized false
                 }
                 LauncherLog.log("StoreStats: Steam state was out of date; retrying with fresh state")
             } catch (t: Throwable) {
                 LauncherLog.log("StoreStats attempt $attempt failed", t)
                 if (attempt == 2) {
-                    if (!shuttingDown.get()) updateNotification("Steam achievement synchronization needs attention")
+                    if (!shuttingDown.get() && historicalCutoffUnix <= 0L) {
+                        updateNotification("Steam achievement synchronization needs attention")
+                    }
                     return@synchronized false
                 }
             }
@@ -383,7 +524,10 @@ class AchievementService : Service() {
         builder
             .setContentTitle("Silksong achievements")
             .setContentText(text)
-            .setSubText("Steam synchronization service active")
+            .setSubText(
+                if (historicalCutoffUnix > 0L) "Historical save sandbox active"
+                else "Steam synchronization service active"
+            )
             .setSmallIcon(android.R.drawable.stat_sys_upload_done)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOngoing(true)
@@ -410,8 +554,8 @@ class AchievementService : Service() {
         executor.execute {
             try {
                 if (ready.get() && pendingUnlocks.isNotEmpty()) {
-                    LauncherLog.log("Achievements: flushing ${pendingUnlocks.size} pending unlock(s) before exit")
-                    runCatching { storeStats() }
+                    LauncherLog.log("Achievements: flushing ${pendingUnlocks.size} pending real unlock(s) before exit")
+                    runCatching { storeStatsToSteam() }
                         .onFailure { LauncherLog.log("Achievements: final Steam flush failed", it) }
                 }
             } finally {
@@ -449,7 +593,7 @@ class AchievementService : Service() {
         active = false
         LauncherLog.log("Achievements: synchronization service stopping")
         if (!shuttingDown.get() && ready.get() && pendingUnlocks.isNotEmpty()) {
-            runCatching { storeStats() }
+            runCatching { storeStatsToSteam() }
         }
         running.set(false)
         ready.set(false)
