@@ -2,6 +2,21 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.11
+
+Fixes historical save restores so Silksong's own in-game achievement/global progression state is restored together with the selected profile instead of leaving newer shared state active.
+
+Changes in this revision:
+
+- Restores Silksong's `shared.dat` state alongside the selected historical `userN.dat` when Steam Cloud retained a usable shared-state snapshot.
+- Recognizes the real unnumbered `shared.dat.bak` filename present in Steam Cloud, as well as numbered/versioned shared backups.
+- Pairs root-level versioned profile saves with shared-state snapshots by timestamp instead of incorrectly assuming files in the same root folder belong to the same snapshot.
+- Prefers an exact version/folder companion when one exists; otherwise chooses the newest retained shared state at or before the selected profile timestamp. A later shared snapshot is only used when no earlier one exists and it is within seven days.
+- Installs the profile and historical `shared.dat` as one filesystem transaction: all files are written and fsynced first, current files are staged aside, and every file is rolled back if any replacement fails.
+- Keeps the pre-restore full local safety backup introduced by the Save History feature.
+- Save History now labels entries as `FULL STATE`, `PAIRED STATE`, or `SLOT ONLY` and shows which historical shared state will be restored.
+- Keeps this fix strictly about Silksong's local/in-game shared progression. The Steam achievement synchronization service remains unchanged from revision 10.
+
 ## 1.0.3-achievements.10
 
 Fixes the game-side Steamworks.NET bootstrap that prevented Silksong from ever reaching the achievement bridge even though the Android JavaSteam service was authenticated and READY.
@@ -74,7 +89,7 @@ Changes in this revision:
 - Reworks the launcher screen to more closely match the modern concept: branded header, prominent Play action, separate account/cloud/settings controls, dedicated Steam-achievement and Steam Cloud status cards, live activity feed, and a distinct Exit control.
 - Adds `ExitButton`, which blocks exit while a visible Steam Cloud pull/push is running so a save transfer is not cut off mid-operation.
 - Adds a confirmation step for full launcher exit.
-- Adds an explicit achievement-service safe-shutdown broadcast. If pending achievement writes exist, the service attempts the final Steam `StoreStats` flow before closing JavaSteam and the IPC socket.
+- Adds an explicit achievement-service safe-shutdown broadcast. If pending achievement writes exist, the service attempts the final Steam `StoreStats` flow before closing JavaSteam and its socket.
 - Removes the foreground achievement notification during successful shutdown and explicitly cancels it before the launcher process is terminated.
 - Terminates the dedicated `:launcher` process after safe service cleanup, while leaving the separate game process untouched.
 - If the achievement service is not running, Exit removes the launcher task and closes the `:launcher` process immediately.
