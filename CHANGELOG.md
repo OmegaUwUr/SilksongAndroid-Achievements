@@ -2,6 +2,23 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.10
+
+Fixes the game-side Steamworks.NET bootstrap that prevented Silksong from ever reaching the achievement bridge even though the Android JavaSteam service was authenticated and READY.
+
+Changes in this revision:
+
+- Implements Valve-compatible `SteamInternal_ContextInit` support for Steamworks interface accessors.
+- Makes `SteamInternal_CreateInterface` return a valid Steam client handle instead of only accepting `STEAMUSERSTATS_INTERFACE_VERSION*` strings.
+- Supplies non-null `ISteamClient` interface handles required by Steamworks.NET's `CSteamAPIContext.Init()`, including User, Friends, Utils, Matchmaking, UserStats, Apps, RemoteStorage, HTTP, UGC, Input, Parties, RemotePlay, and the other standard context interfaces.
+- Keeps the real achievement behavior on the UserStats flat API while using opaque compatibility handles for unrelated Steam interfaces.
+- Adds conservative Steam user/apps/utils probes used during normal client initialization.
+- Fixes the native `CallbackMsg_t` layout by adding Valve's required callback payload-size field so Steamworks.NET manual dispatch can marshal callbacks correctly.
+- Splits IPC transport success from boolean command results so a valid locked achievement (`GET` returning `0`) is no longer treated as a transport/API failure.
+- Adds neutral `GetStat`/`SetStat` compatibility calls so incidental Steam stat probes do not fail with unresolved P/Invokes before achievements are stored.
+- Updates the post-IL2CPP Steam ABI diagnostics to recognize the newly implemented context/bootstrap symbols.
+- Targets the revision-9 symptom where the Java achievement service reached `READY — 52 Steam achievement API names mapped` but received zero `REQUEST`, `GET`, `SET`, or `STORE` IPC calls from the running game.
+
 ## 1.0.3-achievements.9
 
 Replaces the launcher frontend with the portrait-first Silksong dashboard requested from the visual reference, using official Steam-hosted Hollow Knight: Silksong artwork rather than generated imagery.
