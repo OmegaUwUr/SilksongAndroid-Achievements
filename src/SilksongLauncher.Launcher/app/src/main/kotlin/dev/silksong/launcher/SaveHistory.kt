@@ -8,7 +8,6 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.abs
 
 /**
  * Exposes Silksong's Steam-synchronized historical save files as safe,
@@ -19,26 +18,26 @@ import kotlin.math.abs
  * userN.dat.bakM files, and version-stamped userN_<game-version>.dat files.
  *
  * Silksong also stores shared progression (including its in-game achievement
- * completion flags) in shared.dat. Historical restores therefore try to pair
- * every user-slot snapshot with a historical shared.dat from the same cloud
- * snapshot/time. A current shared.dat is never substituted for an old one.
+ * completion flags) in shared.dat. Historical restores therefore pair every
+ * user-slot snapshot with the best historical shared.dat/shared.dat.bak copy
+ * Steam retained, rather than restoring the profile alone.
  */
 object SaveHistory {
     private val userSave = Regex(
-        "^user(\\d+)(?:_[A-Za-z0-9._-]+)?\\.dat(?:\\.bak\\d+)?$",
+        "^user(\\d+)(?:_[A-Za-z0-9._-]+)?\\.dat(?:\\.bak\\d*)?$",
         RegexOption.IGNORE_CASE,
     )
     private val plainActive = Regex("^user(\\d+)\\.dat$", RegexOption.IGNORE_CASE)
     private val sharedSave = Regex(
-        "^shared(?:_[A-Za-z0-9._-]+)?\\.dat(?:\\.bak\\d+)?$",
+        "^shared(?:_[A-Za-z0-9._-]+)?\\.dat(?:\\.bak\\d*)?$",
         RegexOption.IGNORE_CASE,
     )
     private val versionedUser = Regex(
-        "^user\\d+(_[A-Za-z0-9._-]+)\\.dat(?:\\.bak\\d+)?$",
+        "^user\\d+(_[A-Za-z0-9._-]+)\\.dat(?:\\.bak\\d*)?$",
         RegexOption.IGNORE_CASE,
     )
     private val versionedShared = Regex(
-        "^shared(_[A-Za-z0-9._-]+)\\.dat(?:\\.bak\\d+)?$",
+        "^shared(_[A-Za-z0-9._-]+)\\.dat(?:\\.bak\\d*)?$",
         RegexOption.IGNORE_CASE,
     )
 
@@ -53,14 +52,23 @@ object SaveHistory {
         val sharedCloudPath: String? = null,
         val sharedSourceName: String? = null,
         val sharedTimestampUnix: Long? = null,
+        val sharedMatchExact: Boolean = false,
     ) {
         val displayTime: String
-            get() = SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault())
-                .format(Date(timestampUnix * 1000L))
+            get() = formatTime(timestampUnix)
+
+        val sharedDisplayTime: String?
+            get() = sharedTimestampUnix?.let(::formatTime)
 
         val hasHistoricalSharedState: Boolean
             get() = sharedCloudPath != null
     }
+
+    private data class SharedMatch(
+        val file: SteamCloudClient.CloudFile,
+        val exact: Boolean,
+        val reason: String,
+    )
 
     suspend fun list(credentials: TokenStore.Credentials): List<Version> = withContext(Dispatchers.IO) {
         SteamSession().use { session ->
@@ -122,21 +130,26 @@ object SaveHistory {
                 val shared = findHistoricalSharedCompanion(all, version)
                 if (shared != null) {
                     LauncherLog.log(
-                        "Save history: paired Slot ${version.slot} ${version.sourceName} with historical shared state ${shared.filename}"
+                        "Save history: paired Slot ${version.slot} ${version.sourceName} (${version.timestampUnix}) " +
+                            "with ${shared.file.filename} (${shared.file.timestampUnix}); ${shared.reason}"
                     )
                     version.copy(
-                        sharedCloudPath = shared.filename,
-                        sharedSourceName = baseName(shared.filename),
-                        sharedTimestampUnix = shared.timestampUnix,
+                        sharedCloudPath = shared.file.filename,
+                        sharedSourceName = baseName(shared.file.filename),
+                        sharedTimestampUnix = shared.file.timestampUnix,
+                        sharedMatchExact = shared.exact,
                     )
                 } else {
+                    LauncherLog.log(
+                        "Save history: Slot ${version.slot} ${version.sourceName} has no retained shared.dat snapshot"
+                    )
                     version
                 }
             }.sortedWith(compareBy<Version> { it.slot }.thenByDescending { it.timestampUnix })
 
             LauncherLog.log(
                 "Save history: ${candidates.size} user-save cloud file(s), ${versions.size} historical version(s) recognized, " +
-                    "${versions.count { it.hasHistoricalSharedState }} with historical shared.dat state"
+                    "${versions.count { it.hasHistoricalSharedState }} with historical shared state"
             )
             if (versions.isEmpty() && candidates.isNotEmpty()) {
                 candidates.take(40).forEach { (file, source, _) ->
@@ -278,44 +291,76 @@ object SaveHistory {
     }
 
     /**
-     * Picks only a genuinely historical shared.dat. We never use the current
-     * root shared.dat merely because no old copy exists: that was the exact bug
-     * that produced a 2025 slot with 2026 in-game achievement flags.
+     * Match the profile snapshot to the best shared-state snapshot Steam has.
+     *
+     * Strongest match: same version token / same cloud folder. Otherwise the
+     * best available historical approximation is the newest shared snapshot at
+     * or before the selected profile timestamp. If Steam has no earlier copy,
+     * the earliest later snapshot is accepted only when it is within seven
+     * days; this handles restore-point upload skew without pairing a 2025 save
+     * with a much newer 2026 shared state.
      */
     private fun findHistoricalSharedCompanion(
         all: List<SteamCloudClient.CloudFile>,
         version: Version,
-    ): SteamCloudClient.CloudFile? {
+    ): SharedMatch? {
         val selectedParent = parentPath(normalized(version.cloudPath))
         val versionToken = versionedUser.matchEntire(version.sourceName)?.groupValues?.getOrNull(1)
             ?.takeIf { it.isNotEmpty() }
+        val shared = all.filter { sharedSave.matches(baseName(it.filename)) }
+        if (shared.isEmpty()) return null
 
-        return all.asSequence()
-            .filter { sharedSave.matches(baseName(it.filename)) }
-            .mapNotNull { file ->
+        if (versionToken != null) {
+            shared.firstOrNull { file ->
                 val source = baseName(file.filename)
-                val parent = parentPath(normalized(file.filename))
-                val delta = abs(file.timestampUnix - version.timestampUnix)
-                val sharedToken = versionedShared.matchEntire(source)?.groupValues?.getOrNull(1)
+                val token = versionedShared.matchEntire(source)?.groupValues?.getOrNull(1)
                     ?.takeIf { it.isNotEmpty() }
+                token == versionToken && parentPath(normalized(file.filename)) == selectedParent
+            }?.let { return SharedMatch(it, exact = true, reason = "same version token and folder") }
 
-                val score: Long? = when {
-                    versionToken != null && sharedToken == versionToken && parent == selectedParent -> delta
-                    versionToken != null && sharedToken == versionToken -> 10_000L + delta
-                    selectedParent.isNotEmpty() && parent == selectedParent && delta <= 6 * 60 * 60L ->
-                        100_000L + delta
-                    !source.equals("shared.dat", ignoreCase = true) &&
-                        file.timestampUnix <= version.timestampUnix + 10 * 60L && delta <= 60 * 60L ->
-                        200_000L + delta
-                    source.equals("shared.dat", ignoreCase = true) &&
-                        file.timestampUnix <= version.timestampUnix + 10 * 60L && delta <= 30 * 60L ->
-                        300_000L + delta
-                    else -> null
+            shared.firstOrNull { file ->
+                val source = baseName(file.filename)
+                val token = versionedShared.matchEntire(source)?.groupValues?.getOrNull(1)
+                    ?.takeIf { it.isNotEmpty() }
+                token == versionToken
+            }?.let { return SharedMatch(it, exact = true, reason = "same version token") }
+        }
+
+        if (selectedParent.isNotEmpty()) {
+            shared.filter { parentPath(normalized(it.filename)) == selectedParent }
+                .maxByOrNull { it.timestampUnix }
+                ?.let {
+                    return SharedMatch(
+                        it,
+                        exact = true,
+                        reason = "same Steam restore folder",
+                    )
                 }
-                score?.let { it to file }
+        }
+
+        shared.filter { it.timestampUnix <= version.timestampUnix }
+            .maxByOrNull { it.timestampUnix }
+            ?.let {
+                return SharedMatch(
+                    it,
+                    exact = false,
+                    reason = "nearest shared state at/before selected save (${version.timestampUnix - it.timestampUnix}s earlier)",
+                )
             }
-            .minByOrNull { it.first }
-            ?.second
+
+        val week = 7L * 24L * 60L * 60L
+        shared.filter { it.timestampUnix > version.timestampUnix }
+            .minByOrNull { it.timestampUnix }
+            ?.takeIf { it.timestampUnix - version.timestampUnix <= week }
+            ?.let {
+                return SharedMatch(
+                    it,
+                    exact = false,
+                    reason = "nearest shared state after selected save (${it.timestampUnix - version.timestampUnix}s later)",
+                )
+            }
+
+        return null
     }
 
     private fun normalized(path: String): String = path.replace('\\', '/')
@@ -349,6 +394,10 @@ object SaveHistory {
         }
         return dir
     }
+
+    private fun formatTime(timestampUnix: Long): String =
+        SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault())
+            .format(Date(timestampUnix * 1000L))
 
     fun humanSize(bytes: Long): String = when {
         bytes >= 1024L * 1024L -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
