@@ -2,6 +2,24 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.12
+
+Adds a game-side Steam achievement reconciliation layer so achievements Silksong itself has already marked as fulfilled can still reach Steam even when the translated desktop platform bootstrap never calls Steamworks.NET on Android.
+
+Changes in this revision:
+
+- Adds `SteamAchievementRepair` to the injected `SilksongPatches.dll` and registers it as an `AfterSceneLoad` runtime entry point.
+- Initializes the existing Android `libsteam_api64.so` bridge directly from inside the running game instead of depending on Team Cherry's desktop platform-selection path.
+- Calls `RequestCurrentStats` through the native shim as an explicit end-to-end bridge check; a successful run now produces an `Achievements IPC: REQUEST` line in the launcher log.
+- Discovers the game's achievement definitions from `AchievementHandler` and reads each definition's own `PlatformKey` rather than shipping a hard-coded list of 52 IDs.
+- Uses Silksong's public `GameManager.GetStatusRecordInt(PlatformKey)` as the local authority. That method reads `Platform.Current.RoamingSharedData`, the same shared state stored in `shared.dat` and used by the game's own achievement/progression UI.
+- Queues only achievements whose local Silksong status is greater than zero. Nothing locally locked is offered to Steam, and the repair never clears/relocks a Steam achievement.
+- Sends locally fulfilled keys through the existing `SetAchievement`/`StoreStats` IPC path. `AchievementService` still validates every key against Steam's authoritative Silksong schema before any server write.
+- Reconciles once immediately after startup and then periodically while the game runs, so a newly fulfilled achievement does not depend on Silksong firing its original Steam call at exactly the right moment.
+- Repairs previously missed achievements too: if Silksong already shows an achievement as completed but Steam still has it locked, the next game launch can synchronize that mismatch.
+- Retries failed stores instead of considering them synchronized, while successful keys are remembered for the lifetime of the game process to avoid repeated writes.
+- Keeps the normal Steamworks.NET shim path in place; this is a reliability fallback and reconciliation layer, not a replacement for Steam's authoritative server state.
+
 ## 1.0.3-achievements.11
 
 Fixes historical save restores so Silksong's own in-game achievement/global progression state is restored together with the selected profile instead of leaving newer shared state active.
