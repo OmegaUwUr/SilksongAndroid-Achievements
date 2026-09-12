@@ -6,8 +6,6 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
-import android.net.LocalSocket
-import android.net.LocalSocketAddress
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
@@ -17,9 +15,6 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -28,13 +23,13 @@ import kotlinx.coroutines.withContext
  * Strict pre-launch gate shared by normal Play and isolated Save History Play.
  *
  * The game process is never started while a signed-in achievement service is
- * still authenticating or loading its Steam schema. Readiness is verified by
- * the exact local PING endpoint used by libsteam_api64.so, rather than by a
- * timer or a process-local flag, so a successful result proves the complete
- * launcher-side achievement path is listening and READY.
+ * still authenticating or loading its Steam schema. LauncherActivity and
+ * AchievementService deliberately share the :launcher process, so readiness is
+ * derived from the service's lifecycle plus its own READY/socket-listening log
+ * state instead of opening a second Java LocalSocket connection. The native
+ * game bridge still uses the real abstract socket once Unity starts.
  */
 object LaunchReadiness {
-    private const val ACHIEVEMENT_SOCKET = "silksong-achievements-v1"
     private const val STEAM_READY_TIMEOUT_MS = 60_000L
     private const val STEAM_POLL_MS = 250L
 
@@ -100,7 +95,7 @@ object LaunchReadiness {
                     screen.fail("Steam achievement data did not become ready. Check your Steam sign-in and connection, then try again.")
                     return null
                 }
-                LauncherLog.log("Launch readiness: Steam achievement service is READY")
+                LauncherLog.log("Launch readiness: Steam achievement service is READY and IPC is listening")
             } else {
                 screen.stage(58, "Preparing offline play", "Steam synchronization is not signed in")
             }
@@ -125,40 +120,50 @@ object LaunchReadiness {
     }
 
     /**
-     * PING returns 1 only after AchievementService authenticated, verified the
-     * depot, fetched authoritative Steam user stats, and mapped the Silksong
-     * achievement schema. This is therefore stronger than merely waiting for
-     * Android to report that the Service process exists.
+     * AchievementService and LauncherActivity run in the same :launcher
+     * process. The service already emits the two facts we care about:
+     *
+     *  1. its abstract IPC socket has successfully bound and is listening;
+     *  2. Steam authentication/user-stats/schema initialization reached READY.
+     *
+     * Revision 17 tried to prove those facts by opening another Java
+     * LocalSocket and sending PING. On the user's Android 16 device that probe
+     * never returned success even though the service itself logged READY, so it
+     * created a false 60-second launch failure. Use the service's own in-process
+     * lifecycle/log state instead. The actual game still exercises the native
+     * socket path as soon as SteamAPI_Init runs.
      */
     private suspend fun awaitAchievementServiceReady(): Boolean {
         val deadline = SystemClock.elapsedRealtime() + STEAM_READY_TIMEOUT_MS
         while (SystemClock.elapsedRealtime() < deadline) {
-            if (withContext(Dispatchers.IO) { pingAchievementService() }) return true
+            if (achievementServiceReady()) return true
             delay(STEAM_POLL_MS)
         }
-        return false
+        return achievementServiceReady()
     }
 
-    private fun pingAchievementService(): Boolean {
-        val socket = LocalSocket()
-        return try {
-            socket.soTimeout = 1_500
-            socket.connect(
-                LocalSocketAddress(
-                    ACHIEVEMENT_SOCKET,
-                    LocalSocketAddress.Namespace.ABSTRACT,
-                ),
-            )
-            val writer = OutputStreamWriter(socket.outputStream, Charsets.UTF_8)
-            writer.write("PING\n")
-            writer.flush()
-            val response = BufferedReader(InputStreamReader(socket.inputStream, Charsets.UTF_8)).readLine()
-            response == "1"
-        } catch (_: Throwable) {
-            false
-        } finally {
-            runCatching { socket.close() }
-        }
+    private fun achievementServiceReady(): Boolean {
+        if (!AchievementService.isActive()) return false
+
+        val lines = LauncherLog.snapshot()
+        if (lines.isEmpty()) return false
+
+        fun lastIndexContaining(text: String): Int = lines.indexOfLast { it.contains(text) }
+
+        val lastSocket = lastIndexContaining("Achievements: IPC socket listening")
+        val lastReady = lastIndexContaining("Achievements: READY")
+        val lastStopping = maxOf(
+            lastIndexContaining("Achievements: beginning safe shutdown"),
+            lastIndexContaining("Achievements: safe shutdown complete"),
+            lastIndexContaining("Achievements: synchronization service stopping"),
+        )
+        val lastFailure = maxOf(
+            lastIndexContaining("Achievement Steam session failed"),
+            lastIndexContaining("Achievements disabled: no Steam credentials"),
+        )
+        val invalidAfter = maxOf(lastStopping, lastFailure)
+
+        return lastSocket > invalidAfter && lastReady > invalidAfter
     }
 
     /** Minimal full-screen launch UI with one horizontal determinate bar. */
