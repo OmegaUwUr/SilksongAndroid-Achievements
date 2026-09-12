@@ -5,10 +5,11 @@
 // can reach the launcher-side Steam session while the game's own desktop
 // Steam subsystem may never be selected/initialized.
 //
-// Revision 14 keeps the proven launcher/JavaSteam backend unchanged. The
-// game-side layer remains event-driven and now also distinguishes an already
-// unlocked Steam achievement from a genuinely new Steam unlock. Only a new,
-// successfully stored unlock is handed to SteamAchievementToast for display.
+// Revision 16 keeps the proven launcher/JavaSteam backend unchanged. The
+// game-side layer remains event-driven, distinguishes an already unlocked Steam
+// achievement from a genuinely new unlock, and now keeps an accepted SET
+// explicitly pending until STORE is confirmed instead of mistaking the service's
+// pending GET state for a completed server write.
 //
 // The repair remains deliberately one-way and conservative:
 //   * Silksong itself is the authority for whether an achievement was earned.
@@ -44,9 +45,16 @@ namespace SilksongPatches
         private bool bridgeReady;
 
         // Keys already known to be synchronized during this game process.
-        // If StoreStats fails they are deliberately NOT added and a later
-        // lifecycle/safety pass retries them.
         private readonly HashSet<string> synchronizedLocalKeys =
+            new HashSet<string>(StringComparer.Ordinal);
+
+        // The launcher service reports pending SETs as true from GET so the game
+        // does not repeatedly queue them. That is useful normally, but after a
+        // failed STORE we must remember locally that server confirmation has NOT
+        // happened yet and retry STORE before trusting GET=true.
+        private readonly HashSet<string> pendingStoreKeys =
+            new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> pendingPopupKeys =
             new HashSet<string>(StringComparer.Ordinal);
 
         private AchievementHandler achievementHandler;
@@ -186,10 +194,10 @@ namespace SilksongPatches
         {
             if (!bridgeReady || string.IsNullOrEmpty(key)) return;
 
-            // This is the fast path. Silksong raises this after its own
-            // PushAchievementUnlock call, so RoamingSharedData should already
-            // contain the local fulfilled flag. The event can be suppressed by
-            // the game's native-popup preference, hence the lifecycle fallback.
+            // This remains a compatibility fast path. With the Android online
+            // subsystem installed, Silksong's own PushAchievementUnlock reaches
+            // Steam before this event. If the event is suppressed by the popup
+            // preference, subsystem delivery and lifecycle reconciliation remain.
             if (!DiscoverGameAchievementState())
             {
                 ScheduleReconcile("achievement event (state not ready)", 0.25f);
@@ -231,11 +239,61 @@ namespace SilksongPatches
             Reconcile(reason);
         }
 
+        private bool FlushPendingStore(string reason)
+        {
+            if (pendingStoreKeys.Count == 0) return true;
+
+            bool stored;
+            try
+            {
+                stored = SteamAPI_ISteamUserStats_StoreStats(userStats);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(Tag + "pending StoreStats threw during " + reason + ": " + ex.Message);
+                stored = false;
+            }
+
+            if (!stored)
+            {
+                Debug.LogWarning(Tag + "StoreStats still pending during " + reason +
+                    "; keeping " + pendingStoreKeys.Count + " achievement(s) retryable");
+                return false;
+            }
+
+            string[] confirmed = new string[pendingStoreKeys.Count];
+            pendingStoreKeys.CopyTo(confirmed);
+            pendingStoreKeys.Clear();
+
+            for (int i = 0; i < confirmed.Length; i++)
+            {
+                string key = confirmed[i];
+                synchronizedLocalKeys.Add(key);
+                if (pendingPopupKeys.Remove(key))
+                {
+                    SteamAchievementToast.ShowConfirmed(achievementHandler, key);
+                }
+            }
+
+            Debug.Log(Tag + "confirmed pending Steam store for " + confirmed.Length +
+                " achievement(s) (" + reason + ")");
+            return true;
+        }
+
         private void Reconcile(string reason)
         {
             try
             {
                 if (!DiscoverGameAchievementState()) return;
+
+                // Do this before any GET checks. The service intentionally reports
+                // its own pending SET queue as unlocked, which is not equivalent to
+                // Steam having accepted STORE yet.
+                if (!FlushPendingStore("retry before " + reason))
+                {
+                    ScheduleReconcile("pending StoreStats retry", 5f);
+                    return;
+                }
 
                 var toStore = new List<string>();
                 var showAfterStore = new List<string>();
@@ -249,9 +307,6 @@ namespace SilksongPatches
                     bool remoteStateKnown = TryGetSteamAchievementState(key, out remoteUnlocked);
                     if (remoteStateKnown && remoteUnlocked)
                     {
-                        // Already present on the Steam account. Mark it locally
-                        // synchronized without issuing SET/STORE and, critically,
-                        // without showing a duplicate unlock popup.
                         synchronizedLocalKeys.Add(key);
                         continue;
                     }
@@ -269,31 +324,25 @@ namespace SilksongPatches
                     if (accepted)
                     {
                         toStore.Add(key);
-                        // Only a confirmed pre-store locked state is eligible for
-                        // a Steam-style popup. If GET failed we still synchronize,
-                        // but do not risk announcing an old achievement as new.
                         if (remoteStateKnown && !remoteUnlocked) showAfterStore.Add(key);
                     }
                 }
 
                 if (toStore.Count == 0) return;
 
-                bool stored = SteamAPI_ISteamUserStats_StoreStats(userStats);
-                if (!stored)
-                {
-                    Debug.LogWarning(Tag + "StoreStats rejected during " + reason +
-                        "; will retry " + toStore.Count + " local achievement(s)");
-                    return;
-                }
-
                 for (int i = 0; i < toStore.Count; i++)
                 {
-                    synchronizedLocalKeys.Add(toStore[i]);
+                    pendingStoreKeys.Add(toStore[i]);
                 }
-
                 for (int i = 0; i < showAfterStore.Count; i++)
                 {
-                    SteamAchievementToast.ShowConfirmed(achievementHandler, showAfterStore[i]);
+                    pendingPopupKeys.Add(showAfterStore[i]);
+                }
+
+                if (!FlushPendingStore(reason))
+                {
+                    ScheduleReconcile("retry after failed batch store", 5f);
+                    return;
                 }
 
                 Debug.Log(Tag + "reconciled " + toStore.Count +
@@ -311,6 +360,15 @@ namespace SilksongPatches
 
             try
             {
+                if (pendingStoreKeys.Contains(key))
+                {
+                    if (!FlushPendingStore("retry for " + key + " during " + reason))
+                    {
+                        ScheduleReconcile("retry after failed store: " + key, 5f);
+                    }
+                    return;
+                }
+
                 bool remoteUnlocked;
                 bool remoteStateKnown = TryGetSteamAchievementState(key, out remoteUnlocked);
                 if (remoteStateKnown && remoteUnlocked)
@@ -327,20 +385,17 @@ namespace SilksongPatches
                     return;
                 }
 
-                if (!SteamAPI_ISteamUserStats_StoreStats(userStats))
+                pendingStoreKeys.Add(key);
+                if (remoteStateKnown && !remoteUnlocked) pendingPopupKeys.Add(key);
+
+                if (!FlushPendingStore(reason))
                 {
                     Debug.LogWarning(Tag + "StoreStats rejected for " + key + " during " + reason);
                     ScheduleReconcile("retry after failed store: " + key, 5f);
                     return;
                 }
 
-                synchronizedLocalKeys.Add(key);
                 Debug.Log(Tag + "synchronized newly awarded achievement immediately: " + key);
-
-                if (remoteStateKnown && !remoteUnlocked)
-                {
-                    SteamAchievementToast.ShowConfirmed(achievementHandler, key);
-                }
             }
             catch (Exception ex)
             {
@@ -435,9 +490,6 @@ namespace SilksongPatches
 
         private bool IsLocallyFulfilled(string key)
         {
-            // This is the canonical Silksong desktop fallback: even with no
-            // online subsystem, DesktopPlatform.PushAchievementUnlock writes
-            // RoamingSharedData.SetBool(achievementId, true).
             try
             {
                 Platform platform = Platform.Current;
@@ -452,9 +504,6 @@ namespace SilksongPatches
                 Debug.LogWarning(Tag + "shared achievement lookup failed for " + key + ": " + ex.Message);
             }
 
-            // Preserve revision-12 behavior as a compatibility fallback. It was
-            // proven on-device and costs nothing unless the canonical bool path
-            // did not report the key as fulfilled.
             try
             {
                 return gameManager != null && gameManager.GetStatusRecordInt(key) > 0;
@@ -499,6 +548,8 @@ namespace SilksongPatches
             UnsubscribeGameManager();
             if (delayedReconcile != null) StopCoroutine(delayedReconcile);
             if (safetyLoop != null) StopCoroutine(safetyLoop);
+            pendingStoreKeys.Clear();
+            pendingPopupKeys.Clear();
             bootstrapped = false;
         }
 
