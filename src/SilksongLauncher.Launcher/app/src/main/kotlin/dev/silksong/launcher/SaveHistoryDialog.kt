@@ -56,7 +56,7 @@ object SaveHistoryDialog {
             setTextColor(Color.WHITE)
         })
         root.addView(TextView(activity).apply {
-            text = "Historical Silksong saves synchronized by Steam. The launcher also restores matching shared.dat state when Steam kept it, so in-game achievements/global progress match the old save."
+            text = "Restores the selected profile plus Silksong's matching shared game state when Steam retained it. shared.dat is where the game keeps cross-profile state such as its in-game achievement flags."
             textSize = 12f
             setTextColor(Color.rgb(170, 178, 190))
             setPadding(0, dp(4), 0, dp(12))
@@ -101,7 +101,7 @@ object SaveHistoryDialog {
             }
         }
 
-        fun launchRestored(version: SaveHistory.Version) {
+        fun launchRestored() {
             val depot = DepotLocation.resolve(activity)?.takeIf { PlayerImage.depotData(it) != null }
             if (depot == null) {
                 AlertDialog.Builder(activity)
@@ -114,17 +114,9 @@ object SaveHistoryDialog {
             try {
                 DepotLocation.relink(activity, depot)
                 SettingsStore(activity).exportForGame(activity)
-                // A historical session gets a timestamp-bounded, sandboxed
-                // Steam-achievement view. Normal Play automatically clears it.
-                AchievementService.start(
-                    activity,
-                    historicalCutoffUnix = version.timestampUnix,
-                    historicalLabel = "Slot ${version.slot} • ${version.displayTime}",
-                )
+                AchievementService.start(activity)
                 SaveDir.prepare(activity)
-                LauncherLog.log(
-                    "Save history: launching isolated restored-save session with historical achievement cutoff ${version.timestampUnix}"
-                )
+                LauncherLog.log("Save history: launching isolated restored-save session")
                 dialog.dismiss()
                 activity.startActivity(Intent().apply {
                     setClassName(activity.packageName, UNITY_ACTIVITY_CLASS)
@@ -141,22 +133,23 @@ object SaveHistoryDialog {
 
         fun restore(version: SaveHistory.Version) {
             spinner.visibility = View.VISIBLE
-            status.text = "Restoring Slot ${version.slot} from Steam…"
+            status.text = "Restoring Slot ${version.slot} and in-game shared state…"
             setHistoryButtonsEnabled(false)
             scope.launch {
                 try {
                     val result = SaveHistory.restore(activity, credentials, version)
                     spinner.visibility = View.GONE
                     status.text = if (result.restoredHistoricalSharedState) {
-                        "Slot ${version.slot} + historical shared state restored"
+                        "Slot ${version.slot} + historical in-game state restored"
                     } else {
-                        "Slot ${version.slot} restored • historical shared.dat unavailable"
+                        "Slot ${version.slot} restored • no historical shared state available"
                     }
                     val backup = result.safetyBackup?.absolutePath ?: "No previous local save set existed"
                     val stateNote = if (result.restoredHistoricalSharedState) {
-                        "The matching historical shared.dat was restored too, including Silksong's in-game achievement/global progression state."
+                        val quality = if (version.sharedMatchExact) "matching" else "nearest earlier"
+                        "Also restored $quality shared game state from ${version.sharedDisplayTime ?: "the historical snapshot"} (${version.sharedSourceName}). This includes Silksong's in-game achievement/global flags."
                     } else {
-                        "Steam did not retain a matching historical shared.dat for this snapshot. The slot itself is old, but local shared/global flags may still be newer. During Play restored save, Steam achievement queries are still sandboxed to this save's date."
+                        "Steam did not retain a usable historical shared.dat/shared.dat.bak for this profile version. The profile itself is restored, but Silksong's shared in-game achievement/global flags cannot be rolled back from Cloud for this snapshot."
                     }
                     AlertDialog.Builder(activity)
                         .setTitle("Historical save restored")
@@ -164,10 +157,10 @@ object SaveHistoryDialog {
                             "Slot ${version.slot} now uses the Steam version from ${version.displayTime}.\n\n" +
                                 "$stateNote\n\n" +
                                 "Safety backup: $backup\n\n" +
-                                "Play restored save starts an isolated session: no automatic cloud pull, no automatic cloud push, and no historical-test achievement writes to your real Steam account."
+                                "Play restored save still runs without the launcher's automatic cloud pull/push cycle, so the restored local state is not immediately replaced by the current Cloud save."
                         )
                         .setNegativeButton("Stay here", null)
-                        .setPositiveButton("Play restored save") { _, _ -> launchRestored(version) }
+                        .setPositiveButton("Play restored save") { _, _ -> launchRestored() }
                         .show()
                 } catch (t: Throwable) {
                     spinner.visibility = View.GONE
@@ -181,9 +174,10 @@ object SaveHistoryDialog {
 
         fun confirm(version: SaveHistory.Version) {
             val sharedState = if (version.hasHistoricalSharedState) {
-                "Matching historical shared.dat found — in-game achievement/global state will be restored with the slot."
+                val quality = if (version.sharedMatchExact) "matching" else "nearest retained"
+                "$quality shared state found: ${version.sharedSourceName} from ${version.sharedDisplayTime}. It will replace local shared.dat together with the profile so the game's own achievement/global stats can roll back too."
             } else {
-                "No matching historical shared.dat was found in Steam Cloud. The launcher can restore the slot, but some shared in-game state may remain newer."
+                "No usable historical shared state was found in Steam Cloud. Only the profile can be restored for this entry."
             }
             AlertDialog.Builder(activity)
                 .setTitle("Restore Slot ${version.slot}?")
@@ -207,7 +201,7 @@ object SaveHistoryDialog {
                     return@launch
                 }
                 val complete = versions.count { it.hasHistoricalSharedState }
-                status.text = "${versions.size} historical version(s) • $complete with matching shared state"
+                status.text = "${versions.size} historical version(s) • $complete with restorable shared state"
                 for ((slot, slotVersions) in versions.groupBy { it.slot }.toSortedMap()) {
                     list.addView(TextView(activity).apply {
                         text = "SLOT $slot"
@@ -218,7 +212,11 @@ object SaveHistoryDialog {
                         setPadding(0, dp(12), 0, dp(6))
                     })
                     for (version in slotVersions.sortedByDescending { it.timestampUnix }) {
-                        val completeness = if (version.hasHistoricalSharedState) "FULL STATE" else "SLOT ONLY"
+                        val completeness = when {
+                            version.sharedMatchExact -> "FULL STATE"
+                            version.hasHistoricalSharedState -> "PAIRED STATE"
+                            else -> "SLOT ONLY"
+                        }
                         list.addView(Button(activity).apply {
                             isAllCaps = false
                             gravity = Gravity.CENTER_VERTICAL or Gravity.START
