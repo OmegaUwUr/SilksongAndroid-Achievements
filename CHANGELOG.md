@@ -2,6 +2,29 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.16
+
+Hardens the revision-15 game-driven achievement path after auditing the remaining gates between Silksong gameplay and the proven Steam backend. The launcher-side `AchievementService`, JavaSteam writes, IPC protocol, Steam schema validation, Cloud synchronization, and Save History remain unchanged.
+
+Changes in this revision:
+
+- Fixes a transient `SET`-then-failed-`STORE` edge case. The launcher service intentionally reports its pending unlock queue as true from `GET`; revision 15 could therefore mistake a pending local write for a Steam-confirmed achievement and stop retrying.
+- Keeps game-side pending writes explicitly tracked until `StoreStats` succeeds, and retries them every 10 seconds without scanning the full achievement list.
+- Preserves the original pre-write locked state across a failed `STORE`, so a later successful retry can still show exactly one Steam-style unlock popup.
+- Gives `SteamAchievementRepair` its own pending-store tracking so its startup/lifecycle recovery path also retries `STORE` before trusting a pending `GET=true` response.
+- Keeps progress achievements on Silksong's normal `DesktopPlatform.PushAchievementUnlock()` path at `value >= max`, ensuring the final unlock both reaches Steam and writes Silksong's canonical `shared.dat` Boolean.
+- Validates completed progress keys against Silksong's own `AchievementsList` when that list is available, avoiding conversion of unrelated progress/stat keys into achievement attempts.
+- Leaves the direct reflection-injected Android online subsystem as the primary normal-game route and keeps reconciliation only as a recovery layer.
+
+Additional audit results:
+
+- `AchievementHandler.AwardAchievementToPlayer()` has four meaningful gates: demo mode, membership in `AchievementsList`, the `GODS_GLORY` map-zone whitelist, and the already-unlocked check. Demo mode is hard-coded false in this build.
+- `AchievementsList.FindAchievement()` compares the supplied key directly against each achievement's `PlatformKey`, so a genuinely wrong/case-mismatched game key would be rejected before reaching any online subsystem. No Android-specific renaming layer is involved.
+- `Platform.Current.AreAchievementsFetched` is not used to gate normal award calls; its observed consumers are UI/menu initialization. The Android subsystem still raises the fetched notification when the bridge becomes ready.
+- `showNativeAchievementPopups` only controls `AwardAchievementEvent`; it does not control Silksong's actual `PushAchievementUnlock()` call.
+- Some achievements are deliberately queued in memory and flushed later through `AwardQueuedAchievements()` at scene transitions or dedicated completion UI. Killing the game before Team Cherry flushes such a queue can theoretically lose that not-yet-awarded event; revision 16 does not force queued awards early because doing so could violate intended game timing/zone rules.
+- Steam/API-name validation remains authoritative in the launcher service. Any game `PlatformKey` absent from Steam's Silksong schema is rejected rather than written unsafely.
+
 ## 1.0.3-achievements.15
 
 Injects an Android-native implementation of Silksong's own `DesktopOnlineSubsystem` achievement path while preserving the proven launcher-side Steam/JavaSteam backend and revision-14 popup/reconciliation safety layers.
@@ -122,7 +145,7 @@ Changes in this revision:
 - Rebuilds the launcher as a single-column phone dashboard instead of the previous desktop-like split layout.
 - Adds a large official Silksong hero-art panel, official Steam library logo overlay, official game icon, compact top app bar, large red `Play Game` button, and stacked Steam / Cloud Saves / Achievements / Game Settings / About cards.
 - Fetches the official Steam library hero (`70d7e70ae2fd0f8a46661d4a425cd84479dc7a61`) and library logo (`98878a81ca9047352403db7e19e3942239ea8bf1`) at build time and stages them into Android resources without committing Team Cherry artwork to the repository.
-- Keeps the existing official Steam desktop/client icon staging for the Android launcher icon.
+- Keeps the existing official Steam desktop/client shortcut icon staging for the Android launcher icon.
 - Adds a unified Cloud Saves card that opens Pull, Push, or Steam Save History while reusing the existing cloud-sync implementation underneath.
 - Preserves the existing Steam login, achievement diagnostics, game settings, logs, controller focus, safe-exit lifecycle, save-history restore flow, and game launch behavior.
 - Keeps the existing hidden Pull/Push/log controls in the view hierarchy so cloud-job state, safe-exit blocking, and existing launcher logic continue to work without duplicating the synchronization engine.
@@ -186,7 +209,7 @@ Changes in this revision:
 - Strengthens the Steam-achievement foreground notification with ongoing/no-clear service flags, low-noise service presentation, live status text, and automatic restoration if it is dismissed while the synchronization service is still active.
 - Makes the achievement notification distinguish connecting, ready, queued, synchronized, and attention/error states.
 - Stages Hollow Knight: Silksong's official Steam desktop/client shortcut icon during GitHub APK builds using Steam app `1030300` clienticon `28f5a41307a55aa9151db0b4104ac327039d2683`.
-- Extracts the largest PNG frame from the official content-addressed Steam ICO and uses it for both legacy and adaptive Android launcher icon resources without committing the third-party artwork to this repository.
+- Extracts the largest PNG frame from the official content-addressed Steam ICO and uses it for both legacy and adaptive Android launcher icon resources without committing the third-party artwork to the repository.
 - Uses a launcher-owned vector mark inside the AAR UI so the launcher module remains independently compilable before the final Steam icon resources are overlaid during APK packaging.
 
 ## 1.0.3-achievements.4
