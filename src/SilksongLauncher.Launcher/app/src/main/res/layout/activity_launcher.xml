@@ -28,7 +28,7 @@
                 android:paddingRight="14dp"
                 android:paddingBottom="18dp">
 
-                <!-- Compact app bar, matching the phone-first reference. -->
+                <!-- Single launcher header. Settings live only in the Game Settings card below. -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -56,7 +56,8 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:orientation="vertical"
-                        android:paddingStart="12dp">
+                        android:paddingStart="12dp"
+                        android:paddingEnd="4dp">
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -75,36 +76,24 @@
                             android:textSize="11sp"
                             android:layout_marginTop="2dp" />
                     </LinearLayout>
-
-                    <dev.silksong.launcher.SettingsShortcutButton
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:minWidth="0dp"
-                        android:minHeight="0dp"
-                        android:background="@drawable/launcher_card"
-                        android:foreground="@drawable/focus_on_dark"
-                        android:text="⚙"
-                        android:textColor="@color/text_muted"
-                        android:textSize="23sp"
-                        android:gravity="center"
-                        android:padding="0dp"
-                        android:contentDescription="Settings" />
                 </LinearLayout>
 
-                <!-- Official Steam library hero + logo. Artwork is staged from
-                     Steam CDN at build time and is not committed to this repo. -->
+                <!-- Official Steam artwork. The image determines this frame's height from
+                     its real intrinsic aspect ratio; no fixed-height center crop. -->
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="292dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="108dp"
                     android:background="@drawable/launcher_hero_frame"
                     android:clipToOutline="true">
 
                     <dev.silksong.launcher.OfficialSteamAssetView
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent"
+                        android:layout_height="wrap_content"
+                        android:adjustViewBounds="true"
                         android:tag="launcher_hero"
                         android:contentDescription="Official Hollow Knight Silksong artwork"
-                        android:scaleType="centerCrop" />
+                        android:scaleType="fitCenter" />
 
                     <View
                         android:layout_width="match_parent"
@@ -112,11 +101,11 @@
                         android:background="@drawable/launcher_hero_scrim" />
 
                     <dev.silksong.launcher.OfficialSteamAssetView
-                        android:layout_width="235dp"
-                        android:layout_height="94dp"
+                        android:layout_width="160dp"
+                        android:layout_height="64dp"
                         android:layout_gravity="top|start"
-                        android:layout_marginStart="18dp"
-                        android:layout_marginTop="14dp"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginTop="10dp"
                         android:tag="launcher_logo"
                         android:contentDescription="Hollow Knight Silksong logo"
                         android:scaleType="fitStart" />
@@ -125,16 +114,16 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="bottom|end"
-                        android:layout_marginEnd="18dp"
-                        android:layout_marginBottom="18dp"
+                        android:layout_marginEnd="12dp"
+                        android:layout_marginBottom="10dp"
                         android:text="EXPLORE\nFIGHT\nDISCOVER\nASCEND"
                         android:textAlignment="viewEnd"
                         android:gravity="end"
                         android:textColor="#D9F7F8FA"
-                        android:textSize="10sp"
+                        android:textSize="8sp"
                         android:textStyle="bold"
-                        android:letterSpacing="0.18"
-                        android:lineSpacingExtra="3dp" />
+                        android:letterSpacing="0.16"
+                        android:lineSpacingExtra="1dp" />
                 </FrameLayout>
 
                 <Button
@@ -161,10 +150,12 @@
                     android:background="@drawable/launcher_card">
 
                     <ImageView
-                        android:layout_width="30dp"
-                        android:layout_height="30dp"
+                        android:layout_width="34dp"
+                        android:layout_height="34dp"
                         android:layout_gravity="center_vertical|start"
-                        android:layout_marginStart="15dp"
+                        android:layout_marginStart="13dp"
+                        android:padding="1dp"
+                        android:scaleType="fitCenter"
                         android:src="@drawable/ic_dashboard_steam"
                         android:contentDescription="Steam" />
 
@@ -217,7 +208,7 @@
                         android:contentDescription="Steam account" />
                 </FrameLayout>
 
-                <!-- Unified cloud card. -->
+                <!-- Steam Cloud actions -->
                 <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="70dp"
@@ -268,16 +259,19 @@
                         android:contentDescription="Open" />
 
                     <dev.silksong.launcher.CloudMenuButton
+                        android:id="@+id/btn_cloud"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
                         android:background="@android:color/transparent"
                         android:foreground="@drawable/focus_on_dark"
                         android:text=""
+                        android:stateListAnimator="@null"
                         android:contentDescription="Steam Cloud saves" />
                 </FrameLayout>
 
-                <!-- Achievements / diagnostics. The existing Logs action is
-                     kept as the card's transparent click target. -->
+                <!-- Achievements / diagnostics -->
                 <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="70dp"
@@ -311,7 +305,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="52 Steam achievements • tap for sync diagnostics"
+                            android:text="52 Steam achievements • sync diagnostics"
                             android:textColor="@color/text_muted"
                             android:textSize="11sp"
                             android:maxLines="1"
@@ -331,14 +325,17 @@
                         android:id="@+id/btn_logs"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
                         android:background="@android:color/transparent"
                         android:foreground="@drawable/focus_on_dark"
                         android:text=""
+                        android:stateListAnimator="@null"
                         android:textAllCaps="false"
                         android:contentDescription="Achievement diagnostics" />
                 </FrameLayout>
 
-                <!-- Game settings -->
+                <!-- Game settings: the only settings entry on the dashboard. -->
                 <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="70dp"
@@ -392,9 +389,12 @@
                         android:id="@+id/btn_settings"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
                         android:background="@android:color/transparent"
                         android:foreground="@drawable/focus_on_dark"
                         android:text=""
+                        android:stateListAnimator="@null"
                         android:textAllCaps="false"
                         android:contentDescription="Game settings" />
                 </FrameLayout>
@@ -450,9 +450,12 @@
                     <dev.silksong.launcher.AboutButton
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
                         android:background="@android:color/transparent"
                         android:foreground="@drawable/focus_on_dark"
                         android:text=""
+                        android:stateListAnimator="@null"
                         android:contentDescription="About Silksong Android" />
                 </FrameLayout>
 
@@ -463,7 +466,10 @@
                     android:minHeight="0dp"
                     android:background="@drawable/launcher_exit"
                     android:foreground="@drawable/focus_on_dark"
-                    android:text="⏻   Exit launcher safely"
+                    android:drawableStart="@drawable/ic_dashboard_exit"
+                    android:drawablePadding="8dp"
+                    android:gravity="center"
+                    android:text="Exit launcher safely"
                     android:textColor="@color/text_primary"
                     android:textSize="13sp"
                     android:textStyle="bold"
@@ -481,10 +487,8 @@
             </LinearLayout>
         </ScrollView>
 
-        <!-- Existing launcher implementation still owns the concrete Pull /
-             Push actions and the live log mirror. Keep those controls in the
-             hierarchy but out of the portrait dashboard; CloudMenuButton and
-             the achievement card forward into them. -->
+        <!-- Concrete Pull / Push actions and the live log stay in the hierarchy
+             for LauncherActivity and the Cloud dialog, but never overlap the dashboard. -->
         <FrameLayout
             android:layout_width="1dp"
             android:layout_height="1dp"
