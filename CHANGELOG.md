@@ -2,6 +2,26 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.21
+
+Fixes Steam profile visibility after device testing showed that `ClientGamesPlayed` was being sent for AppID `1030300` while the account still appeared Offline to profile viewers.
+
+Changes in this revision:
+
+- Adds JavaSteam `SteamFriends` to the live authenticated session and explicitly publishes `EPersonaState.Online` when the real Silksong `GameActivity` starts.
+- Resets the persona client-state flag before publishing Online so the game session is presented as a normal active Steam client rather than remaining in JavaSteam's default Offline persona state.
+- Sends the Online persona update before the existing `ClientGamesPlayed` declaration, allowing Steam to associate the visible account presence with Hollow Knight: Silksong instead of receiving game activity from an Offline persona.
+- Subscribes to `PersonaStateCallback` for the logged-in account and logs Steam's reflected persona state, game app ID, and game name. This gives a stronger runtime diagnostic than merely logging that an outbound presence message was sent.
+- Keeps the revision-20 ordered Activity lifecycle handling, real Unity PID, another-client protection, and normal games-played clearing on game stop.
+- Does not alter achievement GET/SET/STORE behavior, JavaSteam achievement writes, Cloud saves, Save History, or launch readiness.
+- Does not forcibly send an Offline persona update when gameplay ends; the game-playing state is cleared immediately, while the JavaSteam session's Online persona remains until that authenticated service disconnects. This avoids potentially overriding another Steam client's own online state.
+
+Expected successful runtime diagnostics include:
+
+- `Steam presence: persona set ONLINE for gameplay`
+- `Steam presence: announced Playing Hollow Knight: Silksong (AppID 1030300, gamePid=...)`
+- ideally a Steam-reflected line such as `Steam presence: server persona=Online, gameApp=1030300, gameName=...`
+
 ## 1.0.3-achievements.20
 
 Hardens Steam playing presence after revision 19 device logs showed that the first sessions announced AppID `1030300` correctly but a later GameActivity start could be silently skipped.
