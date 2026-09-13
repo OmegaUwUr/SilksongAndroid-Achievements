@@ -3,6 +3,7 @@ package dev.silksong.launcher
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.ContextWrapper
 import android.util.AttributeSet
 import android.widget.Button
 
@@ -15,11 +16,19 @@ class CloudMenuButton @JvmOverloads constructor(
 
     init {
         isAllCaps = false
+        isClickable = true
+        isFocusable = true
         setOnClickListener { openCloudMenu() }
     }
 
     private fun openCloudMenu() {
-        val activity = context as? Activity ?: return
+        val activity = context.findActivity()
+        if (activity == null) {
+            LauncherLog.log("Cloud menu: could not resolve launcher Activity")
+            return
+        }
+
+        LauncherLog.log("Cloud menu: opened")
         val credentials = TokenStore(activity).read()
         if (credentials == null) {
             AlertDialog.Builder(activity)
@@ -57,5 +66,11 @@ class CloudMenuButton @JvmOverloads constructor(
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private tailrec fun Context.findActivity(): Activity? = when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
     }
 }
