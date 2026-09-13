@@ -21,14 +21,12 @@ import urllib.request
 
 APP_ID = 1030300
 CLIENT_ICON = "28f5a41307a55aa9151db0b4104ac327039d2683"
-APP_ICON = "b4a999c1302e3ac123c041fd41bb8a34528c6ab5"
 LIBRARY_HERO = "70d7e70ae2fd0f8a46661d4a425cd84479dc7a61"
 LIBRARY_LOGO = "98878a81ca9047352403db7e19e3942239ea8bf1"
 
 COMMUNITY_BASE = "https://shared.fastly.steamstatic.com/community_assets/images/apps"
 STORE_BASE = "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps"
 ICO_URL = f"{COMMUNITY_BASE}/{APP_ID}/{CLIENT_ICON}.ico"
-JPG_URL = f"{COMMUNITY_BASE}/{APP_ID}/{APP_ICON}.jpg"
 HERO_URLS = (
     f"{STORE_BASE}/{APP_ID}/{LIBRARY_HERO}/library_hero.jpg",
     f"{STORE_BASE}/{APP_ID}/{LIBRARY_HERO}/library_hero_2x.jpg",
@@ -101,19 +99,40 @@ def largest_png_frame(ico: bytes) -> bytes | None:
     return max(candidates, key=lambda item: (item[0], item[1]))[2]
 
 
-def stage_icon(root: pathlib.Path, payload: bytes, extension: str) -> int:
+def png_dimensions(payload: bytes) -> tuple[int, int]:
+    if not payload.startswith(PNG_MAGIC) or len(payload) < 24:
+        raise ValueError("launcher icon payload is not a valid PNG")
+    width, height = struct.unpack_from(">II", payload, 16)
+    if width <= 0 or height <= 0:
+        raise ValueError("launcher icon PNG has invalid dimensions")
+    return width, height
+
+
+def stage_icon(root: pathlib.Path, payload: bytes) -> int:
+    """Stage only PNG launcher resources and remove stale JPEG variants.
+
+    ic_launcher.png is the legacy icon. ic_launcher_bg.png is deliberately kept
+    as the adaptive foreground source name for compatibility with the existing
+    committed fallback resources; API 26+ applies the actual safe-zone inset in
+    drawable-anydpi-v26/ic_launcher_foreground_safe.xml.
+    """
+    if not payload.startswith(PNG_MAGIC):
+        raise ValueError("refusing to stage a non-PNG Android launcher icon")
+
     changed = 0
     for density in ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"):
         directory = root / f"mipmap-{density}"
         if not directory.is_dir():
             continue
         for basename in ("ic_launcher", "ic_launcher_bg"):
-            # Avoid duplicate Android resources if a fallback changes format.
+            # Never leave a same-name JPEG beside the PNG. Besides making the
+            # packaged format ambiguous, duplicate resources can be resolved
+            # differently by Android build-tool versions.
             for old_ext in ("png", "jpg", "jpeg"):
                 candidate = directory / f"{basename}.{old_ext}"
                 if candidate.exists():
                     candidate.unlink()
-            (directory / f"{basename}.{extension}").write_bytes(payload)
+            (directory / f"{basename}.png").write_bytes(payload)
             changed += 1
     return changed
 
@@ -132,23 +151,25 @@ def main() -> int:
 
     ico = fetch(ICO_URL)
     png = largest_png_frame(ico)
-    if png is not None:
-        payload = png
-        extension = "png"
-        source = f"Steam desktop/client icon {CLIENT_ICON}"
-    else:
-        payload = fetch(JPG_URL)
-        if not payload.startswith(JPEG_MAGIC):
-            raise ValueError("Steam app-icon fallback is not a JPEG")
-        extension = "jpg"
-        source = f"Steam app icon fallback {APP_ICON}"
+    if png is None:
+        # Do not silently fall back to Steam's community JPG. Android launcher
+        # icons should remain lossless PNG resources, and an icon-source change
+        # should fail visibly in CI rather than ship a different format.
+        raise RuntimeError(
+            "official Steam client icon no longer contains an embedded PNG frame; "
+            "refusing JPEG fallback"
+        )
 
-    changed = stage_icon(icon_root, payload, extension)
+    width, height = png_dimensions(png)
+    changed = stage_icon(icon_root, png)
     if changed == 0:
         raise RuntimeError(f"no launcher mipmap directories found under {icon_root}")
 
     hero_size, logo_size = stage_launcher_art()
-    print(f"Staged {source}: {len(payload)} bytes into {changed} Android icon resources")
+    print(
+        "Staged official Steam desktop/client PNG icon "
+        f"{CLIENT_ICON}: {width}x{height}, {len(png)} bytes into {changed} Android icon resources"
+    )
     print(
         "Staged official Steam library artwork: "
         f"hero={hero_size} bytes, logo={logo_size} bytes -> {LAUNCHER_DRAWABLES}"
