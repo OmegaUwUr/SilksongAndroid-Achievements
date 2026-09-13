@@ -49,7 +49,7 @@ class SilksongApp : Application() {
         // means the game is still running. Steam presence/playtime therefore
         // starts only while GameActivity is actually visible and is cleared
         // when it stops (background, return to launcher, or normal exit).
-        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+        registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {
                 if (activity.javaClass.name != GAME_ACTIVITY) return
                 LauncherLog.log("Steam presence: GameActivity started")
