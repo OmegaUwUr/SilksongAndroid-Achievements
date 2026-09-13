@@ -2,6 +2,21 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.22
+
+Cleans up the portrait launcher dashboard based on device UI testing without replacing or generating game artwork.
+
+Changes in this revision:
+
+- Removes the duplicate top-right Settings shortcut; the `Game Settings` card is now the single settings entry on the dashboard.
+- Lets the official Steam-hosted Silksong hero artwork measure from its intrinsic aspect ratio with `adjustViewBounds` and `fitCenter` instead of forcing it into a fixed 292dp `centerCrop` frame.
+- Keeps the existing official Steam hero, logo, and app artwork; no generated or replacement Silksong image is introduced.
+- Insets and resizes the dashboard Steam vector so its outer ring and mark are no longer clipped by the ImageView bounds.
+- Replaces the font-dependent Unicode power glyph on `Exit launcher safely` with a native Android vector exit icon so it renders consistently across devices.
+- Hardens the Cloud Saves card by resolving the host Activity through `ContextWrapper` layers and giving the cloud overlay its own explicit click target; the card continues to open Pull, Push, and Steam Save History rather than achievement diagnostics.
+- Removes default Button state-list elevation from transparent card overlays to prevent invisible button elevation/translation from interfering with adjacent dashboard cards.
+- Preserves all hidden Pull/Push/log control IDs required by `LauncherActivity`, and leaves achievements, Steam persona/activity, launch readiness, Cloud synchronization, Save History, and Steam writes unchanged.
+
 ## 1.0.3-achievements.21
 
 Fixes Steam profile visibility after device testing showed that `ClientGamesPlayed` was being sent for AppID `1030300` while the account still appeared Offline to profile viewers.
