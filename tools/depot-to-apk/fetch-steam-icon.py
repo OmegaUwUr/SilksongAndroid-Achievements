@@ -111,10 +111,11 @@ def png_dimensions(payload: bytes) -> tuple[int, int]:
 def stage_icon(root: pathlib.Path, payload: bytes) -> int:
     """Stage only PNG launcher resources and remove stale JPEG variants.
 
-    ic_launcher.png is the legacy icon. ic_launcher_bg.png is deliberately kept
-    as the adaptive foreground source name for compatibility with the existing
-    committed fallback resources; API 26+ applies the actual safe-zone inset in
-    drawable-anydpi-v26/ic_launcher_foreground_safe.xml.
+    ic_launcher.png is the legacy icon. ic_launcher_bg.png remains the adaptive
+    foreground source; API 26+ applies the safe-zone inset through
+    mipmap-anydpi-v26/ic_launcher_foreground_safe.xml. Keeping that wrapper in
+    the mipmap resource family is important because the final APK shell
+    packager preserves the mipmap tree verbatim.
     """
     if not payload.startswith(PNG_MAGIC):
         raise ValueError("refusing to stage a non-PNG Android launcher icon")
