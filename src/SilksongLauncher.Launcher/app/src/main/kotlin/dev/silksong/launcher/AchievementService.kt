@@ -45,6 +45,7 @@ class AchievementService : Service() {
         private const val ACTION_SAFE_SHUTDOWN = "dev.silksong.launcher.ACHIEVEMENT_SAFE_SHUTDOWN"
         private const val ACTION_GAME_ACTIVE = "dev.silksong.launcher.SILKSONG_GAME_ACTIVE"
         private const val ACTION_GAME_INACTIVE = "dev.silksong.launcher.SILKSONG_GAME_INACTIVE"
+        private const val EXTRA_GAME_PROCESS_ID = "dev.silksong.launcher.SILKSONG_GAME_PROCESS_ID"
         @Volatile private var active = false
 
         fun isActive(): Boolean = active
@@ -66,12 +67,14 @@ class AchievementService : Service() {
          * Called from the Application's ActivityLifecycleCallbacks in the game
          * process. This is deliberately a package-scoped broadcast rather than
          * process-local state: GameActivity and AchievementService live in
-         * different Android processes.
+         * different Android processes. The originating PID is included so the
+         * ClientGamesPlayed record describes the real Unity game process.
          */
         fun reportGameActivity(context: Context, playing: Boolean) {
             context.sendBroadcast(
                 Intent(if (playing) ACTION_GAME_ACTIVE else ACTION_GAME_INACTIVE)
                     .setPackage(context.packageName)
+                    .putExtra(EXTRA_GAME_PROCESS_ID, android.os.Process.myPid())
             )
         }
 
@@ -96,6 +99,9 @@ class AchievementService : Service() {
     private val steamPlaying = AtomicBoolean(false)
     private val playingBlocked = AtomicBoolean(false)
     private val executor: ExecutorService = Executors.newCachedThreadPool()
+    // Presence transitions must stay ordered. A cached pool can execute a
+    // rapid STOP/START pair out of order, leaving Steam's session state stale.
+    private val presenceExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val achievementLocations = ConcurrentHashMap<String, AchievementLocation>()
     private val remotelyUnlocked = ConcurrentHashMap.newKeySet<String>()
     private val pendingUnlocks = ConcurrentHashMap.newKeySet<String>()
@@ -108,6 +114,7 @@ class AchievementService : Service() {
     @Volatile private var steamUser: SteamUser? = null
     @Volatile private var steamUserStats: SteamUserStats? = null
     @Volatile private var steamApps: SteamApps? = null
+    @Volatile private var gameProcessId: Int = 0
     @Volatile private var notificationText = "Connecting to Steam…"
 
     private val notificationDismissReceiver = object : BroadcastReceiver() {
@@ -133,12 +140,17 @@ class AchievementService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 ACTION_GAME_ACTIVE -> {
+                    gameProcessId = intent.getIntExtra(EXTRA_GAME_PROCESS_ID, 0)
                     gameWantsPlaying.set(true)
-                    if (!shuttingDown.get()) executor.execute { applySteamPlayingState(true) }
+                    if (!shuttingDown.get()) {
+                        runCatching { presenceExecutor.execute { applySteamPlayingState(true) } }
+                    }
                 }
                 ACTION_GAME_INACTIVE -> {
                     gameWantsPlaying.set(false)
-                    if (!shuttingDown.get()) executor.execute { applySteamPlayingState(false) }
+                    if (!shuttingDown.get()) {
+                        runCatching { presenceExecutor.execute { applySteamPlayingState(false) } }
+                    }
                 }
             }
         }
@@ -187,7 +199,7 @@ class AchievementService : Service() {
                             "Silksong presence will wait"
                     )
                 } else if (gameWantsPlaying.get() && ready.get() && !shuttingDown.get()) {
-                    runCatching { executor.execute { applySteamPlayingState(true) } }
+                    runCatching { presenceExecutor.execute { applySteamPlayingState(true) } }
                 }
             }
 
@@ -226,7 +238,9 @@ class AchievementService : Service() {
 
             // If GameActivity became active while Steam was still authenticating,
             // honor that lifecycle signal now rather than losing the session.
-            if (gameWantsPlaying.get()) applySteamPlayingState(true)
+            if (gameWantsPlaying.get()) {
+                runCatching { presenceExecutor.execute { applySteamPlayingState(true) } }
+            }
         } catch (t: Throwable) {
             if (!shuttingDown.get()) failReady("Achievement Steam session failed", t)
         }
@@ -253,6 +267,7 @@ class AchievementService : Service() {
             }
             try {
                 apps.notifyGamesPlayed(emptyList(), EOSType.AndroidUnknown)
+                gameProcessId = 0
                 LauncherLog.log("Steam presence: Silksong playing state cleared")
                 if (ready.get()) {
                     updateNotification("Connected to Steam • ${achievementLocations.size} achievements tracked")
@@ -263,7 +278,7 @@ class AchievementService : Service() {
             return@synchronized
         }
 
-        if (!gameWantsPlaying.get() || !ready.get() || steamPlaying.get()) return@synchronized
+        if (!gameWantsPlaying.get() || !ready.get()) return@synchronized
         if (playingBlocked.get()) {
             LauncherLog.log("Steam presence: Silksong is active, but another Steam session currently owns playing state")
             return@synchronized
@@ -271,17 +286,24 @@ class AchievementService : Service() {
 
         val user = steamUser ?: return@synchronized
         val steamId = user.steamID ?: return@synchronized
+        val pid = gameProcessId
         val played = GamePlayedInfo(
             gameId = APP_ID.toLong(),
-            processId = android.os.Process.myPid(),
+            processId = pid,
             ownerId = steamId.accountID.toInt(),
             gameBuildId = 0,
         )
 
         try {
+            // Re-send on every real Activity START. ClientGamesPlayed is an
+            // idempotent current-state declaration, and doing this avoids a
+            // stale local steamPlaying flag suppressing a new Steam session.
             apps.notifyGamesPlayed(listOf(played), EOSType.AndroidUnknown)
             steamPlaying.set(true)
-            LauncherLog.log("Steam presence: announced Playing Hollow Knight: Silksong (AppID $APP_ID)")
+            LauncherLog.log(
+                "Steam presence: announced Playing Hollow Knight: Silksong " +
+                    "(AppID $APP_ID, gamePid=$pid)"
+            )
             updateNotification("Playing Silksong • Steam activity active")
         } catch (t: Throwable) {
             steamPlaying.set(false)
@@ -292,6 +314,7 @@ class AchievementService : Service() {
     private fun clearSteamPresenceForShutdown() = synchronized(presenceLock) {
         gameWantsPlaying.set(false)
         steamPlaying.set(false)
+        gameProcessId = 0
         val apps = steamApps ?: return@synchronized
         if (playingBlocked.get()) return@synchronized
         runCatching { apps.notifyGamesPlayed(emptyList(), EOSType.AndroidUnknown) }
@@ -558,6 +581,7 @@ class AchievementService : Service() {
             } finally {
                 running.set(false)
                 ready.set(false)
+                presenceExecutor.shutdownNow()
                 runCatching { playingSessionSubscription?.close() }
                 playingSessionSubscription = null
                 runCatching { server?.close() }
@@ -598,6 +622,7 @@ class AchievementService : Service() {
         clearSteamPresenceForShutdown()
         running.set(false)
         ready.set(false)
+        presenceExecutor.shutdownNow()
         runCatching { playingSessionSubscription?.close() }
         playingSessionSubscription = null
         runCatching { server?.close() }
