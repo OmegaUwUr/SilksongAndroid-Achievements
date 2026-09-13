@@ -2,6 +2,26 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.20
+
+Hardens Steam playing presence after revision 19 device logs showed that the first sessions announced AppID `1030300` correctly but a later GameActivity start could be silently skipped.
+
+Changes in this revision:
+
+- Removes the cached `steamPlaying` flag as a gate for new Activity starts. Every real `GameActivity` start now re-sends the current `ClientGamesPlayed` declaration, so a stale local flag cannot suppress a new Steam play session.
+- Serializes Steam presence transitions on a dedicated single-thread executor so rapid Android STOP/START lifecycle pairs cannot be delivered to Steam out of order.
+- Includes the actual Unity game-process PID in the cross-process lifecycle broadcast and uses that PID in `GamePlayedInfo`, instead of reporting the launcher/service process as the running game.
+- Keeps the empty games-played declaration on Activity stop and safe service shutdown, so profile presence still ends promptly when the game backgrounds or exits.
+- Preserves the existing protection against stealing another Steam client's active playing session and does not kick another device.
+- Leaves achievement synchronization, Steam schema writes, Cloud saves, Save History, and launch readiness unchanged.
+
+Expected successful runtime diagnostics now include the real game PID:
+
+- `Steam presence: GameActivity started`
+- `Steam presence: announced Playing Hollow Knight: Silksong (AppID 1030300, gamePid=...)`
+- `Steam presence: GameActivity stopped`
+- `Steam presence: Silksong playing state cleared`
+
 ## 1.0.3-achievements.19
 
 Adds Steam playing presence for the real Android Silksong session and reports that live session through Steam's normal games-played protocol so Valve can account it as normal game activity/playtime.
