@@ -14,9 +14,12 @@ import android.net.LocalSocket
 import android.os.Build
 import android.os.IBinder
 import `in`.dragonbra.javasteam.enums.EOSType
+import `in`.dragonbra.javasteam.enums.EPersonaState
 import `in`.dragonbra.javasteam.enums.EResult
 import `in`.dragonbra.javasteam.steam.handlers.steamapps.GamePlayedInfo
 import `in`.dragonbra.javasteam.steam.handlers.steamapps.SteamApps
+import `in`.dragonbra.javasteam.steam.handlers.steamfriends.SteamFriends
+import `in`.dragonbra.javasteam.steam.handlers.steamfriends.callback.PersonaStateCallback
 import `in`.dragonbra.javasteam.steam.handlers.steamuser.SteamUser
 import `in`.dragonbra.javasteam.steam.handlers.steamuser.callback.PlayingSessionStateCallback
 import `in`.dragonbra.javasteam.steam.handlers.steamuserstats.Stats
@@ -111,9 +114,11 @@ class AchievementService : Service() {
     private var server: LocalServerSocket? = null
     private var steam: SteamSession? = null
     private var playingSessionSubscription: Closeable? = null
+    private var personaStateSubscription: Closeable? = null
     @Volatile private var steamUser: SteamUser? = null
     @Volatile private var steamUserStats: SteamUserStats? = null
     @Volatile private var steamApps: SteamApps? = null
+    @Volatile private var steamFriends: SteamFriends? = null
     @Volatile private var gameProcessId: Int = 0
     @Volatile private var notificationText = "Connecting to Steam…"
 
@@ -218,10 +223,27 @@ class AchievementService : Service() {
                 ?: throw IllegalStateException("JavaSteam SteamUserStats handler unavailable")
             val apps = session.steamClient.getHandler(SteamApps::class.java)
                 ?: throw IllegalStateException("JavaSteam SteamApps handler unavailable")
+            val friends = session.steamClient.getHandler(SteamFriends::class.java)
+                ?: throw IllegalStateException("JavaSteam SteamFriends handler unavailable")
             if (user.steamID == null) throw IllegalStateException("Steam logged on but account SteamID is unavailable")
             steamUser = user
             steamUserStats = stats
             steamApps = apps
+            steamFriends = friends
+
+            // Observe Steam's persona broadcasts for our own account. This is a
+            // stronger diagnostic than merely logging that we sent a status
+            // packet: when Steam reflects it back we can see both ONLINE state
+            // and the app id Steam associates with the persona.
+            personaStateSubscription = session.subscribe(PersonaStateCallback::class.java) { state ->
+                val localSteamId = steamUser?.steamID
+                if (localSteamId != null && state.friendId == localSteamId) {
+                    LauncherLog.log(
+                        "Steam presence: server persona=${state.personaState}, " +
+                            "gameApp=${state.gamePlayedAppId}, gameName=${state.gameName.ifBlank { "-" }}"
+                    )
+                }
+            }
 
             LauncherLog.log("Achievements: requesting authoritative Steam achievement state for app $APP_ID")
             val snapshot = fetchUserStats()
@@ -247,9 +269,9 @@ class AchievementService : Service() {
     }
 
     /**
-     * Announces AppID 1030300 through Steam's normal ClientGamesPlayed path.
-     * Steam uses this presence session for the visible "Playing" state and is
-     * the server-side source of playtime; we never fabricate a minute counter.
+     * Publishes the account as ONLINE, then announces AppID 1030300 through
+     * Steam's normal ClientGamesPlayed path. ClientGamesPlayed by itself does
+     * not make an Offline persona visible to friends/profile viewers.
      */
     private fun applySteamPlayingState(playing: Boolean) = synchronized(presenceLock) {
         if (shuttingDown.get()) return@synchronized
@@ -286,6 +308,7 @@ class AchievementService : Service() {
 
         val user = steamUser ?: return@synchronized
         val steamId = user.steamID ?: return@synchronized
+        val friends = steamFriends ?: return@synchronized
         val pid = gameProcessId
         val played = GamePlayedInfo(
             gameId = APP_ID.toLong(),
@@ -295,6 +318,15 @@ class AchievementService : Service() {
         )
 
         try {
+            // JavaSteam logs on with a persona that remains Offline until the
+            // client explicitly publishes a state. Steam's own JavaSteam sample
+            // does this after successful logon. Put this message before
+            // ClientGamesPlayed so the two ordered client messages describe an
+            // ONLINE account that is currently playing Silksong.
+            friends.resetPersonaStateFlag()
+            friends.setPersonaState(EPersonaState.Online)
+            LauncherLog.log("Steam presence: persona set ONLINE for gameplay")
+
             // Re-send on every real Activity START. ClientGamesPlayed is an
             // idempotent current-state declaration, and doing this avoids a
             // stale local steamPlaying flag suppressing a new Steam session.
@@ -307,7 +339,7 @@ class AchievementService : Service() {
             updateNotification("Playing Silksong • Steam activity active")
         } catch (t: Throwable) {
             steamPlaying.set(false)
-            LauncherLog.log("Steam presence: failed to announce Silksong", t)
+            LauncherLog.log("Steam presence: failed to publish Silksong presence", t)
         }
     }
 
@@ -584,12 +616,15 @@ class AchievementService : Service() {
                 presenceExecutor.shutdownNow()
                 runCatching { playingSessionSubscription?.close() }
                 playingSessionSubscription = null
+                runCatching { personaStateSubscription?.close() }
+                personaStateSubscription = null
                 runCatching { server?.close() }
                 steam?.close()
                 steam = null
                 steamUser = null
                 steamUserStats = null
                 steamApps = null
+                steamFriends = null
 
                 android.os.Handler(mainLooper).post {
                     LauncherLog.log("Achievements: safe shutdown complete")
@@ -625,12 +660,15 @@ class AchievementService : Service() {
         presenceExecutor.shutdownNow()
         runCatching { playingSessionSubscription?.close() }
         playingSessionSubscription = null
+        runCatching { personaStateSubscription?.close() }
+        personaStateSubscription = null
         runCatching { server?.close() }
         steam?.close()
         steam = null
         steamUser = null
         steamUserStats = null
         steamApps = null
+        steamFriends = null
         runCatching { unregisterReceiver(notificationDismissReceiver) }
         runCatching { unregisterReceiver(shutdownReceiver) }
         runCatching { unregisterReceiver(gameActivityReceiver) }
