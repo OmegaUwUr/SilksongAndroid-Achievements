@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- The build stages Silksong's official Steam desktop/client PNG into
-         ic_launcher_bg.png. Keep the inset wrapper in mipmap-anydpi-v26 too:
-         the final APK shell packager preserves this resource family, while
-         arbitrary drawable-anydpi-v26 shell resources are not copied. -->
-    <background android:drawable="@android:color/black" />
+    <!-- The build stages Silksong's official Steam desktop/client artwork as
+         a transparent RGBA PNG. Keep the foreground inset inside the packaged
+         mipmap resource family, and do not add an opaque matte behind it. -->
+    <background android:drawable="@android:color/transparent" />
     <foreground android:drawable="@mipmap/ic_launcher_foreground_safe" />
 </adaptive-icon>
