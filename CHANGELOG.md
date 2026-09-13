@@ -2,6 +2,39 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.19
+
+Adds Steam playing presence for the real Android Silksong session and reports that live session through Steam's normal games-played protocol so Valve can account it as normal game activity/playtime.
+
+Changes in this revision:
+
+- Uses JavaSteam's `SteamApps.notifyGamesPlayed` / `ClientGamesPlayed` path to announce Hollow Knight: Silksong AppID `1030300` while the actual Unity `GameActivity` is running.
+- Tracks the real Android activity lifecycle instead of treating the launcher being open, the Play button being pressed, or the Steam achievement service merely existing as gameplay.
+- Announces the game when `GameActivity` becomes started/visible and clears the games-played state when the Activity stops, including ordinary backgrounding and return-to-launcher transitions.
+- Clears Steam playing presence again during achievement-service shutdown as a final safety net so an orderly launcher exit cannot leave the account stuck in a playing state.
+- Uses the existing authenticated JavaSteam session; no second Steam login, fake local timer, or custom playtime stat is introduced.
+- Relies on Steam's server-side games-played session accounting for profile/library playtime rather than fabricating elapsed minutes locally. Presence and resulting playtime still require on-device/Steam-profile validation because Valve ultimately decides how the session is displayed/accounted.
+- Subscribes to `PlayingSessionStateCallback` and refuses to send `ClientGamesPlayed` while another Steam client owns the account's playing session, avoiding the documented `LoggedInElsewhere` behavior and never kicking the user's PC/other device just to claim Android presence.
+- Keeps achievement GET/SET/STORE behavior, Steam schema validation, Cloud synchronization, Save History, and the revision-18 launch-readiness fix intact.
+
+Expected runtime diagnostics:
+
+- `Steam presence: GameActivity started`
+- `Steam presence: announced Playing Hollow Knight: Silksong (AppID 1030300)`
+- `Steam presence: GameActivity stopped`
+- `Steam presence: Silksong playing state cleared`
+
+## 1.0.3-achievements.18
+
+Fixes the revision-17 launch gate falsely rejecting a fully ready Steam achievement service on the user's Android 16 device.
+
+Changes in this revision:
+
+- Removes the extra Java `LocalSocket` readiness probe that timed out even though `AchievementService` had already authenticated, mapped all 52 Steam achievement names, bound its IPC socket, and logged `READY`.
+- Keeps strict launch gating but derives readiness from the service's own in-process lifecycle plus its `IPC socket listening` and `READY` state, which are the two facts the launcher actually needs before starting Unity.
+- Keeps the real native `steam_api64` bridge responsible for exercising the abstract socket after the game process starts.
+- Preserves the horizontal preparation screen, Steam/Cloud/save prerequisites, and failure UI introduced in revision 17 without changing achievement writes or JavaSteam user-stat storage.
+
 ## 1.0.3-achievements.17
 
 Adds a strict pre-launch readiness gate so the Unity game process is not started while required launcher-side services or game data are still being prepared.
