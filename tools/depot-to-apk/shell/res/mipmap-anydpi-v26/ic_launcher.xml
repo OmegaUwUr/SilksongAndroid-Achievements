@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- The build stages Silksong's official Steam desktop/client PNG into
-         ic_launcher_bg.png. The foreground wrapper keeps the complete artwork
-         inside Android's adaptive-icon safe zone so OEM circle/squircle masks
-         do not crop Hornet's silhouette. -->
+         ic_launcher_bg.png. Keep the inset wrapper in mipmap-anydpi-v26 too:
+         the final APK shell packager preserves this resource family, while
+         arbitrary drawable-anydpi-v26 shell resources are not copied. -->
     <background android:drawable="@android:color/black" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground_safe" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground_safe" />
 </adaptive-icon>
