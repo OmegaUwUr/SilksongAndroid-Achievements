@@ -94,7 +94,7 @@ class LauncherActivity : Activity() {
         spinPull = findViewById(R.id.spin_pull)
         spinPush = findViewById(R.id.spin_push)
         btnSettings = findViewById(R.id.btn_settings)
-        btnAchievements = findViewById(R.id.btn_achievements)
+        btnAchievements = findViewById(R.id.btn_logs)
         btnLaunch = findViewById(R.id.btn_launch)
         logScroll = findViewById(R.id.log_scroll)
         txtLog = findViewById(R.id.txt_log)
