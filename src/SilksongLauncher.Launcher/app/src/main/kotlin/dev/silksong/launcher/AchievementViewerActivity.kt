@@ -35,7 +35,10 @@ import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Steam achievement browser adapted from GameNative's achievement viewer.
+ * Steam achievement browser with behavior adapted from GameNative's viewer.
+ * Original viewer: phobos665, https://github.com/utkarshdalal/GameNative/pull/1511
+ * UI refinements: VinceBT, https://github.com/utkarshdalal/GameNative/pull/1695
+ * See CREDITS.md at the repository root for the adaptation scope and licenses.
  *
  * The synchronization service remains the single owner of the Steam session.
  * This activity observes its immutable display snapshot, avoiding a second
