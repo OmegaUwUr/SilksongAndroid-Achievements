@@ -21,6 +21,18 @@ Steam integration for game files and cloud saves.
 - **QoL settings**: Skip intro, set resolution, auto upload/download cloud saves etc.
 - **Any device**: Any Android device works, single screen as well. Android 13 only for now (Android 15 is not supported at the moment)
 
+## SteamSync package and APK name
+
+The SteamSync variant installs as `com.hollowknightsilksong.steamsync`.
+APK filenames use `HollowKnight-Silksong-Steamsync-<version>.apk`; the colon
+in the game title is replaced with a hyphen for Windows-compatible downloads.
+
+Changing the package ID creates a separate Android app. It does not upgrade
+the old `com.jakobkhansen.silksong` installation or automatically migrate its
+login, settings, downloaded files, or saves. Back up/export saves from the old
+app before removing it. Sign in again and select or download the game files
+for the new app; Android may block access to the old app's private directories.
+
 ## Getting started
 
 1. Download the latest APK from

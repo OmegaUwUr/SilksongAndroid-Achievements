@@ -42,7 +42,7 @@ OUT="${OUT:-$BUILD_ROOT/depot-apk}"
 APK_DIR="${APK_DIR:-$REPO_ROOT/build}"
 STEPS="${STEPS:-5,6}"
 
-PKG="${PKG:-com.jakobkhansen.silksong}"
+PKG="${PKG:-com.hollowknightsilksong.steamsync}"
 APP_LABEL="${APP_LABEL:-Hollow Knight: Silksong}"
 # The version the stock engine reports. The depot is stamped with an internal
 # branch build of the same numeric version and must be normalised to this.
@@ -117,11 +117,11 @@ fi
 # The APK's filename, which is what a person downloading it sees.
 #
 # Named after the project and its version rather than the application id: a
-# file called com.jakobkhansen.silksong.apk says nothing useful in a downloads
+# file called com.hollowknightsilksong.steamsync.apk says nothing useful in a downloads
 # folder, and says nothing at all about which build it is. VERSION at the repo
 # root is the single source of truth, and dev.sh and the Makefile derive the
 # same name from the same file.
-APK_NAME="${APK_NAME:-SilksongAndroid-$VERSION_NAME.apk}"
+APK_NAME="${APK_NAME:-HollowKnight-Silksong-Steamsync-$VERSION_NAME.apk}"
 
 if [[ -z "${VERSION_CODE:-}" ]]; then
     _core="${VERSION_NAME%%-*}"
