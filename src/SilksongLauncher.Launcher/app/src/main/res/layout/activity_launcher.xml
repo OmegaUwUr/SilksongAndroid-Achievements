@@ -322,7 +322,7 @@
                         android:contentDescription="Open" />
 
                     <Button
-                        android:id="@+id/btn_achievements"
+                        android:id="@+id/btn_logs"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:minWidth="0dp"
