@@ -111,7 +111,7 @@ class SteamCloudClient(session: SteamSession) {
                 raw[3] == 0x04.toByte()
 
             val content = if (isZipped) decompressZip(raw) else raw
-            if (rawFileSize > 0 && content.size.toLong() != rawFileSize) {
+            if (rawFileSize > 0 && content.size.toLong() != rawFileSize.toLong()) {
                 throw RuntimeException(
                     "Cloud download for $filename has wrong size: expected $rawFileSize, got ${content.size}"
                 )
