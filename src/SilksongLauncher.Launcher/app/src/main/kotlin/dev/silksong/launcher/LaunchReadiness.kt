@@ -25,8 +25,8 @@ import kotlinx.coroutines.withContext
  * The game process is never started while a signed-in achievement service is
  * still authenticating or loading its Steam schema. LauncherActivity and
  * AchievementService deliberately share the :launcher process, so readiness is
- * derived from the service's lifecycle plus its own READY/socket-listening log
- * state instead of opening a second Java LocalSocket connection. The native
+ * read directly from explicit in-process service state instead of parsing log
+ * history or opening a second Java LocalSocket connection. The native
  * game bridge still uses the real abstract socket once Unity starts.
  */
 object LaunchReadiness {
@@ -120,50 +120,19 @@ object LaunchReadiness {
     }
 
     /**
-     * AchievementService and LauncherActivity run in the same :launcher
-     * process. The service already emits the two facts we care about:
-     *
-     *  1. its abstract IPC socket has successfully bound and is listening;
-     *  2. Steam authentication/user-stats/schema initialization reached READY.
-     *
-     * Revision 17 tried to prove those facts by opening another Java
-     * LocalSocket and sending PING. On the user's Android 16 device that probe
-     * never returned success even though the service itself logged READY, so it
-     * created a false 60-second launch failure. Use the service's own in-process
-     * lifecycle/log state instead. The actual game still exercises the native
-     * socket path as soon as SteamAPI_Init runs.
+     * AchievementService and LauncherActivity share the :launcher process, so
+     * the launcher can observe the service's exact state without a second IPC
+     * connection. Polling the explicit flags avoids false failures when log
+     * history is trimmed, reordered, or contains state from an older service
+     * instance. The native game still validates the real socket after launch.
      */
     private suspend fun awaitAchievementServiceReady(): Boolean {
         val deadline = SystemClock.elapsedRealtime() + STEAM_READY_TIMEOUT_MS
         while (SystemClock.elapsedRealtime() < deadline) {
-            if (achievementServiceReady()) return true
+            if (AchievementService.isReady()) return true
             delay(STEAM_POLL_MS)
         }
-        return achievementServiceReady()
-    }
-
-    private fun achievementServiceReady(): Boolean {
-        if (!AchievementService.isActive()) return false
-
-        val lines = LauncherLog.snapshot()
-        if (lines.isEmpty()) return false
-
-        fun lastIndexContaining(text: String): Int = lines.indexOfLast { it.contains(text) }
-
-        val lastSocket = lastIndexContaining("Achievements: IPC socket listening")
-        val lastReady = lastIndexContaining("Achievements: READY")
-        val lastStopping = maxOf(
-            lastIndexContaining("Achievements: beginning safe shutdown"),
-            lastIndexContaining("Achievements: safe shutdown complete"),
-            lastIndexContaining("Achievements: synchronization service stopping"),
-        )
-        val lastFailure = maxOf(
-            lastIndexContaining("Achievement Steam session failed"),
-            lastIndexContaining("Achievements disabled: no Steam credentials"),
-        )
-        val invalidAfter = maxOf(lastStopping, lastFailure)
-
-        return lastSocket > invalidAfter && lastReady > invalidAfter
+        return AchievementService.isReady()
     }
 
     /** Minimal full-screen launch UI with one horizontal determinate bar. */
