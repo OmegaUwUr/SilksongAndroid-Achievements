@@ -85,8 +85,8 @@ class AchievementViewerActivity : Activity() {
                 }
 
                 var snapshot = AchievementService.displaySnapshot()
-                repeat(180) {
-                    if (snapshot != null) return@repeat
+                for (attempt in 0 until 180) {
+                    if (snapshot != null) break
                     delay(250)
                     snapshot = AchievementService.displaySnapshot()
                 }
