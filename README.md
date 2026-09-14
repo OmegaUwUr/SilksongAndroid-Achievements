@@ -80,6 +80,16 @@ Signing in, by QR code or password, goes through
 Your password is never stored: the only thing kept is the login token Steam issues in
 return, encrypted, and it never leaves the device.
 
+## Credits
+
+This project builds on **jakobkhansen and the SilksongAndroid contributors**.
+The achievement viewer adapts features from **phobos665's original GameNative
+viewer** and **VinceBT's refinements** in GameNative PR #1695.
+
+See [CREDITS.md](CREDITS.md) for the specific features adapted, source links,
+library contributions, and artwork credits. Third-party license notices are
+in [NOTICE.md](NOTICE.md).
+
 ## AI assistance
 
 Much of this project was written with AI assistance. Everything in it is reviewed and
