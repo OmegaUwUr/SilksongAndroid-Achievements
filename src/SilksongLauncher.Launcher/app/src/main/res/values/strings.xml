@@ -69,4 +69,29 @@
     <string name="login_status_done">Signed in as %1$s</string>
     <string name="login_status_error">Login failed: %1$s</string>
     <string name="login_cancel">Cancel</string>
+
+    <!-- Steam achievement viewer. -->
+    <string name="achievements_title">Achievements</string>
+    <string name="achievements_all_title">All Achievements</string>
+    <string name="achievements_loading">Loading achievement data from Steam…</string>
+    <string name="achievements_unavailable">Steam achievement data is unavailable. Check your connection and try again.</string>
+    <string name="achievements_sign_in_required">Sign in to Steam from the launcher to view achievements.</string>
+    <string name="achievements_none">Steam returned no achievements for Silksong.</string>
+    <string name="achievements_progress_count">%1$d / %2$d unlocked (%3$d%%)</string>
+    <string name="achievements_complete">★ All achievements unlocked</string>
+    <string name="achievements_unlocked_at">Unlocked on %1$s</string>
+    <string name="achievements_locked">Locked</string>
+    <string name="achievements_hidden_name">Hidden achievement</string>
+    <string name="achievements_hidden_subtitle">Details will be revealed after this achievement is unlocked.</string>
+    <plurals name="achievements_hidden_remaining">
+        <item quantity="one">%1$d hidden achievement remaining</item>
+        <item quantity="other">%1$d hidden achievements remaining</item>
+    </plurals>
+    <string name="achievements_reveal_title">Reveal hidden achievements?</string>
+    <string name="achievements_reveal_message">This temporarily shows the names and details of remaining secret achievements.</string>
+    <string name="achievements_reveal_confirm">Reveal</string>
+    <string name="achievements_retry">Retry</string>
+    <string name="achievements_back">Back</string>
+    <string name="achievements_diagnostics">Diagnostics</string>
+
 </resources>
