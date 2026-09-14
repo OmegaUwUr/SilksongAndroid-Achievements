@@ -121,7 +121,10 @@ fi
 # folder, and says nothing at all about which build it is. VERSION at the repo
 # root is the single source of truth, and dev.sh and the Makefile derive the
 # same name from the same file.
-APK_NAME="${APK_NAME:-HollowKnight-Silksong-Steamsync-$VERSION_NAME.apk}"
+# Download filename uses the managed revision, independently of versionName.
+APK_REVISION="$(tr -d ' \t\r\n' < "$REPO_ROOT/APP_REVISION")"
+[[ "$APK_REVISION" =~ ^[0-9]+$ ]] || { echo "Invalid APP_REVISION" >&2; exit 1; }
+APK_NAME="${APK_NAME:-HollowKnight-Silksong-Steamsync.$APK_REVISION.apk}"
 
 if [[ -z "${VERSION_CODE:-}" ]]; then
     _core="${VERSION_NAME%%-*}"

@@ -107,7 +107,10 @@ APK_DIR="${APK_DIR:-$REPO_ROOT/build}"
 # two cannot disagree about what the build just produced. Exported for the same
 # reason: build.sh takes the override if one is set here.
 VERSION_NAME="${VERSION_NAME:-$(tr -d ' \t\r\n' < "$REPO_ROOT/VERSION" 2>/dev/null || echo 0.0.0)}"
-APK_NAME="${APK_NAME:-HollowKnight-Silksong-Steamsync-$VERSION_NAME.apk}"
+# Download filename uses the managed revision, independently of versionName.
+APK_REVISION="$(tr -d ' \t\r\n' < "$REPO_ROOT/APP_REVISION")"
+[[ "$APK_REVISION" =~ ^[0-9]+$ ]] || { echo "Invalid APP_REVISION" >&2; exit 1; }
+APK_NAME="${APK_NAME:-HollowKnight-Silksong-Steamsync.$APK_REVISION.apk}"
 
 OUT="${OUT:-$BUILD_ROOT/mk/apk2}"
 export PKG OUT VERSION_NAME APK_NAME

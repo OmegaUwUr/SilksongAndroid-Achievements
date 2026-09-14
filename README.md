@@ -24,8 +24,9 @@ Steam integration for game files and cloud saves.
 ## SteamSync package and APK name
 
 The SteamSync variant installs as `com.hollowknightsilksong.steamsync`.
-APK filenames use `HollowKnight-Silksong-Steamsync-<version>.apk`; the colon
-in the game title is replaced with a hyphen for Windows-compatible downloads.
+APK filenames use `HollowKnight-Silksong-Steamsync.<revision>.apk`, where
+`<revision>` comes from `APP_REVISION` (for example, `.26.apk`). The full Android
+versionName and versionCode are independent of this shorter download filename.
 
 Changing the package ID creates a separate Android app. It does not upgrade
 the old `com.jakobkhansen.silksong` installation or automatically migrate its

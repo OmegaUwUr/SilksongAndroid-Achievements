@@ -30,7 +30,8 @@ PKG     ?= com.hollowknightsilksong.steamsync
 # The APK is named for the project and its version, not the application id, so
 # that a downloaded file says what it is. Same VERSION file build.sh reads.
 VERSION ?= $(shell tr -d ' \t\r\n' < VERSION 2>/dev/null)
-APK     ?= $(APK_DIR)/HollowKnight-Silksong-Steamsync-$(VERSION).apk
+APK_REVISION := $(shell tr -d ' \t\r\n' < APP_REVISION)
+APK     ?= $(APK_DIR)/HollowKnight-Silksong-Steamsync.$(APK_REVISION).apk
 FILES   := /sdcard/Android/data/$(PKG)/files
 
 .PHONY: help dev dev-fast device-wipe install logcat game-logcat build-log \

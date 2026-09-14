@@ -219,7 +219,7 @@ jobs:
             -e DEBUGGABLE=1 \
             -e VERSION_NAME="${{ steps.version.outputs.version }}" \
             -e VERSION_CODE="${{ steps.version.outputs.version_code }}" \
-            -e APK_NAME="HollowKnight-Silksong-Steamsync-${{ steps.version.outputs.version }}.apk" \
+            -e APK_NAME="HollowKnight-Silksong-Steamsync.${{ steps.version.outputs.revision }}.apk" \
             -e KEYSTORE=/workspace/.ci-cache/build.jks \
             -e KS_PASS="$APK_KS_PASS" \
             -e KEY_PASS="$APK_KEY_PASS" \
@@ -237,7 +237,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: HollowKnight-Silksong-Steamsync-${{ steps.version.outputs.version }}-${{ steps.version.outputs.short_sha }}
+          name: HollowKnight-Silksong-Steamsync.${{ steps.version.outputs.revision }}-${{ steps.version.outputs.short_sha }}
           path: build/*.apk
           if-no-files-found: error
           retention-days: 14
