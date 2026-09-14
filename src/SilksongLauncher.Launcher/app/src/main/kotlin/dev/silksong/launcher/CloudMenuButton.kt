@@ -50,22 +50,35 @@ class CloudMenuButton @JvmOverloads constructor(
             return
         }
 
-        val choices = arrayOf(
-            "↓  Pull latest saves from Steam",
-            "↑  Push current saves to Steam",
-            "↶  Steam Save History",
+        val retryUpload = CloudStatus.retryUpload(activity, credentials.accountName)
+        val choices = mutableListOf(
+            activity.getString(R.string.ui_cloud_download),
+            activity.getString(R.string.ui_cloud_upload),
+            activity.getString(R.string.ui_save_history),
         )
+        if (retryUpload != null) choices.add(activity.getString(R.string.achievements_retry))
+        fun confirm(upload: Boolean) {
+            AlertDialog.Builder(activity)
+                .setTitle(if (upload) R.string.ui_cloud_upload else R.string.ui_cloud_download)
+                .setMessage(if (upload) R.string.ui_cloud_upload_explain else R.string.ui_cloud_download_explain)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.ui_continue) { _, _ ->
+                    if (upload) push.performClick() else pull.performClick()
+                }.show()
+        }
         AlertDialog.Builder(activity)
-            .setTitle("Steam Cloud")
-            .setItems(choices) { _, which ->
+            .setTitle(CloudStatus.label(activity))
+            .setItems(choices.toTypedArray()) { _, which ->
                 when (which) {
-                    0 -> pull.performClick()
-                    1 -> push.performClick()
+                    0 -> confirm(false)
+                    1 -> confirm(true)
                     2 -> SaveHistoryDialog.show(activity)
+                    3 -> confirm(retryUpload == true)
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
+
     }
 
     private tailrec fun Context.findActivity(): Activity? = when (this) {

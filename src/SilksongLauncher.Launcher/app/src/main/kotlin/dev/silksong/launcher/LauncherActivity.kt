@@ -166,6 +166,7 @@ class LauncherActivity : Activity() {
         if (creds != null) {
             // Logged in already — this button doubles as "log out".
             LauncherLog.log("Logged out")
+            AchievementService.stopSafely(this)
             tokenStore.clear()
             creds = null
             refreshLoginUi()
@@ -235,6 +236,8 @@ class LauncherActivity : Activity() {
      * the requested pre-launch Cloud check is incomplete.
      */
     private suspend fun pullFlow(c: TokenStore.Credentials, source: String): Boolean {
+        CloudStatus.begin(this, c.accountName, false)
+        var outcome = "success"
         try {
             LauncherLog.log("Analyzing cloud vs local saves ($source pull)…")
             val analysis = CloudSync.analyzePull(this@LauncherActivity, c)
@@ -252,6 +255,7 @@ class LauncherActivity : Activity() {
                         return true
                     }
                     ConflictChoice.CANCEL -> {
+                        outcome = "cancelled"
                         LauncherLog.log("Pull cancelled by user (local is newer for ${analysis.conflicts.size} file(s))")
                         return false
                     }
@@ -268,9 +272,13 @@ class LauncherActivity : Activity() {
             }
             return true
         } catch (t: Throwable) {
+            outcome = if (t is kotlinx.coroutines.CancellationException) "cancelled" else "failed"
+            if (t is kotlinx.coroutines.CancellationException) throw t
             LauncherLog.log("Pull failed: ${t.message ?: t.javaClass.simpleName}")
             android.util.Log.e("SilksongLauncher.Cloud", "pull flow failed ($source)", t)
             return false
+        } finally {
+            CloudStatus.finish(this, c.accountName, outcome)
         }
     }
 
@@ -299,6 +307,8 @@ class LauncherActivity : Activity() {
     }
 
     private suspend fun pushFlow(c: TokenStore.Credentials) {
+        CloudStatus.begin(this, c.accountName, true)
+        var outcome = "success"
         try {
             LauncherLog.log("Analyzing local vs cloud saves…")
             val analysis = CloudSync.analyzePush(this@LauncherActivity, c)
@@ -325,6 +335,7 @@ class LauncherActivity : Activity() {
                         return
                     }
                     ConflictChoice.CANCEL -> {
+                        outcome = "cancelled"
                         LauncherLog.log("Push cancelled by user (cloud is newer for ${analysis.conflicts.size} file(s))")
                         return
                     }
@@ -339,8 +350,12 @@ class LauncherActivity : Activity() {
                 CloudSync.pushItems(c, analysis.toUpload, toDelete = analysis.toDelete).collect { }
             }
         } catch (t: Throwable) {
+            outcome = if (t is kotlinx.coroutines.CancellationException) "cancelled" else "failed"
+            if (t is kotlinx.coroutines.CancellationException) throw t
             LauncherLog.log("Push failed: ${t.message ?: t.javaClass.simpleName}")
             android.util.Log.e("SilksongLauncher.Cloud", "push flow failed", t)
+        } finally {
+            CloudStatus.finish(this, c.accountName, outcome)
         }
     }
 

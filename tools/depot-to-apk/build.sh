@@ -43,7 +43,7 @@ APK_DIR="${APK_DIR:-$REPO_ROOT/build}"
 STEPS="${STEPS:-5,6}"
 
 PKG="${PKG:-com.hollowknightsilksong.steamsync}"
-APP_LABEL="${APP_LABEL:-Hollow Knight: Silksong}"
+APP_LABEL="${APP_LABEL:-Silksong SteamSync}"
 # The version the stock engine reports. The depot is stamped with an internal
 # branch build of the same numeric version and must be normalised to this.
 UNITY_VERSION="${UNITY_VERSION:-6000.0.50f1}"

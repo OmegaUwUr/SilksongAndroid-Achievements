@@ -22,6 +22,13 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.EditText
+import android.widget.Spinner
+import android.widget.ArrayAdapter
+import android.widget.AdapterView
+import android.text.TextWatcher
+import android.text.Editable
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -62,12 +69,16 @@ class AchievementViewerActivity : Activity() {
 
     private var achievements: List<AchievementService.DisplayAchievement> = emptyList()
     private var revealHidden = false
+    private var searchQuery = ""
+    private var filter = 0
+    private var sort = 0
+    private var feedJob: Job? = null
+    private var snapshotLabel = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = getString(R.string.achievements_title)
         setContentView(buildUi())
-        load()
     }
 
     override fun onDestroy() {
@@ -75,42 +86,29 @@ class AchievementViewerActivity : Activity() {
         super.onDestroy()
     }
 
+    override fun onResume() { super.onResume(); load() }
+    override fun onPause() { feedJob?.cancel(); super.onPause() }
+
     private fun load() {
+        feedJob?.cancel()
         retry.visibility = View.GONE
-        status.text = getString(R.string.achievements_loading)
-        summary.text = ""
-        progress.visibility = View.INVISIBLE
-        list.removeAllViews()
-
-        val credentials = TokenStore(this).read()
-        if (credentials == null) {
-            showFailure(getString(R.string.achievements_sign_in_required))
-            return
-        }
-
-        scope.launch {
-            try {
-                if (!AchievementService.isActive()) {
-                    AchievementService.start(this@AchievementViewerActivity)
+        feedJob = scope.launch {
+            AchievementFeed.observe(this@AchievementViewerActivity) { state ->
+                val data = state.snapshot
+                if (data == null) {
+                    achievements = emptyList()
+                    list.removeAllViews()
+                    showFailure(getString(if (TokenStore(this@AchievementViewerActivity).read() == null)
+                        R.string.achievements_sign_in_required else if (state.waiting)
+                        R.string.achievements_loading else R.string.achievements_unavailable))
+                    retry.visibility = if (state.waiting) View.GONE else View.VISIBLE
+                } else {
+                    snapshotLabel = getString(if (state.saved) R.string.ui_achievement_saved else R.string.ui_achievement_updated,
+                        android.text.format.DateUtils.getRelativeTimeSpanString(data.updated,
+                            System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS).toString())
+                    achievements = data.items
+                    render()
                 }
-
-                var snapshot = AchievementService.displaySnapshot()
-                for (attempt in 0 until 180) {
-                    if (snapshot != null) break
-                    delay(250)
-                    snapshot = AchievementService.displaySnapshot()
-                }
-
-                val loaded = snapshot
-                if (loaded == null) {
-                    showFailure(getString(R.string.achievements_unavailable))
-                    return@launch
-                }
-                achievements = loaded
-                render()
-            } catch (t: Throwable) {
-                LauncherLog.log("Achievement viewer failed", t)
-                showFailure(getString(R.string.achievements_unavailable))
             }
         }
     }
@@ -123,25 +121,37 @@ class AchievementViewerActivity : Activity() {
         } else {
             getString(R.string.achievements_progress_count, unlocked, total, unlocked * 100 / total)
         }
-        summary.text = if (total > 0 && unlocked == total) {
-            getString(R.string.achievements_complete)
-        } else {
-            getString(R.string.achievements_all_title)
-        }
+        summary.text = snapshotLabel
         progress.max = total.coerceAtLeast(1)
         progress.progress = unlocked
         progress.visibility = if (total > 0) View.VISIBLE else View.INVISIBLE
         retry.visibility = View.GONE
         list.removeAllViews()
 
-        val sorted = achievements.sortedWith(
-            compareByDescending<AchievementService.DisplayAchievement> { it.isUnlocked }
+        val candidates = achievements.filter {
+            filter == 0 || (filter == 1 && it.isUnlocked) || (filter == 2 && !it.isUnlocked)
+        }
+        val ordering = when (sort) {
+            1 -> compareBy<AchievementService.DisplayAchievement> { it.displayName.lowercase() }
+            2 -> compareByDescending<AchievementService.DisplayAchievement> {
+                if (!it.isUnlocked && (it.progressMax ?: 0f) > 0f)
+                    (it.progressCurrent ?: 0f) / it.progressMax!! else -1f
+            }
+            else -> compareByDescending<AchievementService.DisplayAchievement> { it.isUnlocked }
                 .thenByDescending { it.unlockTimestamp }
-                .thenBy { it.displayName.lowercase() }
-        )
-        val hiddenLocked = sorted.filter { it.hidden && !it.isUnlocked }
-        val visible = if (revealHidden) sorted else sorted.filterNot { it.hidden && !it.isUnlocked }
-
+        }
+        val hiddenLocked = candidates.filter { it.hidden && !it.isUnlocked }
+        // Hidden titles/descriptions cannot influence search results before explicit reveal.
+        val visible = candidates.filterNot { !revealHidden && it.hidden && !it.isUnlocked }
+            .filter { searchQuery.isBlank() || it.displayName.contains(searchQuery, true) ||
+                it.description.contains(searchQuery, true) }
+            .sortedWith(ordering.thenBy { it.displayName.lowercase() })
+        if (visible.isEmpty()) list.addView(TextView(this).apply {
+            text = getString(R.string.ui_achievement_no_matches)
+            setTextColor(Color.LTGRAY)
+            textSize = 16f
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+        })
         visible.forEachIndexed { index, achievement ->
             if (index > 0) addDivider()
             list.addView(achievementRow(achievement, revealSecret = revealHidden))
@@ -162,7 +172,7 @@ class AchievementViewerActivity : Activity() {
 
     private fun showFailure(message: String) {
         status.text = message
-        summary.text = getString(R.string.achievements_all_title)
+        summary.text = ""
         progress.visibility = View.INVISIBLE
         retry.visibility = View.VISIBLE
     }
@@ -209,7 +219,6 @@ class AchievementViewerActivity : Activity() {
             setTextColor(Color.WHITE)
             textSize = 15f
             setTypeface(typeface, Typeface.BOLD)
-            maxLines = 2
         })
         textColumn.addView(TextView(this).apply {
             text = when {
@@ -217,13 +226,13 @@ class AchievementViewerActivity : Activity() {
                 achievement.isUnlocked && achievement.unlockTimestamp > 0 ->
                     getString(R.string.achievements_unlocked_at, formatDate(achievement.unlockTimestamp))
                 achievement.description.isNotBlank() -> achievement.description
+                achievement.isUnlocked -> getString(R.string.ui_unlocked)
                 else -> getString(R.string.achievements_locked)
             }
             setTextColor(
                 Color.parseColor(if (achievement.isUnlocked) "#79D6A3" else "#9A8E91")
             )
-            textSize = 11f
-            maxLines = 3
+            textSize = 14f
             setPadding(0, dp(4), 0, 0)
         })
 
@@ -288,7 +297,10 @@ class AchievementViewerActivity : Activity() {
                 if (achievement.isUnlocked && achievement.unlockTimestamp > 0) {
                     if (isNotEmpty()) append("\n\n")
                     append(getString(R.string.achievements_unlocked_at, formatDate(achievement.unlockTimestamp)))
-                } else if (!achievement.isUnlocked) {
+                } else if (achievement.isUnlocked) {
+                    if (isNotEmpty()) append("\n\n")
+                    append(getString(R.string.ui_unlocked))
+                } else {
                     if (isNotEmpty()) append("\n\n")
                     append(getString(R.string.achievements_locked))
                 }
@@ -296,13 +308,44 @@ class AchievementViewerActivity : Activity() {
                 val max = achievement.progressMax
                 if (current != null && max != null && max > 0f) {
                     if (isNotEmpty()) append("\n\n")
-                    append(current.toInt()).append(" / ").append(max.toInt())
+                    append(java.text.NumberFormat.getNumberInstance().format(current)).append(" / ").append(java.text.NumberFormat.getNumberInstance().format(max))
                 }
             }
         }
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(12), dp(20), dp(16))
+        }
+        val icon = ImageView(this).apply {
+            setImageResource(R.drawable.ic_dashboard_trophy)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#211B1E")); cornerRadius = dp(14).toFloat()
+            }
+            clipToOutline = true
+            contentDescription = if (lockedSecret) getString(R.string.achievements_hidden_name) else achievement.displayName
+        }
+        body.addView(icon, LinearLayout.LayoutParams(dp(112), dp(112)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(16)
+        })
+        if (!lockedSecret) loadIcon(icon, achievement)
+        body.addView(TextView(this).apply {
+            text = message
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setTextIsSelectable(true)
+        })
+        val max = achievement.progressMax
+        val current = achievement.progressCurrent
+        if (!lockedSecret && !achievement.isUnlocked && current != null && max != null && max > 0f) {
+            body.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+                this.max = 1000
+                progress = ((current / max).coerceIn(0f, 1f) * 1000).toInt()
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(12)).apply { topMargin = dp(12) })
+        }
         AlertDialog.Builder(this)
             .setTitle(if (lockedSecret) getString(R.string.achievements_hidden_name) else achievement.displayName)
-            .setMessage(message)
+            .setView(ScrollView(this).apply { addView(body) })
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }
@@ -340,7 +383,7 @@ class AchievementViewerActivity : Activity() {
         val date = Date(timestampSeconds * 1000L)
         val day = DateFormat.getDateInstance(DateFormat.MEDIUM).format(date)
         val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(date)
-        return "$day at $time"
+        return "$day • $time"
     }
 
     private fun buildUi(): View {
@@ -368,6 +411,38 @@ class AchievementViewerActivity : Activity() {
             setPadding(dp(12), 0, dp(8), 0)
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(header)
+        root.addView(EditText(this).apply {
+            hint = getString(R.string.ui_achievement_search)
+            contentDescription = hint
+            textSize = 16f
+            setSingleLine(true)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    searchQuery = s?.toString()?.trim().orEmpty()
+                    if (::list.isInitialized) render()
+                }
+                override fun afterTextChanged(s: Editable?) {}
+            })
+        })
+        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun selector(labels: Array<String>, label: Int, selected: (Int) -> Unit): Spinner = Spinner(this).apply {
+            minimumHeight = dp(48)
+            contentDescription = getString(label)
+            adapter = ArrayAdapter(this@AchievementViewerActivity, android.R.layout.simple_spinner_dropdown_item, labels)
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    selected(position)
+                    if (::list.isInitialized) render()
+                }
+                override fun onNothingSelected(parent: AdapterView<*>?) {}
+            }
+        }
+        controls.addView(selector(resources.getStringArray(R.array.ui_achievement_filters), R.string.ui_filter) { filter = it },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        controls.addView(selector(resources.getStringArray(R.array.ui_achievement_sorts), R.string.ui_sort) { sort = it },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        root.addView(controls)
 
         summary = TextView(this).apply {
             setTextColor(Color.parseColor("#D8CDD0"))
@@ -378,7 +453,7 @@ class AchievementViewerActivity : Activity() {
 
         status = TextView(this).apply {
             setTextColor(Color.parseColor("#9A8E91"))
-            textSize = 12f
+            textSize = 14f
             setPadding(0, 0, 0, dp(9))
         }
         root.addView(status)
