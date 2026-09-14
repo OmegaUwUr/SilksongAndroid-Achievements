@@ -3,6 +3,7 @@ package dev.silksong.launcher
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.util.AttributeSet
 import android.widget.Button
 
@@ -33,7 +34,7 @@ class AboutButton @JvmOverloads constructor(
                     "Silksong artwork and logos shown by the launcher are the official assets submitted for the game on Steam."
             )
             .setPositiveButton("Diagnostics") { _, _ ->
-                activity.findViewById<Button>(R.id.btn_logs)?.performClick()
+                activity.startActivity(Intent(activity, LogActivity::class.java))
             }
             .setNegativeButton("Close", null)
             .show()
