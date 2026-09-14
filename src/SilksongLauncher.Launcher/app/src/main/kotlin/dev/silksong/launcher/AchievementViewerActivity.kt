@@ -231,7 +231,7 @@ class AchievementViewerActivity : Activity() {
                 count,
                 count,
             )
-            textAllCaps = false
+            isAllCaps = false
             setTextColor(Color.WHITE)
             textSize = 14f
             setBackgroundResource(R.drawable.launcher_card)
@@ -362,7 +362,7 @@ class AchievementViewerActivity : Activity() {
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(Button(this).apply {
             text = getString(R.string.achievements_diagnostics)
-            textAllCaps = false
+            isAllCaps = false
             setOnClickListener {
                 startActivity(Intent(this@AchievementViewerActivity, LogActivity::class.java))
             }
@@ -394,7 +394,7 @@ class AchievementViewerActivity : Activity() {
 
         retry = Button(this).apply {
             text = getString(R.string.achievements_retry)
-            textAllCaps = false
+            isAllCaps = false
             visibility = View.GONE
             setOnClickListener { load() }
         }
