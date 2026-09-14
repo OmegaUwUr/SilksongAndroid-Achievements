@@ -39,7 +39,7 @@ These are library dependencies or tools used by the project, rather than authors
 
 | Project / contributors | Used for |
 | --- | --- |
-| [JavaSteam and contributors](https://github.com/Longi94/JavaSteam) | Steam authentication and protocol handling, achievement/stat requests and updates, cloud operations, and depot downloads through JavaSteam Depot Downloader |
+| [JavaSteam / Long Tran (Longi94), Lossy, and contributors](https://github.com/Longi94/JavaSteam) | Steam authentication and protocol handling, achievement/stat requests and updates, cloud operations, and depot downloads through JavaSteam Depot Downloader |
 | [AssetsTools.NET / nesrak1](https://github.com/nesrak1/AssetsTools.NET) | Reading and rewriting Unity asset bundles in `tools/bundle-surgery/`, including the type-package database |
 | [Mono.Cecil and contributors](https://github.com/jbevain/cecil) | Rewriting managed assembly call sites for the `File.Replace` save compatibility fix in `RedirectFileReplace.cs` |
 | [.NET / Mono contributors](https://github.com/dotnet/runtime) | The on-device managed runtime used by the compilation and asset-processing tools |
@@ -50,6 +50,79 @@ These are library dependencies or tools used by the project, rather than authors
 | Apache Commons Compress, zstd-jni, and XZ contributors | Archive and depot-content decompression |
 
 Additional dependency credits and license information, including transport, serialization, and logging libraries, are retained in [NOTICE.md](NOTICE.md).
+
+
+## Additional source and compatibility references
+
+| People / project | Contribution and location |
+| --- | --- |
+| [nesrak1 / USCSandbox](https://github.com/nesrak1/USCSandbox) | `tools/bundle-surgery/Program.cs` explicitly credits USCSandbox as the reference for the subset of Unity's internal `ShaderGpuProgramType` enum used when processing shaders. The project file also records the AssetsTools.NET version originally obtained through USCSandbox. |
+| [SteamRE / SteamKit2 contributors](https://github.com/SteamRE/SteamKit) | The upstream Steam protocol implementation on which JavaSteam is based. Used indirectly through JavaSteam. |
+| [Riley Labrecque and Steamworks.NET contributors](https://github.com/rlabrecque/Steamworks.NET) | The game's managed Steam wrapper is the compatibility target for `steam_api_shim.c`, including native entry points, interface initialization, and manual callback layouts. This credits the interface reference; this repository implements its own Android IPC shim. |
+| [SteamRE / DepotDownloader contributors](https://github.com/SteamRE/DepotDownloader) | The optional desktop tool documented in the README for obtaining the Linux depot manually. The app itself uses JavaSteam Depot Downloader. |
+| [Google / Material Design icons contributors](https://github.com/google/material-design-icons) | The Cloud dashboard vector in `ic_dashboard_cloud.xml` follows the [Material cloud icon geometry](https://github.com/google/material-design-icons/blob/master/src/file/cloud/materialicons/24px.svg), with Android vector formatting and app-specific color. |
+
+## Supporting runtime libraries
+
+The following credits expand the supporting libraries already listed in `NOTICE.md` and the dependency declarations:
+
+| People / project | Contribution |
+| --- | --- |
+| JetBrains / [Ktor](https://github.com/ktorio/ktor) contributors | Steam networking transport through JavaSteam |
+| Square / [OkHttp](https://github.com/square/okhttp) and [Okio](https://github.com/square/okio) contributors | HTTP networking and I/O, including Steam Cloud transfers |
+| Google / [Protocol Buffers](https://github.com/protocolbuffers/protobuf) contributors | Steam protocol message serialization |
+| Apache Software Foundation / [Commons Lang](https://github.com/apache/commons-lang) contributors | Utility library used by JavaSteam |
+| QOS.ch / [SLF4J](https://github.com/qos-ch/slf4j) contributors | Logging API credited in the existing dependency notices |
+| AndroidX contributors | Android support components credited in the existing dependency notices |
+| JetBrains Java Annotations contributors | JVM annotation metadata |
+| Kotlin and kotlinx contributors | Standard library, coroutines, serialization, and I/O support |
+| Luben Karavelov / [zstd-jni](https://github.com/luben/zstd-jni) contributors | Zstandard decompression through the native JNI library |
+| Lasse Collin and [XZ for Java contributors](https://tukaani.org/xz/java.html) | XZ/LZMA decompression |
+| The Legion of the Bouncy Castle and contributors | Cryptographic primitives used by JavaSteam |
+
+## Tools and packages downloaded on the device
+
+These components support the app's on-device build. They are fetched separately by `ToolchainFetcher.kt`, `UnityFetcher.kt`, and `PackageCompiler.kt`; their upstream authors retain their respective rights.
+
+| People / project | Contribution |
+| --- | --- |
+| [Termux package maintainers and contributors](https://github.com/termux/termux-packages) | Android-hosted compiler binaries and support libraries that make compilation on the phone possible |
+| [LLVM contributors](https://github.com/llvm/llvm-project) | Clang, LLVM, LLD, compiler-rt, and libc++ supplied through Termux |
+| GNU Binutils contributors | Assembler and binary utilities supplied through Termux |
+| libffi contributors | Foreign-function interface support library in the fetched toolchain |
+| libxml2 contributors | XML support library in the fetched toolchain |
+| Unicode / ICU contributors | Unicode support library in the fetched toolchain |
+| ncurses contributors | Terminal support library in the fetched toolchain |
+| zlib contributors, including Jean-loup Gailly and Mark Adler | Compression support in the fetched toolchain |
+| Zstandard contributors | Native Zstandard compression library in the fetched toolchain |
+| XZ Utils / liblzma contributors | Native XZ/LZMA support in the fetched toolchain |
+| GNU libiconv contributors | Character conversion support in the fetched toolchain |
+| Google / Android NDK contributors | Android headers and system-library stubs used to compile native code |
+| Microsoft and [.NET Roslyn contributors](https://github.com/dotnet/roslyn) | C# compiler downloaded from NuGet to build game patches and the Android Input System assembly |
+| Unity Technologies and [Input System contributors](https://github.com/Unity-Technologies/InputSystem) | Unity engine/player/toolchain components and Input System package fetched for on-device compilation and game input |
+
+The complete explicitly requested Termux package list at the reviewed revision is:
+`clang`, `libllvm`, `lld`, `libcompiler-rt`, `binutils`, `libc++`,
+`libffi`, `libxml2`, `libicu`, `ncurses`, `zlib`, `zstd`,
+`liblzma`, and `libiconv`.
+
+## APK build and CI tooling
+
+These projects provide the development environment and automation:
+
+- **Eclipse Adoptium / Temurin and OpenJDK contributors** — JDK 17 and the base build-container image.
+- **Gradle contributors** and **Google / Android Gradle Plugin, SDK and build-tools contributors** — Android library compilation, resource processing, dex generation, alignment, and signing.
+- **Microsoft / .NET SDK contributors** — building the asset-processing tool.
+- **Kitware / CMake contributors** — native JNI and Steam shim builds.
+- **Docker / BuildKit / Buildx contributors** — containerized builds and build caching.
+- **GitHub Actions contributors** — checkout, cache, and artifact-upload actions; **Docker's Actions contributors** — Buildx setup and image-build actions.
+- **Ubuntu and Debian maintainers**, **libarchive**, **curl**, **Info-ZIP**, **XZ Utils**, **Git**, **Python**, **GNU Bash / Make / Coreutils / Findutils / Gawk / Sed**, and **file/libmagic contributors** — the build image and command-line tools explicitly used by its scripts.
+
+## Attribution review scope
+
+Reviewed against repository revision `027bcd8907d8d0c32cee117f189cd5d1f391cfe2`: all 158 text files, including source comments, stored achievement patches, Gradle and NuGet declarations, download scripts, CI configuration, and existing notices. Binary artwork and the type database are credited using their documented provenance.
+
+This records the sources identifiable from the repository and the linked upstream references. It is not an exhaustive list of every individual contributor to every dependency, or a resolved dependency inventory for every APK. Project links credit those contributor communities collectively. Undocumented historical copying cannot be ruled out by a source-reference review alone; new source attributions should be added when identified.
 
 ## Artwork and game ownership
 
