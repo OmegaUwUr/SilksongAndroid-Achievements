@@ -50,8 +50,11 @@ class AchievementService : Service() {
         private const val ACTION_GAME_INACTIVE = "dev.silksong.launcher.SILKSONG_GAME_INACTIVE"
         private const val EXTRA_GAME_PROCESS_ID = "dev.silksong.launcher.SILKSONG_GAME_PROCESS_ID"
         @Volatile private var active = false
+        @Volatile private var serviceReady = false
+        @Volatile private var socketListening = false
 
         fun isActive(): Boolean = active
+        fun isReady(): Boolean = active && serviceReady && socketListening
 
         fun start(context: Context) {
             LauncherLog.log("Achievements: requesting synchronization service start")
@@ -164,6 +167,8 @@ class AchievementService : Service() {
     override fun onCreate() {
         super.onCreate()
         active = true
+        serviceReady = false
+        socketListening = false
         LauncherLog.log("Achievements: service created")
         createNotificationChannel()
         registerReceivers()
@@ -255,6 +260,7 @@ class AchievementService : Service() {
 
             if (shuttingDown.get()) return
             ready.set(true)
+            serviceReady = true
             LauncherLog.log("Achievements: READY — ${achievementLocations.size} Steam achievement API names mapped")
             updateNotification("Connected to Steam • ${achievementLocations.size} achievements tracked")
 
@@ -356,6 +362,7 @@ class AchievementService : Service() {
 
     private fun failReady(message: String, error: Throwable? = null) {
         ready.set(false)
+        serviceReady = false
         if (error == null) LauncherLog.log(message) else LauncherLog.log(message, error)
         if (!shuttingDown.get()) updateNotification("Steam achievement synchronization unavailable")
     }
@@ -505,6 +512,7 @@ class AchievementService : Service() {
     private fun serve() {
         try {
             server = LocalServerSocket(SOCKET_NAME)
+            socketListening = true
             LauncherLog.log("Achievements: IPC socket listening ($SOCKET_NAME)")
             while (running.get()) {
                 val socket = server!!.accept()
@@ -512,6 +520,8 @@ class AchievementService : Service() {
             }
         } catch (t: Throwable) {
             if (running.get() && !shuttingDown.get()) LauncherLog.log("Achievement socket stopped", t)
+        } finally {
+            socketListening = false
         }
     }
 
@@ -613,6 +623,8 @@ class AchievementService : Service() {
             } finally {
                 running.set(false)
                 ready.set(false)
+                serviceReady = false
+                socketListening = false
                 presenceExecutor.shutdownNow()
                 runCatching { playingSessionSubscription?.close() }
                 playingSessionSubscription = null
@@ -650,6 +662,8 @@ class AchievementService : Service() {
 
     override fun onDestroy() {
         active = false
+        serviceReady = false
+        socketListening = false
         LauncherLog.log("Achievements: synchronization service stopping")
         if (!shuttingDown.get() && ready.get() && pendingUnlocks.isNotEmpty()) {
             runCatching { storeStats() }
