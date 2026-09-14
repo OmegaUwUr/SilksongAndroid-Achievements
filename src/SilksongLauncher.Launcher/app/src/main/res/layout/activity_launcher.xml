@@ -271,69 +271,12 @@
                         android:contentDescription="Steam Cloud saves" />
                 </FrameLayout>
 
-                <!-- Achievements / diagnostics -->
-                <FrameLayout
+                <!-- GameNative-inspired preview; attribution in CREDITS.md. -->
+                <dev.silksong.launcher.AchievementPreviewView
+                    android:id="@+id/btn_logs"
                     android:layout_width="match_parent"
-                    android:layout_height="70dp"
-                    android:layout_marginBottom="7dp"
-                    android:background="@drawable/launcher_card">
-
-                    <ImageView
-                        android:layout_width="30dp"
-                        android:layout_height="30dp"
-                        android:layout_gravity="center_vertical|start"
-                        android:layout_marginStart="15dp"
-                        android:src="@drawable/ic_dashboard_trophy"
-                        android:contentDescription="Achievements" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:orientation="vertical"
-                        android:gravity="center_vertical"
-                        android:paddingStart="58dp"
-                        android:paddingEnd="42dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Achievements"
-                            android:textColor="@color/text_primary"
-                            android:textSize="15sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="View progress, details, and unlock dates"
-                            android:textColor="@color/text_muted"
-                            android:textSize="11sp"
-                            android:maxLines="1"
-                            android:ellipsize="end"
-                            android:layout_marginTop="2dp" />
-                    </LinearLayout>
-
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:layout_gravity="center_vertical|end"
-                        android:layout_marginEnd="14dp"
-                        android:src="@drawable/ic_dashboard_chevron"
-                        android:contentDescription="Open" />
-
-                    <Button
-                        android:id="@+id/btn_logs"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:minWidth="0dp"
-                        android:minHeight="0dp"
-                        android:background="@android:color/transparent"
-                        android:foreground="@drawable/focus_on_dark"
-                        android:text=""
-                        android:stateListAnimator="@null"
-                        android:textAllCaps="false"
-                        android:contentDescription="View Steam achievements" />
-                </FrameLayout>
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="7dp" />
 
                 <!-- Game settings: the only settings entry on the dashboard. -->
                 <FrameLayout

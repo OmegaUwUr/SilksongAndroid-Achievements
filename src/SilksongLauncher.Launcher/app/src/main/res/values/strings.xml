@@ -94,4 +94,8 @@
     <string name="achievements_back">Back</string>
     <string name="achievements_diagnostics">Diagnostics</string>
 
+    <string name="achievements_preview_title">Achievements ›</string>
+    <string name="achievements_preview_complete">Achievements ★ ›</string>
+    <string name="achievements_preview_count">%1$d / %2$d (%3$d%%)</string>
+    <string name="achievements_preview_more">+%1$d</string>
 </resources>

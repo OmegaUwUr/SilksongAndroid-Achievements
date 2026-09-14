@@ -23,13 +23,14 @@ The following behavior was adapted for this launcher:
 | Referenced feature | Implementation here |
 | --- | --- |
 | Full achievement list with cards | `AchievementViewerActivity.kt`: dedicated Android screen showing names, descriptions, icons, and locked/unlocked states |
+| Launcher preview card | `AchievementPreviewView.kt`: up to five icon tiles, a +N overflow tile, locked-icon grayscale, masked secrets, completion count/progress, and whole-card navigation; inspired by phobos665’s viewer and VinceBT’s GameNative PR #1695 refinements |
 | Completion summary | Unlocked/total count, percentage, and overall progress bar |
 | Stat-linked achievement progress | Current/maximum values and progress bars when supplied by the Steam achievement data |
 | Locked secret achievements | Collapsed summary and a confirmation to reveal them for the current viewer session |
 | Achievement details | Tap a row for an icon, description, unlock date, or locked/progress status |
 | Steam achievement metadata | `AchievementService.DisplayAchievement` and its immutable display snapshot expose data to the viewer |
 
-The screen was implemented with Android Views for this launcher, using its existing `AchievementService` Steam session. The reference uses Jetpack Compose. This attribution covers the viewer behavior and design reference; it does not claim that all of GameNative's implementation was imported. In particular, GameNative's localized schema fallback, multi-store architecture, game-page icon strip, and gallery animations are not implemented here.
+The screen was implemented with Android Views for this launcher, using its existing `AchievementService` Steam session. The reference uses Jetpack Compose. This attribution covers the viewer behavior and design reference; it does not claim that all of GameNative's implementation was imported. In particular, GameNative's localized schema fallback, multi-store architecture, gallery animations are not implemented here.
 
 GameNative publishes its source under [GNU GPL v3](https://github.com/utkarshdalal/GameNative/blob/2fb880e4a127e8ec1d9307c7361903fb5bc86687/LICENSE). Its source retains its own license; this credit does not relicense upstream code.
 

@@ -422,7 +422,7 @@ class AchievementViewerActivity : Activity() {
 }
 
 /** URL-keyed cache shared across viewer instances; contains only public icon images. */
-private object AchievementIconCache {
+internal object AchievementIconCache {
     private const val DISK_LIMIT = 16L * 1024 * 1024
     private val memory = object : LruCache<String, Bitmap>(4 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount

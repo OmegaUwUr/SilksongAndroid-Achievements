@@ -49,7 +49,7 @@ class LauncherActivity : Activity() {
     private lateinit var spinPull: ProgressBar
     private lateinit var spinPush: ProgressBar
     private lateinit var btnSettings: Button
-    private lateinit var btnAchievements: Button
+    private lateinit var btnAchievements: AchievementPreviewView
     private lateinit var btnLaunch: Button
     private lateinit var logScroll: ScrollView
     private lateinit var txtLog: TextView
@@ -144,6 +144,7 @@ class LauncherActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        btnAchievements.start()
         // Auto-push fires after the user returns from playing the
         // game. We use a flag (set in launchGame) instead of just
         // "always on resume" so dismissing dialogs / opening
@@ -155,6 +156,11 @@ class LauncherActivity : Activity() {
     }
 
     // ── Login ──────────────────────────────────────────────────────────
+
+    override fun onPause() {
+        btnAchievements.stop()
+        super.onPause()
+    }
 
     private fun onLoginClicked() {
         if (creds != null) {
