@@ -49,7 +49,7 @@ class LauncherActivity : Activity() {
     private lateinit var spinPull: ProgressBar
     private lateinit var spinPush: ProgressBar
     private lateinit var btnSettings: Button
-    private lateinit var btnLogs: Button
+    private lateinit var btnAchievements: Button
     private lateinit var btnLaunch: Button
     private lateinit var logScroll: ScrollView
     private lateinit var txtLog: TextView
@@ -94,7 +94,7 @@ class LauncherActivity : Activity() {
         spinPull = findViewById(R.id.spin_pull)
         spinPush = findViewById(R.id.spin_push)
         btnSettings = findViewById(R.id.btn_settings)
-        btnLogs = findViewById(R.id.btn_logs)
+        btnAchievements = findViewById(R.id.btn_achievements)
         btnLaunch = findViewById(R.id.btn_launch)
         logScroll = findViewById(R.id.log_scroll)
         txtLog = findViewById(R.id.txt_log)
@@ -122,8 +122,8 @@ class LauncherActivity : Activity() {
         btnPull.setOnClickListener { onPullClicked() }
         btnPush.setOnClickListener { onPushClicked() }
         btnSettings.setOnClickListener { onSettingsClicked() }
-        btnLogs.setOnClickListener {
-            startActivity(Intent(this, LogActivity::class.java))
+        btnAchievements.setOnClickListener {
+            startActivity(Intent(this, AchievementViewerActivity::class.java))
         }
         btnLaunch.setOnClickListener { onLaunchClicked() }
 
