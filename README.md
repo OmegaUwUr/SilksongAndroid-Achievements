@@ -21,6 +21,19 @@ Steam integration for game files and cloud saves.
 - **QoL settings**: Skip intro, set resolution, auto upload/download cloud saves etc.
 - **Any device**: Any Android device works, single screen as well. Android 13 only for now (Android 15 is not supported at the moment)
 
+## SteamSync package and APK name
+
+The SteamSync variant installs as `com.hollowknightsilksong.steamsync`.
+APK filenames use `HollowKnight-Silksong-Steamsync.<revision>.apk`, where
+`<revision>` comes from `APP_REVISION` (for example, `.26.apk`). The full Android
+versionName and versionCode are independent of this shorter download filename.
+
+Changing the package ID creates a separate Android app. It does not upgrade
+the old `com.jakobkhansen.silksong` installation or automatically migrate its
+login, settings, downloaded files, or saves. Back up/export saves from the old
+app before removing it. Sign in again and select or download the game files
+for the new app; Android may block access to the old app's private directories.
+
 ## Getting started
 
 1. Download the latest APK from
@@ -79,6 +92,16 @@ Signing in, by QR code or password, goes through
 [JavaSteam](https://github.com/Longi94/JavaSteam), an open-source Steam client library.
 Your password is never stored: the only thing kept is the login token Steam issues in
 return, encrypted, and it never leaves the device.
+
+## Credits
+
+This project builds on **jakobkhansen and the SilksongAndroid contributors**.
+The achievement viewer adapts features from **phobos665's original GameNative
+viewer** and **VinceBT's refinements** in GameNative PR #1695.
+
+See [CREDITS.md](CREDITS.md) for the specific features adapted, source links,
+library contributions, and artwork credits. Third-party license notices are
+in [NOTICE.md](NOTICE.md).
 
 ## AI assistance
 

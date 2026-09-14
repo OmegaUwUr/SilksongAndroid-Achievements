@@ -30,8 +30,11 @@ Stated first because it is the point of the whole design:
 * **Ktor** — Copyright (c) JetBrains s.r.o.
 * **JetBrains Java Annotations** — Copyright (c) JetBrains s.r.o.
 * **OkHttp** and **Okio** — Copyright (c) Square, Inc.
-* **Apache Commons Compress** — Copyright (c) The Apache Software Foundation
+* **Apache Commons Compress** and **Apache Commons Lang** — Copyright (c) The Apache Software Foundation
 * **ZXing** ("Zebra Crossing") — Copyright (c) ZXing authors
+* **Google Material Design icons** — the Cloud dashboard vector adapts the
+  Material cloud icon geometry. Source: <https://github.com/google/material-design-icons>.
+  License: <https://github.com/google/material-design-icons/blob/master/LICENSE>.
 
 A copy of the Apache License 2.0 is at
 <https://www.apache.org/licenses/LICENSE-2.0>.
@@ -47,9 +50,15 @@ A copy of the Apache License 2.0 is at
 
   Upstream's own `LICENSE.TXT` and `THIRD-PARTY-NOTICES.TXT` are shipped
   beside the assemblies, in `assets/mono-bcl/`.
-* **JavaSteam** and **JavaSteam Depot Downloader** — Copyright (c) Lossy and
-  JavaSteam contributors
+* **JavaSteam** — Copyright (c) 2018 Long Tran, as recorded in
+  <https://github.com/Longi94/JavaSteam/blob/master/LICENSE>.
+  Additional credit to Lossy and the JavaSteam / JavaSteam Depot Downloader
+  contributors.
 * **AssetsTools.NET** — Copyright (c) nesrak1
+* **Mono.Cecil** — Copyright (c) 2008–2015 Jb Evain; Copyright (c) 2008–2011
+  Novell, Inc. Used by `RedirectFileReplace.cs` and shipped as
+  `assets/ondevice/bundle-surgery/Mono.Cecil.dll`.
+  Upstream notice: <https://github.com/jbevain/cecil/blob/master/LICENSE.txt>.
 * **SLF4J** — Copyright (c) QOS.ch
 
 ### BSD family
@@ -75,3 +84,10 @@ AssetsTools.NET ecosystem under the MIT licence.
 
 It is included because parsing a type-tree-stripped bundle is impossible
 without it, and it is the same kind of artefact as a file-format description.
+
+## Source references and separately downloaded tools
+
+See [CREDITS.md](CREDITS.md) for the original Android project, achievement-viewer
+contributors, shader-format and Steam compatibility references, and the
+Termux, LLVM, Roslyn, Unity, and other tools fetched during on-device setup.
+That file distinguishes these roles from components bundled in the APK.

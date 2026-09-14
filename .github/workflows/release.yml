@@ -231,7 +231,9 @@ jobs:
             exit 1
           fi
 
-          out="SilksongAndroid-${{ steps.version.outputs.version }}.apk"
+          revision="$(tr -d ' \t\r\n' < APP_REVISION)"
+          [[ "$revision" =~ ^[0-9]+$ ]] || { echo "::error::Invalid APP_REVISION"; exit 1; }
+          out="HollowKnight-Silksong-Steamsync.$revision.apk"
           # The build already names it this, but not if APK_NAME was overridden
           # somewhere; copying only when they differ keeps both cases working
           # and avoids cp refusing to copy a file onto itself.

@@ -42,7 +42,7 @@ OUT="${OUT:-$BUILD_ROOT/depot-apk}"
 APK_DIR="${APK_DIR:-$REPO_ROOT/build}"
 STEPS="${STEPS:-5,6}"
 
-PKG="${PKG:-com.jakobkhansen.silksong}"
+PKG="${PKG:-com.hollowknightsilksong.steamsync}"
 APP_LABEL="${APP_LABEL:-Hollow Knight: Silksong}"
 # The version the stock engine reports. The depot is stamped with an internal
 # branch build of the same numeric version and must be normalised to this.
@@ -117,11 +117,14 @@ fi
 # The APK's filename, which is what a person downloading it sees.
 #
 # Named after the project and its version rather than the application id: a
-# file called com.jakobkhansen.silksong.apk says nothing useful in a downloads
+# file called com.hollowknightsilksong.steamsync.apk says nothing useful in a downloads
 # folder, and says nothing at all about which build it is. VERSION at the repo
 # root is the single source of truth, and dev.sh and the Makefile derive the
 # same name from the same file.
-APK_NAME="${APK_NAME:-SilksongAndroid-$VERSION_NAME.apk}"
+# Download filename uses the managed revision, independently of versionName.
+APK_REVISION="$(tr -d ' \t\r\n' < "$REPO_ROOT/APP_REVISION")"
+[[ "$APK_REVISION" =~ ^[0-9]+$ ]] || { echo "Invalid APP_REVISION" >&2; exit 1; }
+APK_NAME="${APK_NAME:-HollowKnight-Silksong-Steamsync.$APK_REVISION.apk}"
 
 if [[ -z "${VERSION_CODE:-}" ]]; then
     _core="${VERSION_NAME%%-*}"
@@ -225,6 +228,11 @@ step_5_apk_shell() {
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <activity android:name="dev.silksong.launcher.SettingsActivity"
             android:exported="false" android:process=":launcher"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.launcher.AchievementViewerActivity"
+            android:exported="false" android:process=":launcher"
+            android:label="@string/achievements_title"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <activity android:name="dev.silksong.launcher.LogActivity"
@@ -375,6 +383,15 @@ EOF
         --manifest "$sh/AndroidManifest.xml" "${link_res[@]}" --auto-add-overlay \
         --java "$sh/gen" "${extra_pkg[@]}"
 
+    # This APK uses the generated manifest above, not the AAR's manifest.
+    # Check the compiled manifest too: a successful Kotlin build cannot catch
+    # a missing activity, which crashes startActivity() on the device.
+    if (( have_launcher )); then
+        "$(bt_tool "$bt" aapt2)" dump xmltree "$sh/base.apk" \
+            --file AndroidManifest.xml > "$sh/manifest-tree.txt"
+        grep -Fq 'dev.silksong.launcher.AchievementViewerActivity' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing AchievementViewerActivity"
+    fi
 
     # GameActivity and the activity that hosts the player (shell/*.java) are
     # ours, and are compiled here together with the generated R classes the

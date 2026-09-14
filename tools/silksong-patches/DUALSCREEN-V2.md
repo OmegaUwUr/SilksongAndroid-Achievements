@@ -89,7 +89,7 @@ Two things the device disagreed with the code about:
   size and, if it is short, forces the Presentation immersive** rather than
   quietly losing 10 % of the panel.
 * The shared framebuffer is at
-  `/sdcard/Android/data/com.jakobkhansen.silksong/cache/dualscreen_fb.bin` — 22 MB on
+  `/sdcard/Android/data/com.hollowknightsilksong.steamsync/cache/dualscreen_fb.bin` — 22 MB on
   **external, FUSE-backed storage** (`ext_data_rw`). See §3.
 
 **Target: 60 fps on the second panel.**

@@ -110,7 +110,13 @@ class SteamCloudClient(session: SteamSession) {
                 raw[2] == 0x03.toByte() &&
                 raw[3] == 0x04.toByte()
 
-            return if (isZipped) decompressZip(raw) else raw
+            val content = if (isZipped) decompressZip(raw) else raw
+            if (rawFileSize > 0 && content.size.toLong() != rawFileSize.toLong()) {
+                throw RuntimeException(
+                    "Cloud download for $filename has wrong size: expected $rawFileSize, got ${content.size}"
+                )
+            }
+            return content
         } finally {
             httpResp.close()
         }
@@ -159,6 +165,7 @@ class SteamCloudClient(session: SteamSession) {
             ?: throw RuntimeException("clientBeginFileUpload response missing body")
 
         var allBlocksOk = false
+        var commitFailure: Throwable? = null
         val octetStream = "application/octet-stream".toMediaType()
         try {
             for (block in begin.blockRequestsList) {
@@ -198,12 +205,16 @@ class SteamCloudClient(session: SteamSession) {
             try {
                 cloud.clientCommitFileUpload(commitReq).toFuture().get(30, TimeUnit.SECONDS)
             } catch (t: Throwable) {
+                commitFailure = t
                 LauncherLog.log("Cloud commit failed for $cloudPath: ${t.message}")
             }
         }
 
         if (!allBlocksOk)
             throw RuntimeException("Cloud upload failed for $cloudPath")
+        commitFailure?.let {
+            throw RuntimeException("Cloud commit failed for $cloudPath", it)
+        }
     }
 
     /**

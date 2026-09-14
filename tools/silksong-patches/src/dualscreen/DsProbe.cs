@@ -13,8 +13,8 @@
 // instead of another guess.
 //
 //     adb shell 'echo "probe=1" > \
-//         /sdcard/Android/data/com.jakobkhansen.silksong/files/dualscreen_v2'
-//     adb shell am force-stop com.jakobkhansen.silksong      # then relaunch
+//         /sdcard/Android/data/com.hollowknightsilksong.steamsync/files/dualscreen_v2'
+//     adb shell am force-stop com.hollowknightsilksong.steamsync      # then relaunch
 //     adb logcat -d | grep DsProbe
 //
 // To turn it off again, delete the file. It SHIPS in every build, gated at

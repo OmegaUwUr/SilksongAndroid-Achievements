@@ -41,6 +41,13 @@
             android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
+        <activity
+            android:name="dev.silksong.launcher.AchievementViewerActivity"
+            android:exported="false"
+            android:label="@string/achievements_title"
+            android:process=":launcher"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+
         <service
             android:name="dev.silksong.launcher.MonoService"
             android:exported="false"
