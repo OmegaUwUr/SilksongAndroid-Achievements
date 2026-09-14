@@ -38,6 +38,19 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** Bridges Silksong's Android Steamworks shim to the authenticated JavaSteam session. */
 class AchievementService : Service() {
+    data class DisplayAchievement(
+        val displayName: String,
+        val apiName: String?,
+        val description: String,
+        val isUnlocked: Boolean,
+        val unlockTimestamp: Long,
+        val hidden: Boolean,
+        val iconUrl: String?,
+        val iconGrayUrl: String?,
+        val progressCurrent: Float?,
+        val progressMax: Float?,
+    )
+
     companion object {
         const val APP_ID = 1030300
         private const val CHANNEL_ID = "steam-achievements-v2"
@@ -52,9 +65,11 @@ class AchievementService : Service() {
         @Volatile private var active = false
         @Volatile private var serviceReady = false
         @Volatile private var socketListening = false
+        @Volatile private var displayAchievements: List<DisplayAchievement>? = null
 
         fun isActive(): Boolean = active
         fun isReady(): Boolean = active && serviceReady && socketListening
+        fun displaySnapshot(): List<DisplayAchievement>? = displayAchievements
 
         fun start(context: Context) {
             LauncherLog.log("Achievements: requesting synchronization service start")
@@ -169,6 +184,7 @@ class AchievementService : Service() {
         active = true
         serviceReady = false
         socketListening = false
+        displayAchievements = null
         LauncherLog.log("Achievements: service created")
         createNotificationChannel()
         registerReceivers()
@@ -379,8 +395,35 @@ class AchievementService : Service() {
     private fun rebuildAchievementIndex(snapshot: UserStatsCallback) {
         val newLocations = HashMap<String, AchievementLocation>()
         val newUnlocked = HashSet<String>()
+        val display = ArrayList<DisplayAchievement>()
+        val iconBase = "https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/$APP_ID/"
+
         for (achievement in snapshot.getExpandedAchievements()) {
-            val name = achievement.name?.takeIf { it.isNotBlank() } ?: continue
+            val apiName = achievement.name?.takeIf { it.isNotBlank() }
+            val unlocked = achievement.isUnlocked
+            val hidden = achievement.hidden
+            val title = achievement.displayName?.takeIf { it.isNotBlank() }
+                ?: apiName
+                ?: if (hidden && !unlocked) "Hidden achievement" else "Achievement"
+            val icon = achievement.icon?.takeIf { it.isNotBlank() }?.let { iconBase + it }
+            val iconGray = achievement.iconGray?.takeIf { it.isNotBlank() }?.let { iconBase + it }
+
+            display.add(
+                DisplayAchievement(
+                    displayName = title,
+                    apiName = apiName,
+                    description = achievement.description?.takeIf { it.isNotBlank() } ?: "",
+                    isUnlocked = unlocked,
+                    unlockTimestamp = achievement.unlockTimestamp.toLong(),
+                    hidden = hidden,
+                    iconUrl = icon,
+                    iconGrayUrl = iconGray,
+                    progressCurrent = achievement.progressCurrent,
+                    progressMax = achievement.progressMax,
+                )
+            )
+
+            val name = apiName ?: continue
             val encoded = achievement.achievementId
             val bitIndex = encoded % 100
             val statId = encoded / 100
@@ -389,13 +432,18 @@ class AchievementService : Service() {
                 continue
             }
             newLocations[name] = AchievementLocation(statId, bitIndex)
-            if (achievement.isUnlocked) newUnlocked.add(name)
+            if (unlocked) newUnlocked.add(name)
         }
+
         achievementLocations.clear()
         achievementLocations.putAll(newLocations)
         remotelyUnlocked.clear()
         remotelyUnlocked.addAll(newUnlocked)
-        LauncherLog.log("Achievements: schema mapped ${newLocations.size} name(s), ${newUnlocked.size} already unlocked on Steam")
+        displayAchievements = display.toList()
+        LauncherLog.log(
+            "Achievements: schema mapped ${newLocations.size} name(s), " +
+                "${newUnlocked.size} already unlocked on Steam, ${display.size} available to viewer"
+        )
     }
 
     private fun setAchievement(name: String): Boolean {
@@ -664,6 +712,7 @@ class AchievementService : Service() {
         active = false
         serviceReady = false
         socketListening = false
+        displayAchievements = null
         LauncherLog.log("Achievements: synchronization service stopping")
         if (!shuttingDown.get() && ready.get() && pendingUnlocks.isNotEmpty()) {
             runCatching { storeStats() }
