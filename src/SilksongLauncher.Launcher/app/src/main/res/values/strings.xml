@@ -111,8 +111,8 @@
     <string name="ui_cloud_updated">Last synced %1$s</string>
     <string name="ui_cloud_download">Download Steam saves</string>
     <string name="ui_cloud_upload">Upload device saves</string>
-    <string name="ui_cloud_download_explain">Copy saves from Steam to this device. If the copies differ, you will choose which version to keep before files are replaced.</string>
-    <string name="ui_cloud_upload_explain">Copy saves from this device to Steam. If the copies differ, you will choose which version to keep before files are replaced.</string>
+    <string name="ui_cloud_download_explain">Copy saves from Steam to this device. Newer Steam saves may replace older device saves. Conflicts will ask which version to keep.</string>
+    <string name="ui_cloud_upload_explain">Copy saves from this device to Steam. Newer device saves may replace older Steam saves. Conflicts will ask which version to keep.</string>
     <string name="ui_save_history">Save history &amp; restore</string>
     <string name="ui_continue">Continue</string>
     <string name="ui_achievement_saved">Saved data • updated %1$s</string>
