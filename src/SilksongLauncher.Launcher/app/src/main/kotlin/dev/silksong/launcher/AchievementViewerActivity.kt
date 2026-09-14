@@ -2,7 +2,6 @@ package dev.silksong.launcher
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -10,6 +9,8 @@ import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.util.LruCache
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -28,11 +29,17 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
+import java.io.File
+import java.io.ByteArrayOutputStream
+import java.security.MessageDigest
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.DateFormat
 import java.util.Date
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Steam achievement browser with behavior adapted from GameNative's viewer.
@@ -135,10 +142,22 @@ class AchievementViewerActivity : Activity() {
         val hiddenLocked = sorted.filter { it.hidden && !it.isUnlocked }
         val visible = if (revealHidden) sorted else sorted.filterNot { it.hidden && !it.isUnlocked }
 
-        visible.forEach { list.addView(achievementRow(it, revealSecret = revealHidden)) }
+        visible.forEachIndexed { index, achievement ->
+            if (index > 0) addDivider()
+            list.addView(achievementRow(achievement, revealSecret = revealHidden))
+        }
         if (!revealHidden && hiddenLocked.isNotEmpty()) {
+            if (visible.isNotEmpty()) addDivider()
             list.addView(hiddenSummary(hiddenLocked.size))
         }
+    }
+
+    private fun addDivider() {
+        list.addView(View(this).apply {
+            setBackgroundColor(Color.parseColor("#352C30"))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply {
+            setMargins(dp(12), dp(8), dp(12), dp(8))
+        })
     }
 
     private fun showFailure(message: String) {
@@ -165,7 +184,11 @@ class AchievementViewerActivity : Activity() {
         }
 
         val iconFrame = FrameLayout(this).apply {
-            setBackgroundColor(Color.parseColor("#211B1E"))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#211B1E"))
+                cornerRadius = dp(10).toFloat()
+            }
+            clipToOutline = true
         }
         val icon = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -288,49 +311,30 @@ class AchievementViewerActivity : Activity() {
         view: ImageView,
         achievement: AchievementService.DisplayAchievement,
     ) {
-        val url = if (achievement.isUnlocked) {
-            achievement.iconUrl ?: achievement.iconGrayUrl
+        val urls = (if (achievement.isUnlocked) {
+            listOfNotNull(achievement.iconUrl, achievement.iconGrayUrl)
         } else {
-            achievement.iconGrayUrl ?: achievement.iconUrl
-        } ?: return
-
-        val cached = iconCache[url]
-        if (cached != null) {
-            applyIcon(view, cached, achievement.isUnlocked)
-            return
-        }
+            listOfNotNull(achievement.iconGrayUrl, achievement.iconUrl)
+        }).distinct()
 
         scope.launch {
-            val bitmap = withContext(Dispatchers.IO) { downloadBitmap(url) } ?: return@launch
-            iconCache[url] = bitmap
-            applyIcon(view, bitmap, achievement.isUnlocked)
+            for (url in urls) {
+                val bitmap = AchievementIconCache.get(cacheDir, url) ?: continue
+                applyIcon(view, bitmap, achievement.isUnlocked)
+                break
+            }
         }
     }
 
     private fun applyIcon(view: ImageView, bitmap: Bitmap, unlocked: Boolean) {
-        if (view.windowToken == null) return
+        // Rows are populated before attachment, including after a secret reveal.
+        // Setting a bitmap on an unattached ImageView is valid and must not be skipped.
         view.setPadding(0, 0, 0, 0)
         view.setImageBitmap(bitmap)
         view.colorFilter = if (unlocked) null else ColorMatrixColorFilter(
             ColorMatrix().apply { setSaturation(0f) }
         )
     }
-
-    private fun downloadBitmap(url: String): Bitmap? =
-        runCatching {
-            val connection = URL(url).openConnection() as HttpURLConnection
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 20_000
-            connection.instanceFollowRedirects = true
-            try {
-                if (connection.responseCode !in 200..299) return@runCatching null
-                connection.inputStream.use(BitmapFactory::decodeStream)
-            } finally {
-                connection.disconnect()
-            }
-        }.onFailure {
-            LauncherLog.log("Achievement icon download failed: ${it.message}")
-        }.getOrNull()
 
     private fun formatDate(timestampSeconds: Long): String {
         val date = Date(timestampSeconds * 1000L)
@@ -363,13 +367,6 @@ class AchievementViewerActivity : Activity() {
             setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(12), 0, dp(8), 0)
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(Button(this).apply {
-            text = getString(R.string.achievements_diagnostics)
-            isAllCaps = false
-            setOnClickListener {
-                startActivity(Intent(this@AchievementViewerActivity, LogActivity::class.java))
-            }
-        })
         root.addView(header)
 
         summary = TextView(this).apply {
@@ -405,9 +402,6 @@ class AchievementViewerActivity : Activity() {
 
         list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            showDividers = LinearLayout.SHOW_DIVIDER_MIDDLE
-            dividerDrawable = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
-            dividerPadding = dp(4)
         }
         val scroll = ScrollView(this).apply {
             isFillViewport = true
@@ -425,7 +419,96 @@ class AchievementViewerActivity : Activity() {
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
 
-    companion object {
-        private val iconCache = ConcurrentHashMap<String, Bitmap>()
+}
+
+/** URL-keyed cache shared across viewer instances; contains only public icon images. */
+private object AchievementIconCache {
+    private const val DISK_LIMIT = 16L * 1024 * 1024
+    private val memory = object : LruCache<String, Bitmap>(4 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
+    // Stable stripes coalesce requests without retaining a lock for every URL.
+    private val locks = List(16) { Mutex() }
+    private val downloads = Semaphore(4)
+
+    suspend fun get(cacheDir: File, url: String): Bitmap? {
+        memory.get(url)?.let { return it }
+        return locks[(url.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
+            memory.get(url)?.let { return@withLock it }
+            downloads.withPermit {
+                withContext(Dispatchers.IO) {
+                    val directory = File(cacheDir, "achievement-icons-v1")
+                    val key = MessageDigest.getInstance("SHA-256")
+                        .digest(url.toByteArray(Charsets.UTF_8))
+                        .joinToString("") { "%02x".format(it) }
+                    val file = File(directory, "$key.png")
+                    val diskBitmap = runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull()
+                    if (diskBitmap != null) {
+                        file.setLastModified(System.currentTimeMillis())
+                        memory.put(url, diskBitmap)
+                        return@withContext diskBitmap
+                    }
+                    if (file.exists()) file.delete()
+                    val bitmap = download(url) ?: return@withContext null
+                    memory.put(url, bitmap)
+                    // A failed cache write must not hide an otherwise valid image.
+                    runCatching {
+                        directory.mkdirs()
+                        val temporary = File.createTempFile("icon-", ".tmp", directory)
+                        try {
+                            temporary.outputStream().use {
+                                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                            }
+                            check(temporary.renameTo(file))
+                        } finally {
+                            temporary.delete()
+                        }
+                        val files = directory.listFiles { candidate -> candidate.extension == "png" }
+                            ?.sortedBy { it.lastModified() }.orEmpty()
+                        var bytes = files.sumOf { it.length() }
+                        for (old in files) {
+                            if (bytes <= DISK_LIMIT) break
+                            val size = old.length()
+                            if (old.delete()) bytes -= size
+                        }
+                    }.onFailure { LauncherLog.log("Achievement icon cache: ${it.message}") }
+                    bitmap
+                }
+            }
+        }
+    }
+
+    private fun download(url: String): Bitmap? = runCatching {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 15_000
+        try {
+            check(connection.responseCode in 200..299) { "HTTP ${connection.responseCode}" }
+            // Icons should be tiny. Bound both download and decoded bitmap size.
+            val bytes = connection.inputStream.use { input ->
+                val output = ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                while (output.size() <= 1024 * 1024) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            }
+            check(bytes.size <= 1024 * 1024) { "Icon exceeds size limit" }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            check(bounds.outWidth > 0 && bounds.outHeight > 0) { "Invalid icon image" }
+            val options = BitmapFactory.Options().apply { inSampleSize = 1 }
+            while (bounds.outWidth / options.inSampleSize > 128 ||
+                bounds.outHeight / options.inSampleSize > 128) {
+                options.inSampleSize *= 2
+            }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        } finally {
+            connection.disconnect()
+        }
+    }.onFailure {
+        LauncherLog.log("Achievement icon download failed: ${it.message}")
+    }.getOrNull()
 }
