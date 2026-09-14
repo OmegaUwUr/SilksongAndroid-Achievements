@@ -227,6 +227,11 @@ step_5_apk_shell() {
             android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.launcher.AchievementViewerActivity"
+            android:exported="false" android:process=":launcher"
+            android:label="@string/achievements_title"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <activity android:name="dev.silksong.launcher.LogActivity"
             android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
@@ -375,6 +380,15 @@ EOF
         --manifest "$sh/AndroidManifest.xml" "${link_res[@]}" --auto-add-overlay \
         --java "$sh/gen" "${extra_pkg[@]}"
 
+    # This APK uses the generated manifest above, not the AAR's manifest.
+    # Check the compiled manifest too: a successful Kotlin build cannot catch
+    # a missing activity, which crashes startActivity() on the device.
+    if (( have_launcher )); then
+        "$(bt_tool "$bt" aapt2)" dump xmltree "$sh/base.apk" \
+            --file AndroidManifest.xml > "$sh/manifest-tree.txt"
+        grep -Fq 'dev.silksong.launcher.AchievementViewerActivity' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing AchievementViewerActivity"
+    fi
 
     # GameActivity and the activity that hosts the player (shell/*.java) are
     # ours, and are compiled here together with the generated R classes the
