@@ -1,10 +1,8 @@
 name: Build APK
 
+# Build only when explicitly requested by the repository owner.
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read

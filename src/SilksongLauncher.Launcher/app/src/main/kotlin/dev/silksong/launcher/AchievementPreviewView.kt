@@ -45,8 +45,8 @@ class AchievementPreviewView @JvmOverloads constructor(
 
     init {
         orientation = VERTICAL
-        setPadding(dp(14), dp(12), dp(14), dp(12))
         setBackgroundResource(R.drawable.launcher_card)
+        setPadding(dp(12), dp(10), dp(12), dp(10))
         foreground = context.getDrawable(R.drawable.focus_on_dark)
         isClickable = true
         isFocusable = true
@@ -58,8 +58,8 @@ class AchievementPreviewView @JvmOverloads constructor(
 
         icons.orientation = HORIZONTAL
         addView(icons, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-            topMargin = dp(10)
-            bottomMargin = dp(10)
+            topMargin = dp(8)
+            bottomMargin = dp(8)
         })
         val footer = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
         progress.progressTintList = ColorStateList.valueOf(Color.parseColor("#C95B72"))
@@ -70,10 +70,10 @@ class AchievementPreviewView @JvmOverloads constructor(
         count.setTypeface(count.typeface, Typeface.BOLD)
         footer.addView(count)
         addView(footer)
-        freshness.textSize = 14f
+        freshness.textSize = 13f
         freshness.setTextColor(Color.parseColor("#BEB3B6"))
         addView(freshness)
-        minimumHeight = dp(180)
+        minimumHeight = dp(120)
         showStatus(R.string.achievements_loading)
     }
 
