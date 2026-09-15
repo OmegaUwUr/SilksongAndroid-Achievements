@@ -38,14 +38,15 @@ class AchievementPreviewView @JvmOverloads constructor(
     private var scope: CoroutineScope? = null
     private val title = TextView(context)
     private val icons = LinearLayout(context)
+    private val freshness = TextView(context)
     private val count = TextView(context)
     private val progress = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal)
     private var lastSnapshot: List<AchievementService.DisplayAchievement>? = null
 
     init {
         orientation = VERTICAL
-        setPadding(dp(14), dp(12), dp(14), dp(12))
         setBackgroundResource(R.drawable.launcher_card)
+        setPadding(dp(12), dp(10), dp(12), dp(10))
         foreground = context.getDrawable(R.drawable.focus_on_dark)
         isClickable = true
         isFocusable = true
@@ -57,18 +58,22 @@ class AchievementPreviewView @JvmOverloads constructor(
 
         icons.orientation = HORIZONTAL
         addView(icons, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-            topMargin = dp(10)
-            bottomMargin = dp(10)
+            topMargin = dp(8)
+            bottomMargin = dp(8)
         })
         val footer = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
         progress.progressTintList = ColorStateList.valueOf(Color.parseColor("#C95B72"))
         progress.progressBackgroundTintList = ColorStateList.valueOf(Color.parseColor("#352C30"))
         footer.addView(progress, LayoutParams(0, dp(8), 1f).apply { marginEnd = dp(10) })
         count.setTextColor(Color.WHITE)
-        count.textSize = 12f
+        count.textSize = 14f
         count.setTypeface(count.typeface, Typeface.BOLD)
         footer.addView(count)
         addView(footer)
+        freshness.textSize = 13f
+        freshness.setTextColor(Color.parseColor("#BEB3B6"))
+        addView(freshness)
+        minimumHeight = dp(120)
         showStatus(R.string.achievements_loading)
     }
 
@@ -79,38 +84,22 @@ class AchievementPreviewView @JvmOverloads constructor(
         scope = activeScope
         lastSnapshot = null
         activeScope.launch {
-            var requested = false
-            var waiting = 0
-            while (isActive) {
-                if (TokenStore(context).read() == null) {
+            AchievementFeed.observe(context) { state ->
+                val data = state.snapshot
+                if (data == null) {
+                    showStatus(if (TokenStore(context).read() == null) R.string.achievements_sign_in_required
+                        else if (state.waiting) R.string.achievements_loading else R.string.achievements_unavailable)
+                    freshness.text = ""
                     lastSnapshot = null
-                    showStatus(R.string.achievements_sign_in_required)
-                    requested = false
-                    waiting = 0
                 } else {
-                    try {
-                        if (!requested) {
-                            requested = true
-                            if (!AchievementService.isActive()) AchievementService.start(context)
-                        }
-                        val snapshot = AchievementService.displaySnapshot()
-                        if (snapshot == null) {
-                            lastSnapshot = null
-                            showStatus(if (waiting++ < 45) R.string.achievements_loading
-                                else R.string.achievements_unavailable)
-                        } else if (snapshot != lastSnapshot) {
-                            lastSnapshot = snapshot
-                            render(snapshot, activeScope)
-                        }
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (error: Exception) {
-                        showStatus(R.string.achievements_unavailable)
-                        LauncherLog.log("Achievement preview failed", error)
-                        break
+                    if (data.items != lastSnapshot) {
+                        render(data.items, activeScope)
+                        lastSnapshot = data.items
                     }
+                    freshness.text = context.getString(if (state.saved) R.string.ui_achievement_saved else R.string.ui_achievement_updated,
+                        android.text.format.DateUtils.getRelativeTimeSpanString(data.updated,
+                            System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS).toString())
                 }
-                delay(1000)
             }
         }
     }
@@ -130,7 +119,7 @@ class AchievementPreviewView @JvmOverloads constructor(
         icons.removeAllViews()
         icons.addView(TextView(context).apply {
             text = context.getString(message)
-            textSize = 12f
+            textSize = 14f
             setTextColor(Color.parseColor("#9A8E91"))
         })
         count.text = ""

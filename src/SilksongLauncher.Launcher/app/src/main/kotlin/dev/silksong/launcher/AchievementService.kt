@@ -70,6 +70,9 @@ class AchievementService : Service() {
         fun isActive(): Boolean = active
         fun isReady(): Boolean = active && serviceReady && socketListening
         fun displaySnapshot(): List<DisplayAchievement>? = displayAchievements
+        @Volatile private var displayFrame: AchievementDisplayStore.Snapshot? = null
+        fun displayState(account: String): AchievementDisplayStore.Snapshot? =
+            displayFrame?.takeIf { isReady() && it.account == accountKey(account) }
 
         fun start(context: Context) {
             LauncherLog.log("Achievements: requesting synchronization service start")
@@ -129,6 +132,7 @@ class AchievementService : Service() {
     private val storeLock = Any()
     private val presenceLock = Any()
 
+    private var sessionAccount: String? = null
     private var server: LocalServerSocket? = null
     private var steam: SteamSession? = null
     private var playingSessionSubscription: Closeable? = null
@@ -185,6 +189,7 @@ class AchievementService : Service() {
         serviceReady = false
         socketListening = false
         displayAchievements = null
+        displayFrame = null
         LauncherLog.log("Achievements: service created")
         createNotificationChannel()
         registerReceivers()
@@ -229,6 +234,7 @@ class AchievementService : Service() {
                 }
             }
 
+            sessionAccount = credentials.accountName
             session.logOn(credentials)
             LauncherLog.log("Achievements: authenticated with Steam")
 
@@ -392,6 +398,14 @@ class AchievementService : Service() {
         return callback
     }
 
+    private fun publishDisplay(items: List<DisplayAchievement>) {
+        displayAchievements = items
+        val account = sessionAccount ?: return
+        val frame = AchievementDisplayStore.Snapshot(accountKey(account), System.currentTimeMillis(), items)
+        displayFrame = frame
+        AchievementDisplayStore.write(this, account, frame)
+    }
+
     private fun rebuildAchievementIndex(snapshot: UserStatsCallback) {
         val newLocations = HashMap<String, AchievementLocation>()
         val newUnlocked = HashSet<String>()
@@ -439,7 +453,7 @@ class AchievementService : Service() {
         achievementLocations.putAll(newLocations)
         remotelyUnlocked.clear()
         remotelyUnlocked.addAll(newUnlocked)
-        displayAchievements = display.toList()
+        publishDisplay(display.toList())
         LauncherLog.log(
             "Achievements: schema mapped ${newLocations.size} name(s), " +
                 "${newUnlocked.size} already unlocked on Steam, ${display.size} available to viewer"
@@ -519,6 +533,9 @@ class AchievementService : Service() {
                 if (callback.result == EResult.OK && !callback.statsOutOfDate && callback.statsFailedValidation.isEmpty()) {
                     pendingUnlocks.removeAll(names)
                     remotelyUnlocked.addAll(names)
+                    displayAchievements?.let { rows ->
+                        publishDisplay(rows.map { if (it.apiName in names) it.copy(isUnlocked = true) else it })
+                    }
                     LauncherLog.log("StoreStats: SUCCESS — Steam accepted ${names.joinToString()}")
                     if (!shuttingDown.get()) updateNotification("Connected to Steam • achievements synchronized")
                     return@synchronized true
@@ -713,6 +730,7 @@ class AchievementService : Service() {
         serviceReady = false
         socketListening = false
         displayAchievements = null
+        displayFrame = null
         LauncherLog.log("Achievements: synchronization service stopping")
         if (!shuttingDown.get() && ready.get() && pendingUnlocks.isNotEmpty()) {
             runCatching { storeStats() }

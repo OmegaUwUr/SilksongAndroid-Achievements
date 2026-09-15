@@ -79,11 +79,10 @@ or Valve release.
   animator fixes, and save-file replacement compatibility. These are internal
   port features, not all separate launcher settings.
 
-### UI improvements awaiting merge
+### SteamSync UI improvements
 
 [PR #3](https://github.com/OmegaUwUr/SilksongAndroid-Achievements/pull/3)
-contains the following implemented additions on `feature/ui-polish`; they are
-not yet part of `main`:
+adds the following launcher improvements:
 
 - Compact dashboard cards and a two-column layout on sufficiently wide screens.
 - Cloud status showing the last completed sync, current activity, and failure/
@@ -253,7 +252,7 @@ achievements or unlock-everything control.
 The native Android achievement screens use the same service data: schema names,
 descriptions, icon references, secret flags, timestamps, and supported progress.
 Public achievement artwork is fetched from Steam's image CDN and cached locally.
-The account-scoped display cache in PR #3 is read-only presentation data; it is
+The account-scoped display cache is read-only presentation data; it is
 never used as authoritative input for writing achievements to Steam.
 
 The service also publishes an Online persona and sends Steam's games-played

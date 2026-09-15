@@ -132,3 +132,16 @@ This records the sources identifiable from the repository and the linked upstrea
 - **Valve / Steam** — Steam services and branding used by the integration.
 
 Credit does not imply endorsement by any of these people or projects.
+
+## UI improvements in SteamSync revision 27
+
+The launcher, Cloud status presentation, grouped settings, achievement search and
+filters, account-scoped display cache, and native credits renderer were implemented
+for this repository using Android Views and the existing dependencies above.
+The achievement card, preview, hidden-reveal behavior, and expanded detail dialog
+continue to acknowledge **phobos665**, **VinceBT**, and **GameNative** as the design
+references described in the achievement-viewer section. No additional third-party
+UI library or copied UI source was introduced for this update.
+
+The in-app Credits & licenses screen packages this file, NOTICE.md and LICENSE
+directly during the build, so their attribution remains available offline.

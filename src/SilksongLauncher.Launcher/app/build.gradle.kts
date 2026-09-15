@@ -383,3 +383,10 @@ val stageIo by tasks.registering(Sync::class) {
     into(layout.projectDirectory.dir("src/main/assets/ondevice/silksong-io"))
 }
 tasks.named("preBuild") { dependsOn(stageIo) }
+
+// Keep in-app attribution identical to the repository documents.
+val stageCredits by tasks.registering(Sync::class) {
+    from(rootProject.file("../..")) { include("CREDITS.md", "NOTICE.md", "LICENSE") }
+    into(layout.projectDirectory.dir("src/main/assets/credits"))
+}
+tasks.named("preBuild") { dependsOn(stageCredits) }

@@ -43,6 +43,11 @@ class SettingsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
+        findViewById<android.widget.Button>(R.id.btn_advanced).setOnClickListener {
+            val options = findViewById<android.view.View>(R.id.advanced_options)
+            options.visibility = if (options.visibility == android.view.View.VISIBLE) android.view.View.GONE else android.view.View.VISIBLE
+        }
+
         settings = SettingsStore(this)
 
         swAutoPull = findViewById(R.id.sw_auto_pull)

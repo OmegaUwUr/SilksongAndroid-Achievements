@@ -275,7 +275,7 @@ class SetupActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        header = text("Silksong Android", 30f, Color.WHITE, bold = true)
+        header = text("Silksong SteamSync", 30f, Color.WHITE, bold = true)
         root.addView(header)
         // "Step 2 of 3" -- present only while something is running.
         stepLabel = text("", 12f, Color.parseColor("#7D3341"), bold = true).apply {
@@ -358,7 +358,7 @@ class SetupActivity : Activity() {
         setOnClickListener { onClick() }
         backgroundTintList = android.content.res.ColorStateList.valueOf(Color.TRANSPARENT)
         setTextColor(Color.parseColor("#7A6E71"))
-        textSize = 13f
+        textSize = 14f
         setPadding(0, dp(10), 0, 0)
     }
 
@@ -484,7 +484,7 @@ class SetupActivity : Activity() {
         // The heading says what the app is doing, not what it is called: this
         // screen is on for half an hour and "Silksong" alone reads as an idle
         // title screen rather than work in progress.
-        header.text = if (running) "Porting Silksong" else "Silksong Android"
+        header.text = if (running) "Porting Silksong" else "Silksong SteamSync"
         if (!running) return
         stepLabel.text = "STEP $stepNumber OF $stepCount"
         status.text = stepTitle.ifEmpty { sub }

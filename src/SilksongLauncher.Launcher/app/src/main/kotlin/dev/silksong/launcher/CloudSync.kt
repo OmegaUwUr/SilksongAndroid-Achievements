@@ -516,7 +516,10 @@ object CloudSync {
                             cloud.deleteFile(APP_ID, orphan.filename)
                             LauncherLog.log("  ✗ deleted cloud orphan: ${sanitizeFilename(orphan.filename)}")
                         } catch (t: Throwable) {
+                            if (t is kotlinx.coroutines.CancellationException) throw t
+                            failed.incrementAndGet()
                             val msg = t.message ?: t.javaClass.simpleName
+                            send(Event.FileFailed(orphan.filename, msg))
                             LauncherLog.log("  ✗ delete failed for ${orphan.filename}: $msg")
                             android.util.Log.e("SilksongLauncher.Cloud", "delete failed for ${orphan.filename}", t)
                         }

@@ -26,7 +26,7 @@ class AboutButton @JvmOverloads constructor(
         }.getOrNull() ?: "unknown"
 
         AlertDialog.Builder(activity)
-            .setTitle("Silksong Android")
+            .setTitle("Silksong SteamSync")
             .setMessage(
                 "Hollow Knight: Silksong Android launcher\n\n" +
                     "Version $version\n" +
@@ -36,7 +36,8 @@ class AboutButton @JvmOverloads constructor(
             .setPositiveButton("Diagnostics") { _, _ ->
                 activity.startActivity(Intent(activity, LogActivity::class.java))
             }
-            .setNegativeButton("Close", null)
+            .setNeutralButton(R.string.ui_credits) { _, _ -> CreditsDialog.show(activity) }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 }

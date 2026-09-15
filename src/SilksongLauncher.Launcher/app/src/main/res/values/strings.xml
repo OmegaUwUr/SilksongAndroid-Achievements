@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Visible in the app drawer. Overrides the Unity-set label. -->
-    <string name="launcher_app_name">Silksong Launcher</string>
+    <string name="launcher_app_name">Silksong SteamSync</string>
 
     <string name="launcher_title">Silksong</string>
     <string name="launcher_status_idle">Ready.</string>
@@ -98,4 +98,34 @@
     <string name="achievements_preview_complete">Achievements ★ ›</string>
     <string name="achievements_preview_count">%1$d / %2$d (%3$d%%)</string>
     <string name="achievements_preview_more">+%1$d</string>
+    <string name="ui_brand">SILKSONG STEAMSYNC</string>
+    <string name="ui_tagline">Play • Saves • Achievements</string>
+    <string name="ui_settings_steam">Steam &amp; Saves</string>
+    <string name="ui_settings_gameplay">Gameplay</string>
+    <string name="ui_settings_display">Display</string>
+    <string name="ui_settings_advanced">Advanced options</string>
+    <string name="ui_cloud_working">Synchronizing saves…</string>
+    <string name="ui_cloud_failed">Sync failed — tap to retry</string>
+    <string name="ui_cloud_incomplete">Sync not completed — tap to review</string>
+    <string name="ui_cloud_never">No completed sync yet — tap to manage</string>
+    <string name="ui_cloud_updated">Last synced %1$s</string>
+    <string name="ui_cloud_download">Download Steam saves</string>
+    <string name="ui_cloud_upload">Upload device saves</string>
+    <string name="ui_cloud_download_explain">Copy saves from Steam to this device. Newer Steam saves may replace older device saves. Conflicts will ask which version to keep.</string>
+    <string name="ui_cloud_upload_explain">Copy saves from this device to Steam. Newer device saves may replace older Steam saves. Conflicts will ask which version to keep.</string>
+    <string name="ui_save_history">Save history &amp; restore</string>
+    <string name="ui_continue">Continue</string>
+    <string name="ui_achievement_saved">Saved data • updated %1$s</string>
+    <string name="ui_achievement_updated">Steam data • updated %1$s</string>
+    <string name="ui_achievement_search">Search achievements</string>
+    <string name="ui_achievement_no_matches">No matching achievements</string>
+    <string name="ui_filter">Filter achievements</string>
+    <string name="ui_sort">Sort achievements</string>
+    <string-array name="ui_achievement_filters"><item>All</item><item>Unlocked</item><item>Locked</item></string-array>
+    <string-array name="ui_achievement_sorts"><item>Latest unlock</item><item>Name</item><item>Closest to completion</item></string-array>
+    <string name="ui_credits">Credits &amp; licenses</string>
+    <string name="ui_credits_close">Back • Credits &amp; licenses</string>
+    <string name="ui_credits_loading">Loading credits…</string>
+    <string name="ui_unlocked">Unlocked</string>
+    <string name="ui_credits_failed">Credits could not load. Please check the CREDITS.md file in the repository.</string>
 </resources>
