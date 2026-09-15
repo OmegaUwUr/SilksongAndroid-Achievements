@@ -98,18 +98,6 @@ not yet part of `main`:
   `CREDITS.md`, `NOTICE.md`, and `LICENSE`.
 - Manual-only APK build triggering. No compilation is needed to edit this README.
 
-## SteamSync package and APK name
-
-The SteamSync variant installs as `com.hollowknightsilksong.steamsync`.
-APK filenames use `HollowKnight-Silksong-Steamsync.<revision>.apk`, where
-`<revision>` comes from `APP_REVISION` (for example, `.26.apk`). The full Android
-versionName and versionCode are independent of this shorter download filename.
-
-Changing the package ID creates a separate Android app. It does not upgrade
-the old `com.jakobkhansen.silksong` installation or automatically migrate its
-login, settings, downloaded files, or saves. Back up/export saves from the old
-app before removing it. Sign in again and select or download the game files
-for the new app; Android may block access to the old app's private directories.
 
 ## Getting started
 
