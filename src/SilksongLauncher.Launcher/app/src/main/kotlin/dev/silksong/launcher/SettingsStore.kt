@@ -22,6 +22,10 @@ class SettingsStore(context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    var launchFps: Int
+        get() = prefs.getInt("launch_fps", -1).takeIf { it in FPS_OPTIONS } ?: -1
+        set(value) { require(value in FPS_OPTIONS); prefs.edit().putInt("launch_fps", value).apply() }
+
     var launchResolution: Int
         get() = prefs.getInt("launch_resolution", -1).takeIf { it in RESOLUTIONS } ?: -1
         set(value) { require(value in RESOLUTIONS); prefs.edit().putInt("launch_resolution", value).apply() }
@@ -105,9 +109,11 @@ class SettingsStore(context: Context) {
      * Written whole every time, immediately before launch, so it cannot drift
      * from what the user last chose.
      */
-    fun exportForGame(context: Context) {
+    fun exportForGame(context: Context, manualAchievementCheck: Boolean = false) {
         val dir = context.getExternalFilesDir(null) ?: return
         val text = buildString {
+            append("launch_fps=").append(launchFps).append('\n')
+            append("achievement_manual_check=").append(manualAchievementCheck).append('\n')
             append("launch_resolution=").append(launchResolution).append('\n')
             append("achievement_repair_interval=").append(repairInterval).append('\n')
             AchievementOption.values().forEach { option ->
@@ -155,3 +161,5 @@ enum class AchievementOption(val key: String) {
 
 internal val RESOLUTIONS = listOf(-1, 0, 540, 720, 900, 1080, 1440)
 internal val INTERVALS = listOf(60, 120, 300, 600)
+
+internal val FPS_OPTIONS = listOf(-1, 30, 60, 90, 120)

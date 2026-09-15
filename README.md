@@ -129,6 +129,27 @@ recovery of missed achievements. Steam authentication, schema validation, the
 native bridge, and confirmed-write handling remain enabled; existing Steam
 unlocks are never undone by these switches.
 
+### FPS, manual recovery, and local backups
+
+- **Pre-launch FPS:** Keep game setting, 30, 60, 90, or 120 FPS in the display
+  chooser and Settings. An explicit selection is held for that game session and
+  capped at the available display refresh rate; actual performance may be lower.
+  Select Keep game setting to use the in-game frame-rate control again.
+- **Check for missed achievements now:** Advanced options explains the action
+  before starting the game. It checks recorded local achievement flags and submits
+  eligible missing unlocks to Steam. Load the desired save. This enables startup
+  and scene-load repair checks for that session even when repair is disabled,
+  without changing stored repair switches. It cannot award achievements that have
+  no qualifying local record, and Steam must accept each submission.
+- **Automatic local backups:** before a non-empty Cloud download writes any save,
+  the launcher creates and verifies a ZIP of existing local save files. A failed
+  backup aborts the download. The five newest completed snapshots are retained
+  under the app's external-files `cloud-download-backups` directory. Advanced
+  options can export the latest backup through Android's document picker. These
+  local backups are separate from Steam Save History and are removed if app data
+  is cleared or the app is uninstalled; export a copy first. There is no automatic
+  rollback or in-app local-ZIP restore in this update.
+
 ## Getting started
 
 1. Download the latest APK from

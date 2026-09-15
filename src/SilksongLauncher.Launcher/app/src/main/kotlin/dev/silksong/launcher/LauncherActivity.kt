@@ -142,9 +142,18 @@ class LauncherActivity : Activity() {
         launchPanel.visibility = View.VISIBLE
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
+
     override fun onResume() {
         super.onResume()
         btnAchievements.start()
+        if (intent.getBooleanExtra("manual_achievement_check", false)) {
+            intent.removeExtra("manual_achievement_check")
+            onLaunchClicked(manualAchievementCheck = true)
+        }
         // Auto-push fires after the user returns from playing the
         // game. We use a flag (set in launchGame) instead of just
         // "always on resume" so dismissing dialogs / opening
@@ -519,7 +528,7 @@ class LauncherActivity : Activity() {
      * installed content, the authenticated achievement service, game settings,
      * and local save preparation all complete before GameActivity is started.
      */
-    private fun onLaunchClicked() {
+    private fun onLaunchClicked(manualAchievementCheck: Boolean = false) {
         if (launchJob?.isActive == true) {
             LauncherLog.log("Launch preparation already running")
             return
@@ -536,6 +545,7 @@ class LauncherActivity : Activity() {
                 credentials = c,
                 settings = settings,
                 syncCloud = c != null && settings.autoPull,
+                manualAchievementCheck = manualAchievementCheck,
                 syncSaves = {
                     if (c == null || !settings.autoPull) {
                         true

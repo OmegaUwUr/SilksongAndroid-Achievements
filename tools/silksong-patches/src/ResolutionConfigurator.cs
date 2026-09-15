@@ -86,6 +86,17 @@ public static class ResolutionConfigurator
         return max > 120 ? max : 120;
     }
 
+    internal static int RequestedFrameCap()
+    {
+        int requested = SilksongPatches.Settings.GetInt("launch_fps", -1);
+        if (requested != 30 && requested != 60 && requested != 90 && requested != 120) return -1;
+        int panel = 0;
+        foreach (var mode in Screen.resolutions)
+            panel = Mathf.Max(panel, Mathf.RoundToInt((float)mode.refreshRateRatio.value));
+        if (panel <= 0) panel = Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value);
+        return Mathf.Min(requested, panel > 0 ? panel : 60);
+    }
+
     static void ApplyFrameRate()
     {
         try
@@ -113,7 +124,8 @@ public static class ResolutionConfigurator
             PlayerPrefs.Save();
 
             QualitySettings.vSyncCount = 0;
-            Application.targetFrameRate = stored > 0 ? stored : cap;
+            int requested = RequestedFrameCap();
+            Application.targetFrameRate = requested > 0 ? requested : (stored > 0 ? stored : cap);
 
             FrameCapHolder.Install(cap);
         }
@@ -589,6 +601,7 @@ public class FrameCapHolder : MonoBehaviour
 {
     static FrameCapHolder _instance;
     int _cap;
+    int _requested;
 
     public static void Install(int cap)
     {
@@ -598,6 +611,7 @@ public class FrameCapHolder : MonoBehaviour
         DontDestroyOnLoad(go);
         _instance = go.AddComponent<FrameCapHolder>();
         _instance._cap = cap;
+        _instance._requested = ResolutionConfigurator.RequestedFrameCap();
     }
 
     void Update()
@@ -608,7 +622,9 @@ public class FrameCapHolder : MonoBehaviour
         // change it.
         if (QualitySettings.vSyncCount != 0) QualitySettings.vSyncCount = 0;
 
-        if (Application.targetFrameRate <= 0) Application.targetFrameRate = _cap;
+        if (_requested > 0) {
+            if (Application.targetFrameRate != _requested) Application.targetFrameRate = _requested;
+        } else if (Application.targetFrameRate <= 0) Application.targetFrameRate = _cap;
     }
 }
 #endif

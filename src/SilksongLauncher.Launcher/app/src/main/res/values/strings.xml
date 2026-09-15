@@ -128,7 +128,7 @@
     <string name="ui_credits_loading">Loading credits…</string>
     <string name="ui_unlocked">Unlocked</string>
     <string name="ui_credits_failed">Credits could not load. Please check the CREDITS.md file in the repository.</string>
-    <string name="options_resolution_title">Resolution before launch</string>
+    <string name="options_resolution_title">Display options before launch</string>
     <string name="options_resolution_description">Choose the starting render resolution. Presets use the landscape height and preserve your screen aspect ratio, capped at native resolution. Lower values reduce GPU load. Keep game setting preserves the saved choice (720p default on first use). You can still change resolution inside the game.</string>
     <string name="options_ask_resolution">Ask before each launch</string>
     <string-array name="options_resolutions"><item>Keep game setting</item><item>Native screen resolution</item><item>540p</item><item>720p</item><item>900p</item><item>1080p</item><item>1440p</item></string-array>
@@ -141,4 +141,15 @@
     <string name="options_popups">Show confirmed achievement popups</string>
     <string name="options_interval">Periodic check interval</string>
     <string-array name="options_intervals"><item>Every 60 seconds</item><item>Every 120 seconds (default)</item><item>Every 5 minutes</item><item>Every 10 minutes</item></string-array>
+    <string name="options_fps_title">FPS limit</string>
+    <string name="options_fps_description">Choose the FPS limit for this game session. Lower limits can reduce battery use and heat. Limits are capped at the display refresh rate; actual FPS may be lower. Keep game setting lets the in-game FPS control work normally.</string>
+    <string-array name="options_fps"><item>Keep game setting</item><item>30 FPS</item><item>60 FPS</item><item>90 FPS</item><item>120 FPS</item></string-array>
+    <string name="options_check_now">Check for missed achievements now</string>
+    <string name="options_check_launch">Launch and check</string>
+    <string name="options_check_description">Launches Silksong and checks achievement flags already recorded in your save data against Steam. Load your save so its state is available. Eligible missing unlocks are submitted for Steam confirmation; this does not unlock unearned achievements. Startup and scene-load recovery checks run for this session even if automatic repair is off. Your saved repair settings stay unchanged. Internet and Steam sign-in are required.</string>
+    <string name="options_backup_description">Before Cloud downloads overwrite saves, the launcher creates and verifies a local ZIP backup of the existing save files. The five newest backups are kept. If backup fails, the download stops. Export a backup before uninstalling or clearing app data.</string>
+    <string name="options_export_backup">Export latest local backup</string>
+    <string name="options_no_backup">No local backup yet. A backup is created when a Cloud download starts and local save files exist.</string>
+    <string name="options_backup_exported">Backup exported</string>
+    <string name="options_backup_export_failed">Backup export failed. The local backup is still available; choose another destination and retry.</string>
 </resources>

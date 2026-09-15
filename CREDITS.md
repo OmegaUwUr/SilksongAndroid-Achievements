@@ -155,3 +155,8 @@ switches extend this repository's Steam achievement implementation; no additiona
 external source or UI library was imported for these controls. Existing GameNative,
 JavaSteam, Steamworks.NET interface-reference, and other attributions above remain
 applicable to their respective components.
+
+The revision 28 additions also reuse the upstream frame-cap holder for pre-launch
+FPS controls, this repository's existing repair component for manual checks, and
+its Cloud transfer path for verified pre-download local backups. Backup/export
+code uses Android and Java ZIP APIs; no new external code or dependency was added.

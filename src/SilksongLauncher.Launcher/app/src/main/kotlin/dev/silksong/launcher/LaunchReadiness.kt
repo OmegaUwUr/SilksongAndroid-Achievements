@@ -46,6 +46,7 @@ object LaunchReadiness {
         settings: SettingsStore,
         syncCloud: Boolean,
         syncSaves: suspend () -> Boolean,
+        manualAchievementCheck: Boolean = false,
     ): Prepared? {
         if (!LaunchOptions.chooseBeforeLaunch(activity, settings)) return null
         val screen = Screen(activity)
@@ -103,7 +104,7 @@ object LaunchReadiness {
 
             screen.stage(82, "Preparing game data", "Applying settings and checking local saves")
             try {
-                settings.exportForGame(activity)
+                settings.exportForGame(activity, manualAchievementCheck)
                 SaveDir.prepare(activity)
             } catch (t: Throwable) {
                 LauncherLog.log("Launch readiness failed while preparing local game data", t)

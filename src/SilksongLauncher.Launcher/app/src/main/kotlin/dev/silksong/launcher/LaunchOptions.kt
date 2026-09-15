@@ -2,6 +2,8 @@ package dev.silksong.launcher
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
+import android.widget.Button
 import android.graphics.Color
 import android.view.View
 import android.view.ViewGroup
@@ -48,6 +50,10 @@ internal object LaunchOptions {
         selector(resolution, R.array.options_resolutions, RESOLUTIONS.indexOf(settings.launchResolution)) {
             settings.launchResolution = RESOLUTIONS[it]
         }.contentDescription = activity.getString(R.string.options_resolution_title)
+        label(resolution, R.string.options_fps_description)
+        selector(resolution, R.array.options_fps, FPS_OPTIONS.indexOf(settings.launchFps)) {
+            settings.launchFps = FPS_OPTIONS[it]
+        }.contentDescription = activity.getString(R.string.options_fps_title)
         resolution.addView(Switch(activity).apply {
             setText(R.string.options_ask_resolution)
             textSize = 14f
@@ -57,6 +63,32 @@ internal object LaunchOptions {
         })
 
         val advanced = activity.findViewById<LinearLayout>(R.id.achievement_options)
+        advanced.addView(Button(activity).apply {
+            setText(R.string.options_check_now)
+            isAllCaps = false
+            setOnClickListener {
+                if (TokenStore(activity).read() == null) {
+                    AlertDialog.Builder(activity).setMessage(R.string.achievements_sign_in_required)
+                        .setPositiveButton(android.R.string.ok, null).show()
+                } else {
+                    AlertDialog.Builder(activity).setTitle(R.string.options_check_now)
+                        .setMessage(R.string.options_check_description)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .setPositiveButton(R.string.options_check_launch) { _, _ ->
+                            activity.startActivity(Intent(activity, LauncherActivity::class.java)
+                                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                .putExtra("manual_achievement_check", true))
+                            activity.finish()
+                        }.show()
+                }
+            }
+        })
+        label(advanced, R.string.options_backup_description)
+        advanced.addView(Button(activity).apply {
+            setText(R.string.options_export_backup)
+            isAllCaps = false
+            setOnClickListener { (activity as? SettingsActivity)?.exportLatestBackup() }
+        })
         label(advanced, R.string.options_achievement_description)
         val names = listOf(R.string.options_repair, R.string.options_startup, R.string.options_lifecycle,
             R.string.options_periodic, R.string.options_award_event, R.string.options_popups)
@@ -94,6 +126,7 @@ internal object LaunchOptions {
         if (!settings.askResolution) return true
         return suspendCancellableCoroutine { continuation ->
             var selected = settings.launchResolution
+            var selectedFps = settings.launchFps
             val body = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
                 val pad = (20 * resources.displayMetrics.density).toInt()
@@ -101,6 +134,8 @@ internal object LaunchOptions {
             }
             label(body, R.string.options_resolution_description)
             selector(body, R.array.options_resolutions, RESOLUTIONS.indexOf(selected)) { selected = RESOLUTIONS[it] }
+            label(body, R.string.options_fps_description)
+            selector(body, R.array.options_fps, FPS_OPTIONS.indexOf(selectedFps)) { selectedFps = FPS_OPTIONS[it] }
             val ask = CheckBox(activity).apply {
                 setText(R.string.options_ask_resolution)
                 isChecked = settings.askResolution
@@ -112,6 +147,7 @@ internal object LaunchOptions {
                 .setPositiveButton(R.string.ui_continue) { _, _ ->
                     if (continuation.isActive) {
                         settings.launchResolution = selected
+                        settings.launchFps = selectedFps
                         settings.askResolution = ask.isChecked
                         continuation.resume(true)
                     }
