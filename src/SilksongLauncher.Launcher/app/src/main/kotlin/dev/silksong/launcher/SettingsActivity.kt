@@ -49,6 +49,7 @@ class SettingsActivity : Activity() {
         }
 
         settings = SettingsStore(this)
+        LaunchOptions.populateSettings(this, settings)
 
         swAutoPull = findViewById(R.id.sw_auto_pull)
         swAutoPush = findViewById(R.id.sw_auto_push)

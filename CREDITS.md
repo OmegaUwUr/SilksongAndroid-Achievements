@@ -145,3 +145,13 @@ UI library or copied UI source was introduced for this update.
 
 The in-app Credits & licenses screen packages this file, NOTICE.md and LICENSE
 directly during the build, so their attribution remains available offline.
+
+## Resolution and achievement controls in revision 28
+
+The launcher resolution selector reuses **jakobkhansen and the SilksongAndroid
+contributors'** existing `ResolutionConfigurator`, panel geometry helpers, and
+settings-file transport. The new Android controls and optional repair/pop-up
+switches extend this repository's Steam achievement implementation; no additional
+external source or UI library was imported for these controls. Existing GameNative,
+JavaSteam, Steamworks.NET interface-reference, and other attributions above remain
+applicable to their respective components.

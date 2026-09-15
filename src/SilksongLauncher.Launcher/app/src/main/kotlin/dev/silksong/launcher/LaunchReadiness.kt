@@ -47,6 +47,7 @@ object LaunchReadiness {
         syncCloud: Boolean,
         syncSaves: suspend () -> Boolean,
     ): Prepared? {
+        if (!LaunchOptions.chooseBeforeLaunch(activity, settings)) return null
         val screen = Screen(activity)
         screen.show()
 

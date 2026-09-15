@@ -128,4 +128,17 @@
     <string name="ui_credits_loading">Loading credits…</string>
     <string name="ui_unlocked">Unlocked</string>
     <string name="ui_credits_failed">Credits could not load. Please check the CREDITS.md file in the repository.</string>
+    <string name="options_resolution_title">Resolution before launch</string>
+    <string name="options_resolution_description">Choose the starting render resolution. Presets use the landscape height and preserve your screen aspect ratio, capped at native resolution. Lower values reduce GPU load. Keep game setting preserves the saved choice (720p default on first use). You can still change resolution inside the game.</string>
+    <string name="options_ask_resolution">Ask before each launch</string>
+    <string-array name="options_resolutions"><item>Keep game setting</item><item>Native screen resolution</item><item>540p</item><item>720p</item><item>900p</item><item>1080p</item><item>1440p</item></string-array>
+    <string name="options_achievement_description">Advanced Steam achievements — applies next game launch. These switches control optional repair helpers. Normal gameplay unlocks, Steam validation, and pending-write retries remain active. Turning checks off can delay recovery of missed achievements; existing Steam unlocks stay unlocked. The award-event helper can schedule its own confirmation checks even when startup, lifecycle, and periodic checks are off.</string>
+    <string name="options_repair">Enable missing-achievement repair helpers</string>
+    <string name="options_startup">Check missed achievements at startup</string>
+    <string name="options_lifecycle">Check after scenes, saves, and resume</string>
+    <string name="options_periodic">Enable periodic missed-achievement check</string>
+    <string name="options_award_event">Enable extra award-event listener</string>
+    <string name="options_popups">Show confirmed achievement popups</string>
+    <string name="options_interval">Periodic check interval</string>
+    <string-array name="options_intervals"><item>Every 60 seconds</item><item>Every 120 seconds (default)</item><item>Every 5 minutes</item><item>Every 10 minutes</item></string-array>
 </resources>

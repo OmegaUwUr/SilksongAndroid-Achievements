@@ -1,32 +1,9 @@
 // ResolutionConfigurator — the frame cap, and a sensible starting resolution.
 //
-// ── the resolution ──────────────────────────────────────────────────────────
-//
-// This used to be a launcher setting: pick 720p/900p/1080p/native in Settings,
-// and every boot would force it with Screen.SetResolution. That is gone, and
-// the reason it could go is worth writing down, because it was not obvious.
-//
-// Unity persists the resolution ON ANDROID. After a Screen.SetResolution the
-// player prefs carry
-//
-//     Screenmanager Resolution Width  = 1280
-//     Screenmanager Resolution Height = 720
-//     Screenmanager Fullscreen mode   = 1
-//
-// and the engine restores them on the next launch. So there is nothing to
-// re-apply: forcing it every boot was not making it stick, it was overwriting
-// whatever the player had chosen since.
-//
-// What is left is a default. 720p, applied exactly once, on a device that has
-// never run this before -- roughly half the pixels of a 1080p panel, which is
-// most of a battery saving on art that tolerates the downscale. After that the
-// game owns it, including through its own resolution menu, and nothing here
-// touches it again.
-//
-// Nothing is clamped any more either. The old code refused to set anything at
-// or above the panel's short dimension, which meant the highest modes were
-// unreachable by design; the panel's own modes are exactly what the game's
-// menu offers, and they should work.
+// The launcher can select a resolution before each launch. -1 preserves the
+// game's saved choice (including the existing one-time 720p default); 0 selects
+// native. Positive values are landscape short-side targets, capped at the panel.
+// Choices apply once at startup, so the in-game video menu remains usable.
 
 #if UNITY_ANDROID && !UNITY_EDITOR
 using UnityEngine;
@@ -155,7 +132,7 @@ public static class ResolutionConfigurator
      * chosen anything. A key only this code writes is the only way to tell
      * "never been here" from "been here, and the player picked native".
      *
-     * After this has run once it never runs again, and the resolution belongs
+     * In Keep game setting mode this runs only once, and the resolution belongs
      * to the game: its own menu writes Screenmanager Resolution Width/Height,
      * Unity restores them at boot, and nothing here interferes.
      *
@@ -175,6 +152,24 @@ public static class ResolutionConfigurator
         {
             ResolutionGuard.Install();
             ResolutionMenuOptions.Install();
+
+            int requested = SilksongPatches.Settings.GetInt("launch_resolution", -1);
+            if (requested == 0 || requested == 540 || requested == 720 || requested == 900 || requested == 1080 || requested == 1440)
+            {
+                int panelLong, panelShort;
+                if (ResolutionMenuOptions.TryPanel(out panelLong, out panelShort))
+                {
+                    int height = requested == 0 ? panelShort : Mathf.Min(requested, panelShort);
+                    int width = ResolutionMenuOptions.WidthFor(panelLong, panelShort, height);
+                    Screen.SetResolution(width, height, true);
+                    PlayerPrefs.SetInt(PREF_DEFAULT_APPLIED, 1);
+                    PlayerPrefs.Save();
+                    Debug.Log($"[ResolutionConfigurator] launcher selection: {width}x{height}");
+                    return;
+                }
+                Debug.LogWarning("[ResolutionConfigurator] panel geometry unavailable; retaining game resolution");
+                return;
+            }
 
             if (PlayerPrefs.GetInt(PREF_DEFAULT_APPLIED, 0) != 0)
             {

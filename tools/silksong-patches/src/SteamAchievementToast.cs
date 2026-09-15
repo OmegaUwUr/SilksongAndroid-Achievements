@@ -52,7 +52,7 @@ namespace SilksongPatches
 
         public static void ShowConfirmed(AchievementHandler handler, string key)
         {
-            if (handler == null || string.IsNullOrEmpty(key)) return;
+            if (!Settings.GetBool("achievement_popups", true) || handler == null || string.IsNullOrEmpty(key)) return;
 
             Achievement achievement = null;
             try

@@ -98,6 +98,37 @@ adds the following launcher improvements:
 - Manual-only APK build triggering. No compilation is needed to edit this README.
 
 
+## Resolution and advanced achievement controls
+
+Settings → Display offers **Keep game setting**, **Native**, **540p**, **720p**,
+**900p**, **1080p**, and **1440p**. Presets use landscape render height, preserve
+the panel aspect ratio, and are capped at native resolution. Keep game setting
+preserves the saved choice, including the existing one-time 720p default.
+A chooser appears before launch; disable **Ask before each launch** to reuse the
+saved selection. Cancel aborts launch without saving the chooser changes. The
+in-game resolution menu remains usable.
+
+Settings → Advanced options offers these switches, applied on the next launch:
+
+| Control | Effect when disabled |
+| --- | --- |
+| Missing-achievement repair helpers | Does not create the repair component; normal game-to-Steam unlock delivery remains active. |
+| Startup check | Skips the startup repair scan. |
+| Scene/save/resume checks | Skips scans triggered by those lifecycle events. |
+| Periodic check | Does not start the periodic repair coroutine, including the default 120-second scan. |
+| Extra award-event listener | Disables the repair helper's supplementary listener; the primary online-subsystem path remains active. |
+| Confirmed popups | Hides the port's achievement toasts without suppressing submissions. |
+
+Periodic intervals: **60**, **120** (default), **300**, or **600 seconds**.
+Repair helpers and popups default to enabled. Subordinate repair controls are
+disabled in the UI when the repair master switch is off, retaining their choices.
+The extra award-event helper can still schedule confirmation checks, and pending
+write retries remain active independently of periodic scans. To disable all
+optional repair scans, turn off the repair master control. Fewer checks may delay
+recovery of missed achievements. Steam authentication, schema validation, the
+native bridge, and confirmed-write handling remain enabled; existing Steam
+unlocks are never undone by these switches.
+
 ## Getting started
 
 1. Download the latest APK from
