@@ -89,7 +89,9 @@ class SettingsActivity : Activity() {
         setContentView(R.layout.activity_settings)
         findViewById<android.widget.Button>(R.id.btn_advanced).setOnClickListener {
             val options = findViewById<android.view.View>(R.id.advanced_options)
-            options.visibility = if (options.visibility == android.view.View.VISIBLE) android.view.View.GONE else android.view.View.VISIBLE
+            val open = options.visibility != android.view.View.VISIBLE
+            options.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
+            findViewById<Button>(R.id.btn_advanced).setText(if (open) R.string.settings_troubleshooting_hide else R.string.ui_settings_advanced)
         }
 
         settings = SettingsStore(this)

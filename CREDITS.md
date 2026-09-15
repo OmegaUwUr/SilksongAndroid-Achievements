@@ -160,3 +160,7 @@ The revision 28 additions also reuse the upstream frame-cap holder for pre-launc
 FPS controls, this repository's existing repair component for manual checks, and
 its Cloud transfer path for verified pre-download local backups. Backup/export
 code uses Android and Java ZIP APIs; no new external code or dependency was added.
+
+The settings-page organization, live display summary, disclosure controls, and
+plain-language option descriptions were implemented for this repository using
+Android Views. No additional external UI code or library was introduced.

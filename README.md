@@ -108,7 +108,7 @@ A chooser appears before launch; disable **Ask before each launch** to reuse the
 saved selection. Cancel aborts launch without saving the chooser changes. The
 in-game resolution menu remains usable.
 
-Settings → Advanced options offers these switches, applied on the next launch:
+Settings → Steam achievements → Show advanced achievement controls offers these switches, applied on the next launch:
 
 | Control | Effect when disabled |
 | --- | --- |
@@ -135,7 +135,7 @@ unlocks are never undone by these switches.
   chooser and Settings. An explicit selection is held for that game session and
   capped at the available display refresh rate; actual performance may be lower.
   Select Keep game setting to use the in-game frame-rate control again.
-- **Check for missed achievements now:** Advanced options explains the action
+- **Check for missed achievements now:** The Steam achievements card explains the action
   before starting the game. It checks recorded local achievement flags and submits
   eligible missing unlocks to Steam. Load the desired save. This enables startup
   and scene-load repair checks for that session even when repair is disabled,
@@ -144,8 +144,7 @@ unlocks are never undone by these switches.
 - **Automatic local backups:** before a non-empty Cloud download writes any save,
   the launcher creates and verifies a ZIP of existing local save files. A failed
   backup aborts the download. The five newest completed snapshots are retained
-  under the app's external-files `cloud-download-backups` directory. Advanced
-  options can export the latest backup through Android's document picker. These
+  under the app's external-files `cloud-download-backups` directory. Cloud saves & backups can export the latest backup through Android's document picker. These
   local backups are separate from Steam Save History and are removed if app data
   is cleared or the app is uninstalled; export a copy first. There is no automatic
   rollback or in-app local-ZIP restore in this update.
@@ -367,3 +366,12 @@ make dev        # rebuild, repackage, install
 Requires an Android SDK, JDK 17+ and the .NET 8 SDK; on Windows use Git Bash.
 `make docker-apk` does the same in a container. See [COPILOT.md](COPILOT.md)
 for the full development loop.
+
+### Settings layout
+
+Settings use separate cards for Display & performance, Cloud saves & backups,
+Gameplay, and Steam achievements. A live summary shows the selected resolution
+and FPS. Save directions are explained as Steam → device and device → Steam.
+Backup export and manual achievement recovery are directly accessible; detailed
+repair switches and troubleshooting tools expand separately. Switches include
+short explanations and explicit On/Off labels. Back remains visible while scrolling.
