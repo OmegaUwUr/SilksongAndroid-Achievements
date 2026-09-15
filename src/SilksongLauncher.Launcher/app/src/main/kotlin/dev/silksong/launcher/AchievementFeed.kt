@@ -15,6 +15,7 @@ internal object AchievementFeed {
         catch (error: Exception) { LauncherLog.log("Achievement display connection failed", error) }
         var previous: State? = null
         var ticks = 0
+        var previousMinute = -1L
         while (currentCoroutineContext().isActive) {
             if (TokenStore(context).read()?.accountName != account) {
                 deliver(State(null, false, false)); return
@@ -22,7 +23,12 @@ internal object AchievementFeed {
             val live = AchievementService.displayState(account)
             if (live != null) cached = live
             val state = State(live ?: cached, live == null, ticks++ < 45)
-            if (state != previous) { deliver(state); previous = state }
+            val minute = System.currentTimeMillis() / 60_000L
+            if (state != previous || minute != previousMinute) {
+                deliver(state)
+                previous = state
+                previousMinute = minute
+            }
             delay(1000)
         }
     }

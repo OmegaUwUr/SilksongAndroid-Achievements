@@ -266,9 +266,9 @@ class LauncherActivity : Activity() {
                         LauncherLog.log("Conflict: keep remote — overwriting local with cloud")
                     }
                 }
-                CloudSync.pullItems(this@LauncherActivity, c, analysis.toDownload + analysis.conflicts).collect { }
+                CloudSync.pullItems(this@LauncherActivity, c, analysis.toDownload + analysis.conflicts).requireCloudSuccess()
             } else {
-                CloudSync.pullItems(this@LauncherActivity, c, analysis.toDownload).collect { }
+                CloudSync.pullItems(this@LauncherActivity, c, analysis.toDownload).requireCloudSuccess()
             }
             return true
         } catch (t: Throwable) {
@@ -345,9 +345,9 @@ class LauncherActivity : Activity() {
                         LauncherLog.log("Conflict: keep local — overwriting cloud with local")
                     }
                 }
-                CloudSync.pushItems(c, analysis.all, toDelete = analysis.toDelete).collect { }
+                CloudSync.pushItems(c, analysis.all, toDelete = analysis.toDelete).requireCloudSuccess()
             } else {
-                CloudSync.pushItems(c, analysis.toUpload, toDelete = analysis.toDelete).collect { }
+                CloudSync.pushItems(c, analysis.toUpload, toDelete = analysis.toDelete).requireCloudSuccess()
             }
         } catch (t: Throwable) {
             outcome = if (t is kotlinx.coroutines.CancellationException) "cancelled" else "failed"
@@ -416,7 +416,7 @@ class LauncherActivity : Activity() {
             LauncherLog.log("Keep remote: nothing on cloud to pull")
             return
         }
-        CloudSync.pullItems(this@LauncherActivity, c, items).collect { }
+        CloudSync.pullItems(this@LauncherActivity, c, items).requireCloudSuccess()
     }
 
     /**
@@ -431,7 +431,24 @@ class LauncherActivity : Activity() {
             LauncherLog.log("Keep local: nothing local to push")
             return
         }
-        CloudSync.pushItems(c, analysis.all, toDelete = analysis.toDelete).collect { }
+        CloudSync.pushItems(c, analysis.all, toDelete = analysis.toDelete).requireCloudSuccess()
+    }
+
+    /** Per-file failures are events, not flow exceptions. Drain all transfers before failing. */
+    private suspend fun kotlinx.coroutines.flow.Flow<CloudSync.Event>.requireCloudSuccess() {
+        var completed = false
+        var failed = false
+        collect { event ->
+            when (event) {
+                is CloudSync.Event.FileFailed -> failed = true
+                is CloudSync.Event.Complete -> {
+                    completed = true
+                    failed = failed || event.failed > 0
+                }
+                else -> Unit
+            }
+        }
+        check(completed && !failed) { "Steam Cloud synchronization did not complete successfully. Check diagnostics and retry." }
     }
 
     // ── Settings ───────────────────────────────────────────────────────

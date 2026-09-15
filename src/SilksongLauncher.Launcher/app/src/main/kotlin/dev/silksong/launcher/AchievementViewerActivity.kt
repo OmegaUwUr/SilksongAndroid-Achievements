@@ -74,6 +74,7 @@ class AchievementViewerActivity : Activity() {
     private var sort = 0
     private var feedJob: Job? = null
     private var snapshotLabel = ""
+    private var hasSnapshot = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +97,7 @@ class AchievementViewerActivity : Activity() {
             AchievementFeed.observe(this@AchievementViewerActivity) { state ->
                 val data = state.snapshot
                 if (data == null) {
+                    hasSnapshot = false
                     achievements = emptyList()
                     list.removeAllViews()
                     showFailure(getString(if (TokenStore(this@AchievementViewerActivity).read() == null)
@@ -106,14 +108,17 @@ class AchievementViewerActivity : Activity() {
                     snapshotLabel = getString(if (state.saved) R.string.ui_achievement_saved else R.string.ui_achievement_updated,
                         android.text.format.DateUtils.getRelativeTimeSpanString(data.updated,
                             System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS).toString())
+                    val changed = !hasSnapshot || achievements != data.items
+                    hasSnapshot = true
                     achievements = data.items
-                    render()
+                    if (changed) render() else summary.text = snapshotLabel
                 }
             }
         }
     }
 
     private fun render() {
+        if (!hasSnapshot) return
         val unlocked = achievements.count { it.isUnlocked }
         val total = achievements.size
         status.text = if (total == 0) {

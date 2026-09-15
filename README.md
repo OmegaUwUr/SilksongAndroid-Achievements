@@ -10,11 +10,6 @@ This is a community project based on **jakobkhansen's SilksongAndroid**, with
 additional SteamSync and achievement features. It is not an official Team Cherry
 or Valve release.
 
-<p align="center">
-  <img src="docs/icon.png" alt="Silksong Android app icon" width="180" />
-  <br />
-  <em>Thanks to Kaz Kirigiri for the artwork!</em>
-</p>
 
 <img width="2048" height="1536" alt="IMG_1639" src="https://github.com/user-attachments/assets/c9ddb25d-37a8-4e7e-877c-0f13eb13efed" />
 
@@ -84,11 +79,10 @@ or Valve release.
   animator fixes, and save-file replacement compatibility. These are internal
   port features, not all separate launcher settings.
 
-### UI improvements awaiting merge
+### SteamSync UI improvements
 
 [PR #3](https://github.com/OmegaUwUr/SilksongAndroid-Achievements/pull/3)
-contains the following implemented additions on `feature/ui-polish`; they are
-not yet part of `main`:
+adds the following launcher improvements:
 
 - Compact dashboard cards and a two-column layout on sufficiently wide screens.
 - Cloud status showing the last completed sync, current activity, and failure/
@@ -103,18 +97,6 @@ not yet part of `main`:
   `CREDITS.md`, `NOTICE.md`, and `LICENSE`.
 - Manual-only APK build triggering. No compilation is needed to edit this README.
 
-## SteamSync package and APK name
-
-The SteamSync variant installs as `com.hollowknightsilksong.steamsync`.
-APK filenames use `HollowKnight-Silksong-Steamsync.<revision>.apk`, where
-`<revision>` comes from `APP_REVISION` (for example, `.26.apk`). The full Android
-versionName and versionCode are independent of this shorter download filename.
-
-Changing the package ID creates a separate Android app. It does not upgrade
-the old `com.jakobkhansen.silksong` installation or automatically migrate its
-login, settings, downloaded files, or saves. Back up/export saves from the old
-app before removing it. Sign in again and select or download the game files
-for the new app; Android may block access to the old app's private directories.
 
 ## Getting started
 
@@ -270,7 +252,7 @@ achievements or unlock-everything control.
 The native Android achievement screens use the same service data: schema names,
 descriptions, icon references, secret flags, timestamps, and supported progress.
 Public achievement artwork is fetched from Steam's image CDN and cached locally.
-The account-scoped display cache in PR #3 is read-only presentation data; it is
+The account-scoped display cache is read-only presentation data; it is
 never used as authoritative input for writing achievements to Steam.
 
 The service also publishes an Online persona and sends Steam's games-played
