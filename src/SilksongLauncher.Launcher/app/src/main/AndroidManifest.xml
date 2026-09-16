@@ -34,6 +34,11 @@
             android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
+        <activity android:name="dev.silksong.launcher.SteamAccountActivity"
+            android:exported="false" android:process=":launcher"
+            android:label="@string/steam_account_title"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+
         <activity
             android:name="dev.silksong.launcher.SettingsActivity"
             android:exported="false"

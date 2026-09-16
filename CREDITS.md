@@ -164,3 +164,8 @@ code uses Android and Java ZIP APIs; no new external code or dependency was adde
 The settings-page organization, live display summary, disclosure controls, and
 plain-language option descriptions were implemented for this repository using
 Android Views. No additional external UI code or library was introduced.
+
+The Steam account page and per-account visibility preferences are implemented
+with Android Views and this repository's existing session service. Persona states
+use **JavaSteam / Longi94 and contributors'** `EPersonaState` and SteamFriends APIs;
+no external account-page UI was copied.

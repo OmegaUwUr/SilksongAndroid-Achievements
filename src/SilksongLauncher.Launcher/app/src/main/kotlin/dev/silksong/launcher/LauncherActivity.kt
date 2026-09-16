@@ -172,22 +172,24 @@ class LauncherActivity : Activity() {
     }
 
     private fun onLoginClicked() {
-        if (creds != null) {
-            // Logged in already — this button doubles as "log out".
-            LauncherLog.log("Logged out")
-            AchievementService.stopSafely(this)
-            tokenStore.clear()
-            creds = null
-            refreshLoginUi()
-            return
-        }
-        @Suppress("DEPRECATION")
-        startActivityForResult(Intent(this, LoginActivity::class.java), REQ_LOGIN)
+        startActivityForResult(Intent(this, SteamAccountActivity::class.java), 502)
     }
 
     @Deprecated("Use the Activity Result APIs — fine for Phase 1 scaffolding")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 502) {
+            if (resultCode == RESULT_OK) {
+                cloudJob?.cancel()
+                launchJob?.cancel()
+                AchievementService.stopSafely(this)
+                tokenStore.clear()
+                LauncherLog.log("Signed out of Steam")
+            }
+            creds = tokenStore.read()
+            refreshLoginUi()
+            return
+        }
         if (requestCode != REQ_LOGIN) return
         if (resultCode != RESULT_OK || data == null) {
             LauncherLog.log("Login cancelled")

@@ -375,3 +375,15 @@ and FPS. Save directions are explained as Steam → device and device → Steam.
 Backup export and manual achievement recovery are directly accessible; detailed
 repair switches and troubleshooting tools expand separately. Switches include
 short explanations and explicit On/Off labels. Back remains visible while scrolling.
+
+### Steam account and visibility
+
+The dashboard Steam button opens an account page. Select Disconnected (appear
+offline), Invisible, or Online. These are persona visibility states, not network
+switches: saved sign-in, Cloud saves, and achievement synchronization remain
+available. Offline/Invisible suppress this launcher's games-played announcement.
+Choices are saved per account and reapplied when its achievement session connects;
+another Steam client may affect the account's visible state. This is not a privacy
+control for every type of Steam activity. Sign out at the bottom removes saved
+credentials and stops the app's achievement session after confirmation, preserving
+local game files and saves.

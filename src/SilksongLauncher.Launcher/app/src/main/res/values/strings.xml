@@ -183,4 +183,13 @@ FPS: %2$s</string>
   <string name="settings_popup_hint">Show a notification inside the game after Steam accepts a new unlock. Off only hides the popup.</string>
   <string name="settings_on">On</string>
   <string name="settings_off">Off</string>
+    <string name="steam_account_title">Steam account</string>
+    <string name="steam_visibility_explain">Choose how you appear to friends. Changes save automatically and are sent when Steam connects. Appearing disconnected does not sign you out: Cloud saves and achievements can still synchronize.</string>
+    <string name="steam_visibility_offline">Disconnected — appear offline</string>
+    <string name="steam_visibility_invisible">Invisible — stay signed in, hidden from friends</string>
+    <string name="steam_visibility_online">Online — show when you are playing</string>
+    <string name="steam_visibility_scope">This controls the Steam session in this app. Another signed-in device may affect your account status. Offline and Invisible stop this launcher from announcing game activity; they do not hide every kind of Steam account activity.</string>
+    <string name="steam_visibility_failed">The visibility change could not be applied. Check the connection and try again.</string>
+    <string name="steam_account_sign_out">Sign out</string>
+    <string name="steam_account_sign_out_explain">Remove the saved Steam login from this app and stop its synchronization session? Your local game files and saves will remain on this device.</string>
 </resources>

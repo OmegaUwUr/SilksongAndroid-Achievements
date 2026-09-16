@@ -74,6 +74,12 @@ class AchievementService : Service() {
         fun displayState(account: String): AchievementDisplayStore.Snapshot? =
             displayFrame?.takeIf { isReady() && it.account == accountKey(account) }
 
+        fun refreshVisibility(context: Context) {
+            val intent = Intent(context, AchievementService::class.java).setAction("dev.silksong.launcher.REFRESH_VISIBILITY")
+            if (android.os.Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent)
+            else context.startService(intent)
+        }
+
         fun start(context: Context) {
             LauncherLog.log("Achievements: requesting synchronization service start")
             val intent = Intent(context, AchievementService::class.java)
@@ -200,6 +206,9 @@ class AchievementService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         LauncherLog.log("Achievements: service onStartCommand")
+        if (intent?.action == "dev.silksong.launcher.REFRESH_VISIBILITY" && ready.get() && !shuttingDown.get()) {
+            runCatching { presenceExecutor.execute { applySteamPlayingState(gameWantsPlaying.get()) } }
+        }
         return START_STICKY
     }
 
@@ -288,9 +297,7 @@ class AchievementService : Service() {
 
             // If GameActivity became active while Steam was still authenticating,
             // honor that lifecycle signal now rather than losing the session.
-            if (gameWantsPlaying.get()) {
-                runCatching { presenceExecutor.execute { applySteamPlayingState(true) } }
-            }
+            runCatching { presenceExecutor.execute { applySteamPlayingState(gameWantsPlaying.get()) } }
         } catch (t: Throwable) {
             if (!shuttingDown.get()) failReady("Achievement Steam session failed", t)
         }
@@ -306,7 +313,18 @@ class AchievementService : Service() {
 
         val apps = steamApps ?: return@synchronized
 
-        if (!playing) {
+        val account = sessionAccount ?: return@synchronized
+        val mode = SteamVisibility.get(this, account)
+        try {
+            steamFriends?.resetPersonaStateFlag()
+            steamFriends?.setPersonaState(SteamVisibility.persona(this, account))
+            LauncherLog.log("Steam visibility requested: $mode")
+        } catch (error: Exception) {
+            LauncherLog.log("Could not update Steam visibility", error)
+            return@synchronized
+        }
+
+        if (!playing || mode != SteamVisibility.ONLINE) {
             steamPlaying.set(false)
             // While another client owns the playing session, JavaSteam warns
             // that ANY ClientGamesPlayed message can log this session off with
@@ -317,7 +335,7 @@ class AchievementService : Service() {
             }
             try {
                 apps.notifyGamesPlayed(emptyList(), EOSType.AndroidUnknown)
-                gameProcessId = 0
+                if (!playing) gameProcessId = 0
                 LauncherLog.log("Steam presence: Silksong playing state cleared")
                 if (ready.get()) {
                     updateNotification("Connected to Steam • ${achievementLocations.size} achievements tracked")
@@ -346,15 +364,6 @@ class AchievementService : Service() {
         )
 
         try {
-            // JavaSteam logs on with a persona that remains Offline until the
-            // client explicitly publishes a state. Steam's own JavaSteam sample
-            // does this after successful logon. Put this message before
-            // ClientGamesPlayed so the two ordered client messages describe an
-            // ONLINE account that is currently playing Silksong.
-            friends.resetPersonaStateFlag()
-            friends.setPersonaState(EPersonaState.Online)
-            LauncherLog.log("Steam presence: persona set ONLINE for gameplay")
-
             // Re-send on every real Activity START. ClientGamesPlayed is an
             // idempotent current-state declaration, and doing this avoids a
             // stale local steamPlaying flag suppressing a new Steam session.
