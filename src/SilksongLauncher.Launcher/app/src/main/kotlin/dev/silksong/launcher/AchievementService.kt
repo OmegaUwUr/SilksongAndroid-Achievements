@@ -126,6 +126,7 @@ class AchievementService : Service() {
 
     private val running = AtomicBoolean(true)
     private val ready = AtomicBoolean(false)
+    private val initializing = AtomicBoolean(false)
     private val shuttingDown = AtomicBoolean(false)
     private val gameWantsPlaying = AtomicBoolean(false)
     private val steamPlaying = AtomicBoolean(false)
@@ -204,11 +205,11 @@ class AchievementService : Service() {
         registerReceivers()
         startForeground(NOTIFICATION_ID, notification(notificationText))
         executor.execute { serve() }
-        executor.execute { initializeSteam() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         LauncherLog.log("Achievements: service onStartCommand")
+        requestSteamInitialization()
         if (intent?.action == "dev.silksong.launcher.REFRESH_VISIBILITY" && ready.get() && !shuttingDown.get()) {
             runCatching { presenceExecutor.execute { applySteamPlayingState(gameWantsPlaying.get()) } }
         }
@@ -216,6 +217,42 @@ class AchievementService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    /** A failed initialization must be retryable without killing the launcher process. */
+    private fun requestSteamInitialization() {
+        if (!running.get() || shuttingDown.get() || ready.get()) return
+        if (!initializing.compareAndSet(false, true)) return
+        ownershipDenied = false
+        try {
+            executor.execute {
+                try {
+                    if (running.get() && !shuttingDown.get()) initializeSteam()
+                } catch (error: Exception) {
+                    if (!shuttingDown.get()) failReady("Could not initialize Steam achievements", error)
+                } finally {
+                    // Finish cleanup before allowing another start request to create a session.
+                    if (!ready.get()) {
+                        runCatching { playingSessionSubscription?.close() }
+                        playingSessionSubscription = null
+                        runCatching { personaStateSubscription?.close() }
+                        personaStateSubscription = null
+                        runCatching { steam?.close() }
+                        steam = null
+                        steamUser = null
+                        steamUserStats = null
+                        steamApps = null
+                        steamFriends = null
+                        steamPlaying.set(false)
+                        playingBlocked.set(false)
+                    }
+                    initializing.set(false)
+                }
+            }
+        } catch (error: java.util.concurrent.RejectedExecutionException) {
+            initializing.set(false)
+            if (!shuttingDown.get()) LauncherLog.log("Steam initialization executor unavailable", error)
+        }
+    }
 
     private fun initializeSteam() {
         val credentials = TokenStore(this).read()
@@ -249,6 +286,7 @@ class AchievementService : Service() {
             sessionAccount = credentials.accountName
             session.logOn(credentials)
             LauncherLog.log("Achievements: authenticated with Steam")
+            LauncherLog.log("Achievements: verifying Silksong license with Steam")
             SteamOwnership.requireOwned(session)
             LauncherLog.log("Steam verified a valid Silksong license")
 
@@ -297,7 +335,7 @@ class AchievementService : Service() {
                 throw IllegalStateException("Steam returned no named Silksong achievements in the user-stats schema")
             }
 
-            if (shuttingDown.get()) return
+            if (!running.get() || shuttingDown.get()) return
             ready.set(true)
             serviceReady = true
             LauncherLog.log("Achievements: READY — ${achievementLocations.size} Steam achievement API names mapped")

@@ -17,7 +17,13 @@ internal object SteamOwnership {
     fun requireOwned(session: SteamSession) {
         val apps = session.steamClient.getHandler(SteamApps::class.java)
             ?: error("Steam apps handler unavailable")
-        val response = apps.getAppOwnershipTicket(APP_ID).toFuture().get(30, TimeUnit.SECONDS)
+        val response = try {
+            apps.getAppOwnershipTicket(APP_ID).toFuture().get(30, TimeUnit.SECONDS)
+        } catch (error: java.util.concurrent.CancellationException) {
+            throw IllegalStateException("Steam cancelled the license-verification request. Please retry; ownership is not yet confirmed.", error)
+        } catch (error: java.util.concurrent.TimeoutException) {
+            throw IllegalStateException("Steam license verification timed out. Check your connection and retry.", error)
+        }
         // Ticket access was denied; do not confuse transport failures with a license denial.
         if (response.result == EResult.AccessDenied) throw NotOwned()
         check(response.result == EResult.OK && response.appID == APP_ID && response.ticket.isNotEmpty()) {

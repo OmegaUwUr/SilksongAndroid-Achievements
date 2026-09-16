@@ -187,3 +187,6 @@ feedback and signed-out guidance are original UI changes for this repository.
 Public Steam names are read from **JavaSteam / Longi94 and contributors'** persona
 cache and persona callbacks. Public-name caching, matching account/settings button
 styles, and the scrolling Back layout are original changes for this repository.
+
+Steam initialization retry/cleanup and license-request diagnostics are original
+changes for this repository, using the existing JavaSteam integration credited above.
