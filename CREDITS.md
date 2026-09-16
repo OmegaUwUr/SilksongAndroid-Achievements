@@ -174,3 +174,12 @@ Ownership verification uses **JavaSteam / Longi94 and contributors'**
 `SteamApps.getAppOwnershipTicket` and `AppOwnershipTicketCallback` protocol APIs.
 The login/launch gates and messages were implemented for this repository. Steam,
 not the launcher or a public profile, authorizes the license ticket.
+
+## Steam desktop icon
+
+**Valve** — Steam desktop icon displayed on the dashboard. The vector was adapted
+for Android VectorDrawable from the [Steam icon SVG on Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Steam_icon_logo.svg)
+([source SVG](https://upload.wikimedia.org/wikipedia/commons/8/83/Steam_icon_logo.svg)).
+The original path geometry and blue gradient are retained. Steam branding remains
+Valve's property; use here does not imply endorsement. The account-page selection
+feedback and signed-out guidance are original UI changes for this repository.

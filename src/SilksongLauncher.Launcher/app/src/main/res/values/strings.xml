@@ -185,9 +185,9 @@ FPS: %2$s</string>
   <string name="settings_off">Off</string>
     <string name="steam_account_title">Steam account</string>
     <string name="steam_visibility_explain">Choose how you appear to friends. Changes save automatically and are sent when Steam connects. Appearing disconnected does not sign you out: Cloud saves and achievements can still synchronize.</string>
-    <string name="steam_visibility_offline">Disconnected — appear offline</string>
-    <string name="steam_visibility_invisible">Invisible — stay signed in, hidden from friends</string>
-    <string name="steam_visibility_online">Online — show when you are playing</string>
+    <string name="steam_visibility_offline">Disconnected</string>
+    <string name="steam_visibility_invisible">Invisible</string>
+    <string name="steam_visibility_online">Online</string>
     <string name="steam_visibility_scope">This controls the Steam session in this app. Another signed-in device may affect your account status. Offline and Invisible stop this launcher from announcing game activity; they do not hide every kind of Steam account activity.</string>
     <string name="steam_visibility_failed">The visibility change could not be applied. Check the connection and try again.</string>
     <string name="steam_account_sign_out">Sign out</string>
@@ -199,4 +199,8 @@ FPS: %2$s</string>
     <string name="ownership_unavailable">Steam verification could not finish. Check your internet connection and Steam sign-in, then try again. This does not mean you do not own the game.</string>
     <string name="ownership_sign_in">Sign in to Steam to verify a valid copy of Hollow Knight: Silksong before playing. This is also required when you supply your own game files. After signing in, press Play again.</string>
     <string name="ownership_no_browser">No browser is available. Open store.steampowered.com/app/1030300 on another device.</string>
+    <string name="steam_dashboard_signed_out">Sign in to verify your game</string>
+    <string name="steam_offline_help">Saved choice: appear offline to friends. You stay signed in so saves and achievements can synchronize.</string>
+    <string name="steam_invisible_help">Saved choice: Invisible. Stay signed in without showing as online to friends.</string>
+    <string name="steam_online_help">Saved choice: Online. This launcher can announce Silksong while you play.</string>
 </resources>

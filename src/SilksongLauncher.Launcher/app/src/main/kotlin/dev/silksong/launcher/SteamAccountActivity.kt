@@ -62,7 +62,22 @@ class SteamAccountActivity : Activity() {
         if (credentials != null) {
             val modes = listOf(SteamVisibility.OFFLINE, SteamVisibility.INVISIBLE, SteamVisibility.ONLINE)
             val labels = listOf(R.string.steam_visibility_offline, R.string.steam_visibility_invisible, R.string.steam_visibility_online)
-            val selected = SteamVisibility.get(this, credentials.accountName)
+            var selected = SteamVisibility.get(this, credentials.accountName)
+            val explanation = TextView(this).apply {
+                textSize = 14f
+                setTextColor(Color.LTGRAY)
+                setPadding(0, dp(8), 0, dp(12))
+                accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
+            }
+            fun explain() {
+                explanation.setText(when (selected) {
+                    SteamVisibility.OFFLINE -> R.string.steam_offline_help
+                    SteamVisibility.INVISIBLE -> R.string.steam_invisible_help
+                    else -> R.string.steam_online_help
+                })
+            }
+            explain()
+            var restoring = false
             val group = RadioGroup(this)
             modes.forEachIndexed { index, mode ->
                 group.addView(RadioButton(this).apply {
@@ -74,17 +89,28 @@ class SteamAccountActivity : Activity() {
                 })
             }
             group.setOnCheckedChangeListener { _, id ->
+                if (restoring) return@setOnCheckedChangeListener
                 val choice = group.findViewById<RadioButton>(id)?.tag as? String ?: return@setOnCheckedChangeListener
                 try {
                     SteamVisibility.set(this, credentials.accountName, choice)
                     AchievementService.refreshVisibility(this)
+                    selected = choice
+                    explain()
                 } catch (error: Exception) {
+                    runCatching { SteamVisibility.set(this, credentials.accountName, selected) }
+                    restoring = true
+                    for (index in 0 until group.childCount) {
+                        val option = group.getChildAt(index) as RadioButton
+                        if (option.tag == selected) group.check(option.id)
+                    }
+                    restoring = false
                     LauncherLog.log("Steam visibility change failed", error)
                     AlertDialog.Builder(this).setMessage(R.string.steam_visibility_failed)
                         .setPositiveButton(android.R.string.ok, null).show()
                 }
             }
             body.addView(group)
+            body.addView(explanation)
             text(R.string.steam_visibility_scope)
         }
         root.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))

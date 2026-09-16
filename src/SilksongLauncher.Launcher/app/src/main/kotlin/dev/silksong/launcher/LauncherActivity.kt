@@ -213,12 +213,14 @@ class LauncherActivity : Activity() {
     private fun refreshLoginUi() {
         val c = creds
         if (c == null) {
-            txtLoginStatus.text = ""
+            txtLoginStatus.setText(R.string.steam_dashboard_signed_out)
+            txtLoginStatus.setTextColor(getColor(R.color.text_muted))
             btnLogin.text = getString(R.string.action_log_in)
             btnPull.isEnabled = false
             btnPush.isEnabled = false
         } else {
             txtLoginStatus.text = "Signed in as ${c.accountName}"
+            txtLoginStatus.setTextColor(getColor(R.color.status_green))
             btnLogin.text = getString(R.string.action_log_in_as)
             btnPull.isEnabled = true
             btnPush.isEnabled = true
