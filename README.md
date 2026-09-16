@@ -98,6 +98,57 @@ adds the following launcher improvements:
 - Manual-only APK build triggering. No compilation is needed to edit this README.
 
 
+## Resolution and advanced achievement controls
+
+Settings → Display offers **Keep game setting**, **Native**, **540p**, **720p**,
+**900p**, **1080p**, and **1440p**. Presets use landscape render height, preserve
+the panel aspect ratio, and are capped at native resolution. Keep game setting
+preserves the saved choice, including the existing one-time 720p default.
+A chooser appears before launch; disable **Ask before each launch** to reuse the
+saved selection. Cancel aborts launch without saving the chooser changes. The
+in-game resolution menu remains usable.
+
+Settings → Steam achievements → Show advanced achievement controls offers these switches, applied on the next launch:
+
+| Control | Effect when disabled |
+| --- | --- |
+| Missing-achievement repair helpers | Does not create the repair component; normal game-to-Steam unlock delivery remains active. |
+| Startup check | Skips the startup repair scan. |
+| Scene/save/resume checks | Skips scans triggered by those lifecycle events. |
+| Periodic check | Does not start the periodic repair coroutine, including the default 120-second scan. |
+| Extra award-event listener | Disables the repair helper's supplementary listener; the primary online-subsystem path remains active. |
+| Confirmed popups | Hides the port's achievement toasts without suppressing submissions. |
+
+Periodic intervals: **60**, **120** (default), **300**, or **600 seconds**.
+Repair helpers and popups default to enabled. Subordinate repair controls are
+disabled in the UI when the repair master switch is off, retaining their choices.
+The extra award-event helper can still schedule confirmation checks, and pending
+write retries remain active independently of periodic scans. To disable all
+optional repair scans, turn off the repair master control. Fewer checks may delay
+recovery of missed achievements. Steam authentication, schema validation, the
+native bridge, and confirmed-write handling remain enabled; existing Steam
+unlocks are never undone by these switches.
+
+### FPS, manual recovery, and local backups
+
+- **Pre-launch FPS:** Keep game setting, 30, 60, 90, or 120 FPS in the display
+  chooser and Settings. An explicit selection is held for that game session and
+  capped at the available display refresh rate; actual performance may be lower.
+  Select Keep game setting to use the in-game frame-rate control again.
+- **Check for missed achievements now:** The Steam achievements card explains the action
+  before starting the game. It checks recorded local achievement flags and submits
+  eligible missing unlocks to Steam. Load the desired save. This enables startup
+  and scene-load repair checks for that session even when repair is disabled,
+  without changing stored repair switches. It cannot award achievements that have
+  no qualifying local record, and Steam must accept each submission.
+- **Automatic local backups:** before a non-empty Cloud download writes any save,
+  the launcher creates and verifies a ZIP of existing local save files. A failed
+  backup aborts the download. The five newest completed snapshots are retained
+  under the app's external-files `cloud-download-backups` directory. Cloud saves & backups can export the latest backup through Android's document picker. These
+  local backups are separate from Steam Save History and are removed if app data
+  is cleared or the app is uninstalled; export a copy first. There is no automatic
+  rollback or in-app local-ZIP restore in this update.
+
 ## Getting started
 
 1. Download the latest APK from
@@ -263,7 +314,8 @@ Steam overlay inside the Android game.
 
 ### Connection requirements
 
-After setup, local play without Steam sign-in is supported. Downloads, Cloud
+Steam sign-in and ownership verification are required before play, including
+when the game files were supplied manually. Downloads, Cloud
 operations, live achievement retrieval/submission, and Steam presence require
 network access and a valid account session. With saved credentials present, the
 current launch gate requires a ready Steam achievement service; it does not
@@ -315,3 +367,41 @@ make dev        # rebuild, repackage, install
 Requires an Android SDK, JDK 17+ and the .NET 8 SDK; on Windows use Git Bash.
 `make docker-apk` does the same in a container. See [COPILOT.md](COPILOT.md)
 for the full development loop.
+
+### Settings layout
+
+Settings use separate cards for Display & performance, Cloud saves & backups,
+Gameplay, and Steam achievements. A live summary shows the selected resolution
+and FPS. Save directions are explained as Steam → device and device → Steam.
+Backup export and manual achievement recovery are directly accessible; detailed
+repair switches and troubleshooting tools expand separately. Switches include
+short explanations and explicit On/Off labels. Back remains visible while scrolling.
+
+### Steam account and visibility
+
+The dashboard Steam button opens an account page. Select Disconnected (appear
+offline), Invisible, or Online. These are persona visibility states, not network
+switches: saved sign-in, Cloud saves, and achievement synchronization remain
+available. Offline/Invisible suppress this launcher's games-played announcement.
+Choices are saved per account and reapplied when its achievement session connects;
+another Steam client may affect the account's visible state. This is not a privacy
+control for every type of Steam activity. Sign out at the bottom removes saved
+credentials and stops the app's achievement session after confirmation, preserving
+local game files and saves.
+
+### Steam ownership requirement
+
+QR and password sign-in now request a Steam app ownership ticket for Silksong
+(App ID 1030300) before accepting the login. The authenticated achievement service
+also verifies the license before becoming ready for launch, covering saved logins.
+Manual file selection does not bypass the launch requirement: Play prompts for
+Steam sign-in if needed. A successful ticket response for the correct App ID with
+non-empty ticket data is required; local files or a public Steam profile are not
+used as proof. This verifies Steam-authorized license access, not purchase receipts.
+
+When Steam explicitly reports NoLicense, the app explains that a valid Steam copy
+is required and offers the official Silksong Steam store page. Connection errors,
+timeouts, and other unconfirmed responses block verification with a retry message
+instead of claiming the account does not own the game. After buying the game,
+sign in again. Ticket contents are not stored or logged. Offline launch without
+verification is no longer supported by this flow.

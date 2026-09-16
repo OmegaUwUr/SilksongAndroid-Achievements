@@ -246,6 +246,8 @@ object CloudSync {
         val saveDir = saveDirFor(context)
         saveDir.mkdirs()
 
+        LocalSaveBackup.beforeDownload(context)
+
         SteamSession().use { session ->
             session.logOn(credentials)
             val cloud = SteamCloudClient(session)

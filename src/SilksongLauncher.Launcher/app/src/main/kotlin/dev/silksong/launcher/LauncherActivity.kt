@@ -142,9 +142,20 @@ class LauncherActivity : Activity() {
         launchPanel.visibility = View.VISIBLE
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
+
     override fun onResume() {
         super.onResume()
+        creds = tokenStore.read()
+        refreshLoginUi()
         btnAchievements.start()
+        if (intent.getBooleanExtra("manual_achievement_check", false)) {
+            intent.removeExtra("manual_achievement_check")
+            onLaunchClicked(manualAchievementCheck = true)
+        }
         // Auto-push fires after the user returns from playing the
         // game. We use a flag (set in launchGame) instead of just
         // "always on resume" so dismissing dialogs / opening
@@ -163,22 +174,24 @@ class LauncherActivity : Activity() {
     }
 
     private fun onLoginClicked() {
-        if (creds != null) {
-            // Logged in already — this button doubles as "log out".
-            LauncherLog.log("Logged out")
-            AchievementService.stopSafely(this)
-            tokenStore.clear()
-            creds = null
-            refreshLoginUi()
-            return
-        }
-        @Suppress("DEPRECATION")
-        startActivityForResult(Intent(this, LoginActivity::class.java), REQ_LOGIN)
+        startActivityForResult(Intent(this, SteamAccountActivity::class.java), 502)
     }
 
     @Deprecated("Use the Activity Result APIs — fine for Phase 1 scaffolding")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 502) {
+            if (resultCode == RESULT_OK) {
+                cloudJob?.cancel()
+                launchJob?.cancel()
+                AchievementService.stopSafely(this)
+                tokenStore.clear()
+                LauncherLog.log("Signed out of Steam")
+            }
+            creds = tokenStore.read()
+            refreshLoginUi()
+            return
+        }
         if (requestCode != REQ_LOGIN) return
         if (resultCode != RESULT_OK || data == null) {
             LauncherLog.log("Login cancelled")
@@ -200,12 +213,14 @@ class LauncherActivity : Activity() {
     private fun refreshLoginUi() {
         val c = creds
         if (c == null) {
-            txtLoginStatus.text = ""
+            txtLoginStatus.setText(R.string.steam_dashboard_signed_out)
+            txtLoginStatus.setTextColor(getColor(R.color.text_muted))
             btnLogin.text = getString(R.string.action_log_in)
             btnPull.isEnabled = false
             btnPush.isEnabled = false
         } else {
             txtLoginStatus.text = "Signed in as ${c.accountName}"
+            txtLoginStatus.setTextColor(getColor(R.color.status_green))
             btnLogin.text = getString(R.string.action_log_in_as)
             btnPull.isEnabled = true
             btnPush.isEnabled = true
@@ -519,7 +534,7 @@ class LauncherActivity : Activity() {
      * installed content, the authenticated achievement service, game settings,
      * and local save preparation all complete before GameActivity is started.
      */
-    private fun onLaunchClicked() {
+    private fun onLaunchClicked(manualAchievementCheck: Boolean = false) {
         if (launchJob?.isActive == true) {
             LauncherLog.log("Launch preparation already running")
             return
@@ -536,6 +551,7 @@ class LauncherActivity : Activity() {
                 credentials = c,
                 settings = settings,
                 syncCloud = c != null && settings.autoPull,
+                manualAchievementCheck = manualAchievementCheck,
                 syncSaves = {
                     if (c == null || !settings.autoPull) {
                         true

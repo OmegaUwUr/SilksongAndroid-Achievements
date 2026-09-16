@@ -22,6 +22,27 @@ class SettingsStore(context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    var launchFps: Int
+        get() = prefs.getInt("launch_fps", -1).takeIf { it in FPS_OPTIONS } ?: -1
+        set(value) { require(value in FPS_OPTIONS); prefs.edit().putInt("launch_fps", value).apply() }
+
+    var launchResolution: Int
+        get() = prefs.getInt("launch_resolution", -1).takeIf { it in RESOLUTIONS } ?: -1
+        set(value) { require(value in RESOLUTIONS); prefs.edit().putInt("launch_resolution", value).apply() }
+
+    var askResolution: Boolean
+        get() = prefs.getBoolean("ask_resolution", true)
+        set(value) { prefs.edit().putBoolean("ask_resolution", value).apply() }
+
+    var repairInterval: Int
+        get() = prefs.getInt("achievement_repair_interval", 120).takeIf { it in INTERVALS } ?: 120
+        set(value) { require(value in INTERVALS); prefs.edit().putInt("achievement_repair_interval", value).apply() }
+
+    fun achievementOption(option: AchievementOption): Boolean = prefs.getBoolean(option.key, true)
+    fun setAchievementOption(option: AchievementOption, enabled: Boolean) {
+        prefs.edit().putBoolean(option.key, enabled).apply()
+    }
+
     var autoPull: Boolean
         get() = prefs.getBoolean(KEY_AUTO_PULL, false)
         set(value) { prefs.edit().putBoolean(KEY_AUTO_PULL, value).apply() }
@@ -88,9 +109,16 @@ class SettingsStore(context: Context) {
      * Written whole every time, immediately before launch, so it cannot drift
      * from what the user last chose.
      */
-    fun exportForGame(context: Context) {
+    fun exportForGame(context: Context, manualAchievementCheck: Boolean = false) {
         val dir = context.getExternalFilesDir(null) ?: return
         val text = buildString {
+            append("launch_fps=").append(launchFps).append('\n')
+            append("achievement_manual_check=").append(manualAchievementCheck).append('\n')
+            append("launch_resolution=").append(launchResolution).append('\n')
+            append("achievement_repair_interval=").append(repairInterval).append('\n')
+            AchievementOption.values().forEach { option ->
+                append(option.key).append('=').append(achievementOption(option)).append('\n')
+            }
             append(KEY_PERF_OVERLAY).append('=').append(perfOverlay).append('\n')
             append(KEY_SKIP_INTRO).append('=').append(skipIntro).append('\n')
             append(KEY_DUAL_SCREEN).append('=').append(dualScreen).append('\n')
@@ -120,3 +148,18 @@ class SettingsStore(context: Context) {
         const val KEY_DUAL_SCREEN = "dualscreen_enabled"
     }
 }
+
+/** Independent optional helpers; the authoritative unlock/store bridge remains enabled. */
+enum class AchievementOption(val key: String) {
+    REPAIR("achievement_repair"),
+    STARTUP("achievement_repair_startup"),
+    LIFECYCLE("achievement_repair_lifecycle"),
+    PERIODIC("achievement_repair_periodic"),
+    AWARD_EVENT("achievement_repair_award_event"),
+    POPUPS("achievement_popups")
+}
+
+internal val RESOLUTIONS = listOf(-1, 0, 540, 720, 900, 1080, 1440)
+internal val INTERVALS = listOf(60, 120, 300, 600)
+
+internal val FPS_OPTIONS = listOf(-1, 30, 60, 90, 120)

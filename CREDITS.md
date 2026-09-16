@@ -145,3 +145,41 @@ UI library or copied UI source was introduced for this update.
 
 The in-app Credits & licenses screen packages this file, NOTICE.md and LICENSE
 directly during the build, so their attribution remains available offline.
+
+## Resolution and achievement controls in revision 28
+
+The launcher resolution selector reuses **jakobkhansen and the SilksongAndroid
+contributors'** existing `ResolutionConfigurator`, panel geometry helpers, and
+settings-file transport. The new Android controls and optional repair/pop-up
+switches extend this repository's Steam achievement implementation; no additional
+external source or UI library was imported for these controls. Existing GameNative,
+JavaSteam, Steamworks.NET interface-reference, and other attributions above remain
+applicable to their respective components.
+
+The revision 28 additions also reuse the upstream frame-cap holder for pre-launch
+FPS controls, this repository's existing repair component for manual checks, and
+its Cloud transfer path for verified pre-download local backups. Backup/export
+code uses Android and Java ZIP APIs; no new external code or dependency was added.
+
+The settings-page organization, live display summary, disclosure controls, and
+plain-language option descriptions were implemented for this repository using
+Android Views. No additional external UI code or library was introduced.
+
+The Steam account page and per-account visibility preferences are implemented
+with Android Views and this repository's existing session service. Persona states
+use **JavaSteam / Longi94 and contributors'** `EPersonaState` and SteamFriends APIs;
+no external account-page UI was copied.
+
+Ownership verification uses **JavaSteam / Longi94 and contributors'**
+`SteamApps.getAppOwnershipTicket` and `AppOwnershipTicketCallback` protocol APIs.
+The login/launch gates and messages were implemented for this repository. Steam,
+not the launcher or a public profile, authorizes the license ticket.
+
+## Steam desktop icon
+
+**Valve** — Steam desktop icon displayed on the dashboard. The vector was adapted
+for Android VectorDrawable from the [Steam icon SVG on Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Steam_icon_logo.svg)
+([source SVG](https://upload.wikimedia.org/wikipedia/commons/8/83/Steam_icon_logo.svg)).
+The original path geometry and blue gradient are retained. Steam branding remains
+Valve's property; use here does not imply endorsement. The account-page selection
+feedback and signed-out guidance are original UI changes for this repository.

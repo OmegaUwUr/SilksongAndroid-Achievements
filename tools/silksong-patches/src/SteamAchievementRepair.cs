@@ -36,7 +36,10 @@ namespace SilksongPatches
     {
         private const string Tag = "[SilksongPatches] SteamAchievementRepair: ";
         private const string SteamLibrary = "steam_api64";
-        private const float SafetyReconcileSeconds = 120f;
+        private static float SafetyReconcileSeconds => Mathf.Clamp(Settings.GetInt("achievement_repair_interval", 120), 60, 600);
+        private static bool RepairEnabled => Settings.GetBool("achievement_repair", true);
+        private static bool ManualCheck => Settings.GetBool("achievement_manual_check", false);
+        private static bool LifecycleChecks => RepairEnabled && Settings.GetBool("achievement_repair_lifecycle", true);
         private const int InitAttempts = 20;
 
         private static bool bootstrapped;
@@ -98,7 +101,7 @@ namespace SilksongPatches
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         public static void Bootstrap()
         {
-            if (bootstrapped) return;
+            if (bootstrapped || (!RepairEnabled && !ManualCheck)) return;
             bootstrapped = true;
 
             var go = new GameObject("SilksongAndroid.SteamAchievementRepair");
@@ -153,12 +156,18 @@ namespace SilksongPatches
             // Repair anything missed by an older build after shared state and
             // AchievementHandler have had time to appear.
             yield return new WaitForSecondsRealtime(0.5f);
-            Reconcile("startup");
+            DiscoverGameAchievementState(); // Attach optional listeners even when the startup scan is disabled.
+            if (ManualCheck || (RepairEnabled && Settings.GetBool("achievement_repair_startup", true)))
+                Reconcile(ManualCheck ? "manual check at startup" : "startup");
 
             // Normal unlocks are event-driven. This is only a low-frequency
             // fallback for game configurations that suppress AwardAchievementEvent.
-            safetyLoop = StartCoroutine(SafetyLoop());
-            Debug.Log(Tag + "event-driven synchronization active; safety reconciliation every 120s");
+            if (RepairEnabled && Settings.GetBool("achievement_repair_periodic", true))
+            {
+                safetyLoop = StartCoroutine(SafetyLoop());
+                Debug.Log(Tag + "periodic reconciliation every " + SafetyReconcileSeconds + "s");
+            }
+            else Debug.Log(Tag + "periodic reconciliation disabled");
         }
 
         private IEnumerator SafetyLoop()
@@ -173,12 +182,13 @@ namespace SilksongPatches
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             if (!bridgeReady) return;
-            ScheduleReconcile("scene loaded: " + scene.name, 0.35f);
+            DiscoverGameAchievementState(); // Rebind listeners without scanning old unlocks.
+            if (LifecycleChecks || ManualCheck) ScheduleReconcile("scene loaded: " + scene.name, 0.35f);
         }
 
         private void OnApplicationFocus(bool hasFocus)
         {
-            if (hasFocus && bridgeReady)
+            if (hasFocus && bridgeReady && LifecycleChecks)
             {
                 ScheduleReconcile("application resumed", 0.35f);
             }
@@ -187,7 +197,7 @@ namespace SilksongPatches
         private void OnSavePersistentObjects()
         {
             if (!bridgeReady) return;
-            ScheduleReconcile("game save lifecycle", 0.05f);
+            if (LifecycleChecks) ScheduleReconcile("game save lifecycle", 0.05f);
         }
 
         private void OnAchievementAwarded(string key)
@@ -433,7 +443,7 @@ namespace SilksongPatches
                 subscribedGameManager = currentGameManager;
                 if (subscribedGameManager != null)
                 {
-                    subscribedGameManager.SavePersistentObjects += OnSavePersistentObjects;
+                    if (LifecycleChecks) subscribedGameManager.SavePersistentObjects += OnSavePersistentObjects;
                     Debug.Log(Tag + "subscribed to game save lifecycle");
                 }
             }
@@ -463,7 +473,8 @@ namespace SilksongPatches
 
                 if (subscribedAchievementHandler != null)
                 {
-                    subscribedAchievementHandler.AwardAchievementEvent += OnAchievementAwarded;
+                    if (RepairEnabled && Settings.GetBool("achievement_repair_award_event", true))
+                        subscribedAchievementHandler.AwardAchievementEvent += OnAchievementAwarded;
                     Debug.Log(Tag + "subscribed to Silksong achievement award events");
                 }
             }

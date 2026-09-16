@@ -29,8 +29,52 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.Switch
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 
 class SettingsActivity : Activity() {
+    private val backupScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
+
+    fun exportLatestBackup() {
+        val file = LocalSaveBackup.latest(this)
+        if (file == null) {
+            AlertDialog.Builder(this).setMessage(R.string.options_no_backup).setPositiveButton(android.R.string.ok, null).show()
+            return
+        }
+        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/zip"
+            putExtra(Intent.EXTRA_TITLE, file.name)
+        }, 710)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data ?: return
+        if (requestCode != 710 || resultCode != RESULT_OK) return
+        backupScope.launch {
+            try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val file = LocalSaveBackup.latest(this@SettingsActivity) ?: error("No backup available")
+                    contentResolver.openOutputStream(uri, "w")?.use { output ->
+                        file.inputStream().use { it.copyTo(output) }
+                    } ?: error("Could not open export destination")
+                }
+                android.widget.Toast.makeText(this@SettingsActivity, R.string.options_backup_exported, android.widget.Toast.LENGTH_LONG).show()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                LauncherLog.log("Backup export failed", error)
+                AlertDialog.Builder(this@SettingsActivity).setMessage(R.string.options_backup_export_failed)
+                    .setPositiveButton(android.R.string.ok, null).show()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        backupScope.cancel()
+        super.onDestroy()
+    }
+
 
     private lateinit var settings: SettingsStore
     private lateinit var swAutoPull: Switch
@@ -45,10 +89,13 @@ class SettingsActivity : Activity() {
         setContentView(R.layout.activity_settings)
         findViewById<android.widget.Button>(R.id.btn_advanced).setOnClickListener {
             val options = findViewById<android.view.View>(R.id.advanced_options)
-            options.visibility = if (options.visibility == android.view.View.VISIBLE) android.view.View.GONE else android.view.View.VISIBLE
+            val open = options.visibility != android.view.View.VISIBLE
+            options.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
+            findViewById<Button>(R.id.btn_advanced).setText(if (open) R.string.settings_troubleshooting_hide else R.string.ui_settings_advanced)
         }
 
         settings = SettingsStore(this)
+        LaunchOptions.populateSettings(this, settings)
 
         swAutoPull = findViewById(R.id.sw_auto_pull)
         swAutoPush = findViewById(R.id.sw_auto_push)

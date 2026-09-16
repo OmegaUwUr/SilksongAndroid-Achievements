@@ -1,131 +1,206 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Visible in the app drawer. Overrides the Unity-set label. -->
-    <string name="launcher_app_name">Silksong SteamSync</string>
-
-    <string name="launcher_title">Silksong</string>
-    <string name="launcher_status_idle">Ready.</string>
-    <string name="launcher_status_starting">Starting game…</string>
-    <string name="launcher_status_error">Couldn\'t start the game: %1$s</string>
-
-    <!-- First-run extraction screen. -->
-
-    <!-- Main launcher action buttons. -->
-    <string name="action_log_in">Log in</string>
-    <string name="action_log_in_as">Steam · Log out</string>
-    <string name="action_pull_saves">&#8595;  Download saves</string>
-    <string name="action_pull_saves_busy">Download saves</string>
-    <string name="action_push_saves">&#8593;  Upload saves</string>
-    <string name="action_push_saves_busy">Upload saves</string>
-    <string name="action_settings">Settings</string>
-    <string name="action_logs">View logs</string>
-    <string name="action_launch">Launch game</string>
-
-    <!-- Settings screen. -->
-    <string name="settings_title">Launcher settings</string>
-    <string name="settings_auto_pull">Download cloud saves before launching</string>
-    <string name="settings_auto_pull_subtitle">Download newer cloud saves right before the game starts.</string>
-    <string name="settings_auto_push">Upload cloud saves after playing</string>
-    <string name="settings_auto_push_subtitle">Upload changed local saves when you return from the game.</string>
-    <string name="settings_perf_overlay">Show in-game perf overlay</string>
-    <string name="settings_perf_overlay_subtitle">Top-right overlay with FPS, CPU and GPU load, RAM, and battery level and drain.</string>
-
-    <string name="settings_skip_intro">Skip intro on startup</string>
-    <string name="settings_skip_intro_subtitle">Skip the studio logos and opening quote and go straight to the main menu.</string>
-
-    <!-- Render resolution scale: render at lower res, scale up to display in hardware. -->
-    <string name="settings_clear_build">Reset and re-port</string>
-    <string name="settings_clear_build_subtitle">Delete the ported game and every setting, then build it again. Your saves and your Steam sign-in are kept.</string>
-    <string name="settings_clear_build_title">Reset and re-port?</string>
-    <string name="settings_clear_build_message">This deletes the ported game and puts every setting — here and in the game — back to its default. It is then built again from the files already on this device, which takes 20–30 minutes.\n\nYou will be asked where the game\'s files are again. They are not deleted, so pointing at the same folder is all it takes.\n\nYour saves are not touched, the game is not downloaded again, and you stay signed in to Steam.</string>
-    <string name="settings_clear_build_confirm">Reset and re-port</string>
-    <string name="settings_clear_build_working">Resetting…</string>
-    <string name="settings_clear_build_failed">Could not reset: %1$s</string>
-    <string name="settings_cancel">Cancel</string>
-
-    <string name="settings_back">Back</string>
-    <string name="settings_dual_screen">Dual screen</string>
-    <string name="settings_dual_screen_subtitle">Show the inventory, map, tasks, journal and crest on a second screen, with touch. Only does anything on a device that has two screens, such as the Ayn Thor.</string>
-
-    <!-- Login screen. -->
-    <string name="login_title">Sign in to Steam</string>
-    <string name="login_subtitle">Scan with the Steam mobile app · Settings → Mobile Authenticator → QR Code</string>
-    <string name="login_password_hint">Or sign in with your account name and password.</string>
-    <string name="login_username">Account name</string>
-    <string name="login_password">Password</string>
-    <string name="login_sign_in">Sign in</string>
-    <string name="login_guard_hint">Steam Guard code</string>
-    <string name="login_guard_submit">OK</string>
-    <string name="login_guard_approve">Waiting for you to approve the sign-in in your Steam mobile app…</string>
-    <string name="login_guard_device">Enter the code from your Steam mobile authenticator.</string>
-    <string name="login_guard_email">Enter the code Steam emailed to %1$s.</string>
-    <string name="login_guard_email_no_address">Enter the code Steam emailed you.</string>
-    <string name="login_guard_retry">That code was not accepted. Try again.</string>
-    <string name="login_status_connecting">Connecting to Steam…</string>
-    <string name="login_status_waiting">Waiting for scan…</string>
-    <string name="login_status_signing_in">Signing in…</string>
-    <string name="login_status_need_credentials">Enter an account name and password.</string>
-    <string name="login_status_polling">Confirmed on phone — finalising…</string>
-    <string name="login_status_done">Signed in as %1$s</string>
-    <string name="login_status_error">Login failed: %1$s</string>
-    <string name="login_cancel">Cancel</string>
-
-    <!-- Steam achievement viewer. -->
-    <string name="achievements_title">Achievements</string>
-    <string name="achievements_all_title">All Achievements</string>
-    <string name="achievements_loading">Loading achievement data from Steam…</string>
-    <string name="achievements_unavailable">Steam achievement data is unavailable. Check your connection and try again.</string>
-    <string name="achievements_sign_in_required">Sign in to Steam from the launcher to view achievements.</string>
-    <string name="achievements_none">Steam returned no achievements for Silksong.</string>
-    <string name="achievements_progress_count">%1$d / %2$d unlocked (%3$d%%)</string>
-    <string name="achievements_complete">★ All achievements unlocked</string>
-    <string name="achievements_unlocked_at">Unlocked on %1$s</string>
-    <string name="achievements_locked">Locked</string>
-    <string name="achievements_hidden_name">Hidden achievement</string>
-    <string name="achievements_hidden_subtitle">Details will be revealed after this achievement is unlocked.</string>
-    <plurals name="achievements_hidden_remaining">
-        <item quantity="one">%1$d hidden achievement remaining</item>
-        <item quantity="other">%1$d hidden achievements remaining</item>
-    </plurals>
-    <string name="achievements_reveal_title">Reveal hidden achievements?</string>
-    <string name="achievements_reveal_message">This temporarily shows the names and details of remaining secret achievements.</string>
-    <string name="achievements_reveal_confirm">Reveal</string>
-    <string name="achievements_retry">Retry</string>
-    <string name="achievements_back">Back</string>
-    <string name="achievements_diagnostics">Diagnostics</string>
-
-    <string name="achievements_preview_title">Achievements ›</string>
-    <string name="achievements_preview_complete">Achievements ★ ›</string>
-    <string name="achievements_preview_count">%1$d / %2$d (%3$d%%)</string>
-    <string name="achievements_preview_more">+%1$d</string>
-    <string name="ui_brand">SILKSONG STEAMSYNC</string>
-    <string name="ui_tagline">Play • Saves • Achievements</string>
-    <string name="ui_settings_steam">Steam &amp; Saves</string>
-    <string name="ui_settings_gameplay">Gameplay</string>
-    <string name="ui_settings_display">Display</string>
-    <string name="ui_settings_advanced">Advanced options</string>
-    <string name="ui_cloud_working">Synchronizing saves…</string>
-    <string name="ui_cloud_failed">Sync failed — tap to retry</string>
-    <string name="ui_cloud_incomplete">Sync not completed — tap to review</string>
-    <string name="ui_cloud_never">No completed sync yet — tap to manage</string>
-    <string name="ui_cloud_updated">Last synced %1$s</string>
-    <string name="ui_cloud_download">Download Steam saves</string>
-    <string name="ui_cloud_upload">Upload device saves</string>
-    <string name="ui_cloud_download_explain">Copy saves from Steam to this device. Newer Steam saves may replace older device saves. Conflicts will ask which version to keep.</string>
-    <string name="ui_cloud_upload_explain">Copy saves from this device to Steam. Newer device saves may replace older Steam saves. Conflicts will ask which version to keep.</string>
-    <string name="ui_save_history">Save history &amp; restore</string>
-    <string name="ui_continue">Continue</string>
-    <string name="ui_achievement_saved">Saved data • updated %1$s</string>
-    <string name="ui_achievement_updated">Steam data • updated %1$s</string>
-    <string name="ui_achievement_search">Search achievements</string>
-    <string name="ui_achievement_no_matches">No matching achievements</string>
-    <string name="ui_filter">Filter achievements</string>
-    <string name="ui_sort">Sort achievements</string>
-    <string-array name="ui_achievement_filters"><item>All</item><item>Unlocked</item><item>Locked</item></string-array>
-    <string-array name="ui_achievement_sorts"><item>Latest unlock</item><item>Name</item><item>Closest to completion</item></string-array>
-    <string name="ui_credits">Credits &amp; licenses</string>
-    <string name="ui_credits_close">Back • Credits &amp; licenses</string>
-    <string name="ui_credits_loading">Loading credits…</string>
-    <string name="ui_unlocked">Unlocked</string>
-    <string name="ui_credits_failed">Credits could not load. Please check the CREDITS.md file in the repository.</string>
+  <string name="launcher_app_name">Silksong SteamSync</string>
+  <string name="launcher_title">Silksong</string>
+  <string name="launcher_status_idle">Ready.</string>
+  <string name="launcher_status_starting">Starting game…</string>
+  <string name="launcher_status_error">Couldn\'t start the game: %1$s</string>
+  <string name="action_log_in">Log in</string>
+  <string name="action_log_in_as">Steam · Log out</string>
+  <string name="action_pull_saves">↓  Download saves</string>
+  <string name="action_pull_saves_busy">Download saves</string>
+  <string name="action_push_saves">↑  Upload saves</string>
+  <string name="action_push_saves_busy">Upload saves</string>
+  <string name="action_settings">Settings</string>
+  <string name="action_logs">View logs</string>
+  <string name="action_launch">Launch game</string>
+  <string name="settings_title">Game &amp; launcher settings</string>
+  <string name="settings_auto_pull">Download saves before playing</string>
+  <string name="settings_auto_pull_subtitle">Copy newer Steam saves to this device before launch. Conflicts ask which copy to keep. Requires Steam sign-in.</string>
+  <string name="settings_auto_push">Upload saves after playing</string>
+  <string name="settings_auto_push_subtitle">Send device saves to Steam when you return to the launcher. Force-closing the app does not trigger an upload.</string>
+  <string name="settings_perf_overlay">Show in-game perf overlay</string>
+  <string name="settings_perf_overlay_subtitle">Top-right overlay with FPS, CPU and GPU load, RAM, and battery level and drain.</string>
+  <string name="settings_skip_intro">Skip intro on startup</string>
+  <string name="settings_skip_intro_subtitle">Skip the studio logos and opening quote and go straight to the main menu.</string>
+  <string name="settings_clear_build">Reset and re-port</string>
+  <string name="settings_clear_build_subtitle">Delete the ported game and every setting, then build it again. Your saves and your Steam sign-in are kept.</string>
+  <string name="settings_clear_build_title">Reset and re-port?</string>
+  <string name="settings_clear_build_message">This deletes the ported game and puts every setting — here and in the game — back to its default. It is then built again from the files already on this device, which takes 20–30 minutes.\n\nYou will be asked where the game\'s files are again. They are not deleted, so pointing at the same folder is all it takes.\n\nYour saves are not touched, the game is not downloaded again, and you stay signed in to Steam.</string>
+  <string name="settings_clear_build_confirm">Reset and re-port</string>
+  <string name="settings_clear_build_working">Resetting…</string>
+  <string name="settings_clear_build_failed">Could not reset: %1$s</string>
+  <string name="settings_cancel">Cancel</string>
+  <string name="settings_back">Back</string>
+  <string name="settings_dual_screen">Dual screen</string>
+  <string name="settings_dual_screen_subtitle">Show the inventory, map, tasks, journal and crest on a second screen, with touch. Only does anything on a device that has two screens, such as the Ayn Thor.</string>
+  <string name="login_title">Sign in to Steam</string>
+  <string name="login_subtitle">Scan with the Steam mobile app · Settings → Mobile Authenticator → QR Code</string>
+  <string name="login_password_hint">Or sign in with your account name and password.</string>
+  <string name="login_username">Account name</string>
+  <string name="login_password">Password</string>
+  <string name="login_sign_in">Sign in</string>
+  <string name="login_guard_hint">Steam Guard code</string>
+  <string name="login_guard_submit">OK</string>
+  <string name="login_guard_approve">Waiting for you to approve the sign-in in your Steam mobile app…</string>
+  <string name="login_guard_device">Enter the code from your Steam mobile authenticator.</string>
+  <string name="login_guard_email">Enter the code Steam emailed to %1$s.</string>
+  <string name="login_guard_email_no_address">Enter the code Steam emailed you.</string>
+  <string name="login_guard_retry">That code was not accepted. Try again.</string>
+  <string name="login_status_connecting">Connecting to Steam…</string>
+  <string name="login_status_waiting">Waiting for scan…</string>
+  <string name="login_status_signing_in">Signing in…</string>
+  <string name="login_status_need_credentials">Enter an account name and password.</string>
+  <string name="login_status_polling">Confirmed on phone — finalising…</string>
+  <string name="login_status_done">Signed in as %1$s</string>
+  <string name="login_status_error">Login failed: %1$s</string>
+  <string name="login_cancel">Cancel</string>
+  <string name="achievements_title">Achievements</string>
+  <string name="achievements_all_title">All Achievements</string>
+  <string name="achievements_loading">Loading achievement data from Steam…</string>
+  <string name="achievements_unavailable">Steam achievement data is unavailable. Check your connection and try again.</string>
+  <string name="achievements_sign_in_required">Sign in to Steam from the launcher to view achievements.</string>
+  <string name="achievements_none">Steam returned no achievements for Silksong.</string>
+  <string name="achievements_progress_count">%1$d / %2$d unlocked (%3$d%%)</string>
+  <string name="achievements_complete">★ All achievements unlocked</string>
+  <string name="achievements_unlocked_at">Unlocked on %1$s</string>
+  <string name="achievements_locked">Locked</string>
+  <string name="achievements_hidden_name">Hidden achievement</string>
+  <string name="achievements_hidden_subtitle">Details will be revealed after this achievement is unlocked.</string>
+  <plurals name="achievements_hidden_remaining">
+    <item quantity="one">%1$d hidden achievement remaining</item>
+    <item quantity="other">%1$d hidden achievements remaining</item>
+  </plurals>
+  <string name="achievements_reveal_title">Reveal hidden achievements?</string>
+  <string name="achievements_reveal_message">This temporarily shows the names and details of remaining secret achievements.</string>
+  <string name="achievements_reveal_confirm">Reveal</string>
+  <string name="achievements_retry">Retry</string>
+  <string name="achievements_back">Back</string>
+  <string name="achievements_diagnostics">Diagnostics</string>
+  <string name="achievements_preview_title">Achievements ›</string>
+  <string name="achievements_preview_complete">Achievements ★ ›</string>
+  <string name="achievements_preview_count">%1$d / %2$d (%3$d%%)</string>
+  <string name="achievements_preview_more">+%1$d</string>
+  <string name="ui_brand">SILKSONG STEAMSYNC</string>
+  <string name="ui_tagline">Play • Saves • Achievements</string>
+  <string name="ui_settings_steam">Steam &amp; Saves</string>
+  <string name="ui_settings_gameplay">Gameplay</string>
+  <string name="ui_settings_display">Display</string>
+  <string name="ui_settings_advanced">Show troubleshooting tools</string>
+  <string name="ui_cloud_working">Synchronizing saves…</string>
+  <string name="ui_cloud_failed">Sync failed — tap to retry</string>
+  <string name="ui_cloud_incomplete">Sync not completed — tap to review</string>
+  <string name="ui_cloud_never">No completed sync yet — tap to manage</string>
+  <string name="ui_cloud_updated">Last synced %1$s</string>
+  <string name="ui_cloud_download">Download Steam saves</string>
+  <string name="ui_cloud_upload">Upload device saves</string>
+  <string name="ui_cloud_download_explain">Copy saves from Steam to this device. Newer Steam saves may replace older device saves. Conflicts will ask which version to keep.</string>
+  <string name="ui_cloud_upload_explain">Copy saves from this device to Steam. Newer device saves may replace older Steam saves. Conflicts will ask which version to keep.</string>
+  <string name="ui_save_history">Save history &amp; restore</string>
+  <string name="ui_continue">Continue</string>
+  <string name="ui_achievement_saved">Saved data • updated %1$s</string>
+  <string name="ui_achievement_updated">Steam data • updated %1$s</string>
+  <string name="ui_achievement_search">Search achievements</string>
+  <string name="ui_achievement_no_matches">No matching achievements</string>
+  <string name="ui_filter">Filter achievements</string>
+  <string name="ui_sort">Sort achievements</string>
+  <string-array name="ui_achievement_filters">
+    <item>All</item>
+    <item>Unlocked</item>
+    <item>Locked</item>
+  </string-array>
+  <string-array name="ui_achievement_sorts">
+    <item>Latest unlock</item>
+    <item>Name</item>
+    <item>Closest to completion</item>
+  </string-array>
+  <string name="ui_credits">Credits &amp; licenses</string>
+  <string name="ui_credits_close">Back • Credits &amp; licenses</string>
+  <string name="ui_credits_loading">Loading credits…</string>
+  <string name="ui_unlocked">Unlocked</string>
+  <string name="ui_credits_failed">Credits could not load. Please check the CREDITS.md file in the repository.</string>
+  <string name="options_resolution_title">Display options before launch</string>
+  <string name="options_resolution_description">Lower resolution reduces GPU load; higher resolution gives sharper images. The screen shape is preserved and presets never exceed native resolution. Keep game setting uses the saved in-game choice.</string>
+  <string name="options_ask_resolution">Ask before each launch</string>
+  <string-array name="options_resolutions">
+    <item>Keep game setting</item>
+    <item>Native screen resolution</item>
+    <item>540p</item>
+    <item>720p</item>
+    <item>900p</item>
+    <item>1080p</item>
+    <item>1440p</item>
+  </string-array>
+  <string name="options_achievement_description">Applies next launch. Normal gameplay unlocks and Steam confirmation stay active. Optional checks help recover missed unlocks; fewer checks can delay recovery.</string>
+  <string name="options_repair">Enable missing-achievement repair helpers</string>
+  <string name="options_startup">Check missed achievements at startup</string>
+  <string name="options_lifecycle">Check after scenes, saves, and resume</string>
+  <string name="options_periodic">Enable periodic missed-achievement check</string>
+  <string name="options_award_event">Enable extra award-event listener</string>
+  <string name="options_popups">Show confirmed achievement popups</string>
+  <string name="options_interval">Periodic check interval</string>
+  <string-array name="options_intervals">
+    <item>Every 60 seconds</item>
+    <item>Every 120 seconds (default)</item>
+    <item>Every 5 minutes</item>
+    <item>Every 10 minutes</item>
+  </string-array>
+  <string name="options_fps_title">FPS limit</string>
+  <string name="options_fps_description">Lower FPS can reduce heat and battery use; higher FPS looks smoother. An explicit limit stays active for this session. Keep game setting allows in-game adjustment. Actual FPS depends on the device.</string>
+  <string-array name="options_fps">
+    <item>Keep game setting</item>
+    <item>30 FPS</item>
+    <item>60 FPS</item>
+    <item>90 FPS</item>
+    <item>120 FPS</item>
+  </string-array>
+  <string name="options_check_now">Check for missed achievements now</string>
+  <string name="options_check_launch">Launch and check</string>
+  <string name="options_check_description">Launches Silksong and checks achievement flags already recorded in your save data against Steam. Load your save so its state is available. Eligible missing unlocks are submitted for Steam confirmation; this does not unlock unearned achievements. Startup and scene-load recovery checks run for this session even if automatic repair is off. Your saved repair settings stay unchanged. Internet and Steam sign-in are required.</string>
+  <string name="options_backup_description">Automatic protection: local saves are backed up before Cloud downloads. The five newest ZIP backups are kept. Downloads stop if a backup fails.</string>
+  <string name="options_export_backup">Export latest local backup</string>
+  <string name="options_no_backup">No local backup yet. A backup is created when a Cloud download starts and local save files exist.</string>
+  <string name="options_backup_exported">Backup exported</string>
+  <string name="options_backup_export_failed">Backup export failed. The local backup is still available; choose another destination and retry.</string>
+  <string name="settings_nav_back">‹ Back</string>
+  <string name="settings_page_intro">Changes save automatically. Display and achievement options apply the next time the game starts.</string>
+  <string name="settings_display_card">Display &amp; performance</string>
+  <string name="settings_saves_card">Cloud saves &amp; backups</string>
+  <string name="settings_gameplay_card">Gameplay</string>
+  <string name="settings_achievements_card">Steam achievements</string>
+  <string name="settings_cloud_direction">Download: Steam → device. Upload: device → Steam.</string>
+  <string name="settings_resolution_label">Starting resolution</string>
+  <string name="settings_display_summary">Resolution: %1$s
+FPS: %2$s</string>
+  <string name="settings_check_hint">Launch the game to check achievement flags already recorded in your saves. The next screen explains the check before you continue.</string>
+  <string name="settings_repair_show">Show advanced achievement controls</string>
+  <string name="settings_repair_hide">Hide advanced achievement controls</string>
+  <string name="settings_troubleshooting_hide">Hide troubleshooting tools</string>
+  <string name="settings_repair_hint">Master switch for optional recovery checks. Turning it off keeps normal Steam unlocks active and disables the options below, except popups.</string>
+  <string name="settings_startup_hint">Look for previously earned unlocks when the game starts.</string>
+  <string name="settings_lifecycle_hint">Check again after loading a scene, saving, or returning to the game.</string>
+  <string name="settings_periodic_hint">Run a background recovery check at the interval below. Off means no periodic timer.</string>
+  <string name="settings_award_hint">Listen for an extra game award event. This helper can run confirmation checks even when periodic checks are off.</string>
+  <string name="settings_popup_hint">Show a notification inside the game after Steam accepts a new unlock. Off only hides the popup.</string>
+  <string name="settings_on">On</string>
+  <string name="settings_off">Off</string>
+    <string name="steam_account_title">Steam account</string>
+    <string name="steam_visibility_explain">Choose how you appear to friends. Changes save automatically and are sent when Steam connects. Appearing disconnected does not sign you out: Cloud saves and achievements can still synchronize.</string>
+    <string name="steam_visibility_offline">Disconnected</string>
+    <string name="steam_visibility_invisible">Invisible</string>
+    <string name="steam_visibility_online">Online</string>
+    <string name="steam_visibility_scope">This controls the Steam session in this app. Another signed-in device may affect your account status. Offline and Invisible stop this launcher from announcing game activity; they do not hide every kind of Steam account activity.</string>
+    <string name="steam_visibility_failed">The visibility change could not be applied. Check the connection and try again.</string>
+    <string name="steam_account_sign_out">Sign out</string>
+    <string name="steam_account_sign_out_explain">Remove the saved Steam login from this app and stop its synchronization session? Your local game files and saves will remain on this device.</string>
+    <string name="ownership_required_title">A valid Silksong copy is required</string>
+    <string name="ownership_not_owned">This Steam account does not own a valid copy of Hollow Knight: Silksong. A valid Steam copy is required to use this app, including when supplying your own game files. Open the Steam store to get the game, then sign in again.</string>
+    <string name="ownership_open_store">Open Silksong on Steam</string>
+    <string name="ownership_checking">Verifying Silksong ownership with Steam…</string>
+    <string name="ownership_unavailable">Steam verification could not finish. Check your internet connection and Steam sign-in, then try again. This does not mean you do not own the game.</string>
+    <string name="ownership_sign_in">Sign in to Steam to verify a valid copy of Hollow Knight: Silksong before playing. This is also required when you supply your own game files. After signing in, press Play again.</string>
+    <string name="ownership_no_browser">No browser is available. Open store.steampowered.com/app/1030300 on another device.</string>
+    <string name="steam_dashboard_signed_out">Sign in to verify your game</string>
+    <string name="steam_offline_help">Saved choice: appear offline to friends. You stay signed in so saves and achievements can synchronize.</string>
+    <string name="steam_invisible_help">Saved choice: Invisible. Stay signed in without showing as online to friends.</string>
+    <string name="steam_online_help">Saved choice: Online. This launcher can announce Silksong while you play.</string>
 </resources>
