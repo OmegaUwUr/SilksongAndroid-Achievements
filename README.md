@@ -375,11 +375,13 @@ Gameplay, and Steam achievements. A live summary shows the selected resolution
 and FPS. Save directions are explained as Steam → device and device → Steam.
 Backup export and manual achievement recovery are directly accessible; detailed
 repair switches and troubleshooting tools expand separately. Switches include
-short explanations and explicit On/Off labels. Back remains visible while scrolling.
+short explanations and explicit On/Off labels. Back sits at the top of the scrolling content, without a fixed toolbar strip.
 
 ### Steam account and visibility
 
-The dashboard Steam button opens an account page. Select Disconnected (appear
+The dashboard Steam button opens an account page. The dashboard and account page
+show the public Steam persona name, cached per account and refreshed from Steam;
+the private sign-in identifier is never used as a display-name fallback. Select Disconnected (appear
 offline), Invisible, or Online. These are persona visibility states, not network
 switches: saved sign-in, Cloud saves, and achievement synchronization remain
 available. Offline/Invisible suppress this launcher's games-played announcement.

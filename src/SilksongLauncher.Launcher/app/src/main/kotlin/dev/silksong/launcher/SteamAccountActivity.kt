@@ -31,6 +31,21 @@ internal object SteamVisibility {
 }
 
 class SteamAccountActivity : Activity() {
+    private var profileLabel: TextView? = null
+    private val profileListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        runOnUiThread {
+            TokenStore(this).read()?.let { profileLabel?.text = SteamProfile.name(this, it.accountName) }
+        }
+    }
+    override fun onResume() {
+        super.onResume()
+        SteamProfile.prefs(this).registerOnSharedPreferenceChangeListener(profileListener)
+        TokenStore(this).read()?.let { profileLabel?.text = SteamProfile.name(this, it.accountName) }
+    }
+    override fun onPause() {
+        SteamProfile.prefs(this).unregisterOnSharedPreferenceChangeListener(profileListener)
+        super.onPause()
+    }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); render() }
 
@@ -39,13 +54,12 @@ class SteamAccountActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(12))
-            setBackgroundColor(Color.rgb(8, 10, 14))
+            setBackgroundColor(getColor(R.color.surface))
         }
         fun button(textId: Int, action: () -> Unit) = Button(this).apply {
-            setText(textId); isAllCaps = false; minimumHeight = dp(48)
+            setText(textId); AppButtons.style(this, textId == R.string.steam_account_sign_out)
             setOnClickListener { action() }
         }
-        root.addView(button(R.string.settings_nav_back) { finish() })
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         fun text(id: Int, size: Float = 14f) {
             body.addView(TextView(this).apply {
@@ -53,9 +67,14 @@ class SteamAccountActivity : Activity() {
                 setPadding(0, dp(8), 0, dp(12))
             })
         }
+        root.addView(button(R.string.settings_nav_back) { finish() }, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = dp(12) })
+        root.addView(body)
+        body.setBackgroundResource(R.drawable.launcher_card)
+        body.setPadding(dp(16), dp(12), dp(16), dp(16))
         text(R.string.steam_account_title, 24f)
         body.addView(TextView(this).apply {
-            text = credentials?.accountName ?: getString(R.string.achievements_sign_in_required)
+            profileLabel = this
+            text = credentials?.let { SteamProfile.name(this@SteamAccountActivity, it.accountName) } ?: getString(R.string.achievements_sign_in_required)
             textSize = 18f; setTextColor(Color.WHITE)
         })
         text(R.string.steam_visibility_explain)
@@ -113,7 +132,7 @@ class SteamAccountActivity : Activity() {
             body.addView(explanation)
             text(R.string.steam_visibility_scope)
         }
-        root.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(android.view.View(this), LinearLayout.LayoutParams(1, dp(16)))
         if (credentials != null) {
             root.addView(button(R.string.steam_account_sign_out) {
                 AlertDialog.Builder(this).setTitle(R.string.steam_account_sign_out)
@@ -128,7 +147,11 @@ class SteamAccountActivity : Activity() {
                 startActivityForResult(Intent(this, LoginActivity::class.java), 501)
             })
         }
-        setContentView(root)
+        setContentView(ScrollView(this).apply {
+            setBackgroundColor(getColor(R.color.surface))
+            isFillViewport = true
+            addView(root)
+        })
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

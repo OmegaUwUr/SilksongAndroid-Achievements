@@ -147,8 +147,13 @@ class LauncherActivity : Activity() {
         setIntent(intent)
     }
 
+    private val profileListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        runOnUiThread { refreshLoginUi() }
+    }
+
     override fun onResume() {
         super.onResume()
+        SteamProfile.prefs(this).registerOnSharedPreferenceChangeListener(profileListener)
         creds = tokenStore.read()
         refreshLoginUi()
         btnAchievements.start()
@@ -169,6 +174,7 @@ class LauncherActivity : Activity() {
     // ── Login ──────────────────────────────────────────────────────────
 
     override fun onPause() {
+        SteamProfile.prefs(this).unregisterOnSharedPreferenceChangeListener(profileListener)
         btnAchievements.stop()
         super.onPause()
     }
@@ -219,7 +225,7 @@ class LauncherActivity : Activity() {
             btnPull.isEnabled = false
             btnPush.isEnabled = false
         } else {
-            txtLoginStatus.text = "Signed in as ${c.accountName}"
+            txtLoginStatus.text = getString(R.string.steam_public_signed_in, SteamProfile.name(this, c.accountName))
             txtLoginStatus.setTextColor(getColor(R.color.status_green))
             btnLogin.text = getString(R.string.action_log_in_as)
             btnPull.isEnabled = true

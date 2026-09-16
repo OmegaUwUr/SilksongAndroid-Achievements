@@ -83,7 +83,7 @@ internal object LaunchOptions {
         val advanced = activity.findViewById<LinearLayout>(R.id.achievement_options)
         advanced.addView(Button(activity).apply {
             setText(R.string.options_check_now)
-            isAllCaps = false
+            AppButtons.style(this)
             setOnClickListener {
                 if (TokenStore(activity).read() == null) {
                     AlertDialog.Builder(activity).setMessage(R.string.achievements_sign_in_required)
@@ -105,7 +105,7 @@ internal object LaunchOptions {
         label(backup, R.string.options_backup_description)
         backup.addView(Button(activity).apply {
             setText(R.string.options_export_backup)
-            isAllCaps = false
+            AppButtons.style(this)
             setOnClickListener { (activity as? SettingsActivity)?.exportLatestBackup() }
         })
         label(advanced, R.string.settings_check_hint)
@@ -114,7 +114,7 @@ internal object LaunchOptions {
             visibility = View.GONE
         }
         val expand = Button(activity).apply {
-            isAllCaps = false
+            AppButtons.style(this)
             setText(R.string.settings_repair_show)
             setOnClickListener {
                 val open = details.visibility != View.VISIBLE

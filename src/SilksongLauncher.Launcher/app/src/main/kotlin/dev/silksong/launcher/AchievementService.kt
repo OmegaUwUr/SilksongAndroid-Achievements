@@ -271,6 +271,7 @@ class AchievementService : Service() {
             steamUserStats = stats
             steamApps = apps
             steamFriends = friends
+            SteamProfile.save(this, credentials.accountName, friends.getPersonaName())
 
             // Observe Steam's persona broadcasts for our own account. This is a
             // stronger diagnostic than merely logging that we sent a status
@@ -279,6 +280,7 @@ class AchievementService : Service() {
             personaStateSubscription = session.subscribe(PersonaStateCallback::class.java) { state ->
                 val localSteamId = steamUser?.steamID
                 if (localSteamId != null && state.friendId == localSteamId) {
+                    SteamProfile.save(this, credentials.accountName, state.playerName)
                     LauncherLog.log(
                         "Steam presence: server persona=${state.personaState}, " +
                             "gameApp=${state.gamePlayedAppId}, gameName=${state.gameName.ifBlank { "-" }}"
@@ -286,6 +288,7 @@ class AchievementService : Service() {
                 }
             }
 
+            friends.requestFriendInfo(user.steamID!!)
             LauncherLog.log("Achievements: requesting authoritative Steam achievement state for app $APP_ID")
             val snapshot = fetchUserStats()
             LauncherLog.log("Achievements: Steam authorized user-stats access for app $APP_ID")

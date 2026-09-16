@@ -87,6 +87,9 @@ class SettingsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
+        listOf(R.id.btn_settings_back, R.id.btn_advanced, R.id.btn_settings_logs, R.id.btn_clear_build).forEach { id ->
+            AppButtons.style(findViewById<Button>(id), id == R.id.btn_clear_build)
+        }
         findViewById<android.widget.Button>(R.id.btn_advanced).setOnClickListener {
             val options = findViewById<android.view.View>(R.id.advanced_options)
             val open = options.visibility != android.view.View.VISIBLE

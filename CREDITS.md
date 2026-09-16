@@ -183,3 +183,7 @@ for Android VectorDrawable from the [Steam icon SVG on Wikimedia Commons](https:
 The original path geometry and blue gradient are retained. Steam branding remains
 Valve's property; use here does not imply endorsement. The account-page selection
 feedback and signed-out guidance are original UI changes for this repository.
+
+Public Steam names are read from **JavaSteam / Longi94 and contributors'** persona
+cache and persona callbacks. Public-name caching, matching account/settings button
+styles, and the scrolling Back layout are original changes for this repository.

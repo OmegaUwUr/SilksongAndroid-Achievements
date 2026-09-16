@@ -203,4 +203,6 @@ FPS: %2$s</string>
     <string name="steam_offline_help">Saved choice: appear offline to friends. You stay signed in so saves and achievements can synchronize.</string>
     <string name="steam_invisible_help">Saved choice: Invisible. Stay signed in without showing as online to friends.</string>
     <string name="steam_online_help">Saved choice: Online. This launcher can announce Silksong while you play.</string>
+    <string name="steam_public_name_pending">Steam player</string>
+    <string name="steam_public_signed_in">Signed in as %1$s</string>
 </resources>

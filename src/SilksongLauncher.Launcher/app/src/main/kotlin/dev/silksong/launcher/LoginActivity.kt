@@ -243,6 +243,8 @@ class LoginActivity : Activity() {
                 SteamSession().use { verification ->
                     verification.logOn(TokenStore.Credentials(accountName, refreshToken))
                     SteamOwnership.requireOwned(verification)
+                    val friends = verification.steamClient.getHandler(`in`.dragonbra.javasteam.steam.handlers.steamfriends.SteamFriends::class.java)
+                    SteamProfile.save(this@LoginActivity, accountName, friends?.getPersonaName())
                 }
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
@@ -261,7 +263,7 @@ class LoginActivity : Activity() {
 
         progress.visibility = View.GONE
         rowGuard.visibility = View.GONE
-        status.text = getString(R.string.login_status_done, accountName)
+        status.text = getString(R.string.login_status_done, SteamProfile.name(this, accountName))
         setResult(RESULT_OK, Intent().apply {
             putExtra(EXTRA_ACCOUNT, accountName)
             putExtra(EXTRA_TOKEN, refreshToken)
