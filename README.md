@@ -314,7 +314,8 @@ Steam overlay inside the Android game.
 
 ### Connection requirements
 
-After setup, local play without Steam sign-in is supported. Downloads, Cloud
+Steam sign-in and ownership verification are required before play, including
+when the game files were supplied manually. Downloads, Cloud
 operations, live achievement retrieval/submission, and Steam presence require
 network access and a valid account session. With saved credentials present, the
 current launch gate requires a ready Steam achievement service; it does not
@@ -387,3 +388,20 @@ another Steam client may affect the account's visible state. This is not a priva
 control for every type of Steam activity. Sign out at the bottom removes saved
 credentials and stops the app's achievement session after confirmation, preserving
 local game files and saves.
+
+### Steam ownership requirement
+
+QR and password sign-in now request a Steam app ownership ticket for Silksong
+(App ID 1030300) before accepting the login. The authenticated achievement service
+also verifies the license before becoming ready for launch, covering saved logins.
+Manual file selection does not bypass the launch requirement: Play prompts for
+Steam sign-in if needed. A successful ticket response for the correct App ID with
+non-empty ticket data is required; local files or a public Steam profile are not
+used as proof. This verifies Steam-authorized license access, not purchase receipts.
+
+When Steam explicitly reports NoLicense, the app explains that a valid Steam copy
+is required and offers the official Silksong Steam store page. Connection errors,
+timeouts, and other unconfirmed responses block verification with a retry message
+instead of claiming the account does not own the game. After buying the game,
+sign in again. Ticket contents are not stored or logged. Offline launch without
+verification is no longer supported by this flow.

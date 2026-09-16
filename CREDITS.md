@@ -169,3 +169,8 @@ The Steam account page and per-account visibility preferences are implemented
 with Android Views and this repository's existing session service. Persona states
 use **JavaSteam / Longi94 and contributors'** `EPersonaState` and SteamFriends APIs;
 no external account-page UI was copied.
+
+Ownership verification uses **JavaSteam / Longi94 and contributors'**
+`SteamApps.getAppOwnershipTicket` and `AppOwnershipTicketCallback` protocol APIs.
+The login/launch gates and messages were implemented for this repository. Steam,
+not the launcher or a public profile, authorizes the license ticket.

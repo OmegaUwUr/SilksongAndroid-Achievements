@@ -67,6 +67,8 @@ class AchievementService : Service() {
         @Volatile private var socketListening = false
         @Volatile private var displayAchievements: List<DisplayAchievement>? = null
 
+        @Volatile var ownershipDenied: Boolean = false
+            private set
         fun isActive(): Boolean = active
         fun isReady(): Boolean = active && serviceReady && socketListening
         fun displaySnapshot(): List<DisplayAchievement>? = displayAchievements
@@ -191,6 +193,7 @@ class AchievementService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        ownershipDenied = false
         active = true
         serviceReady = false
         socketListening = false
@@ -246,6 +249,8 @@ class AchievementService : Service() {
             sessionAccount = credentials.accountName
             session.logOn(credentials)
             LauncherLog.log("Achievements: authenticated with Steam")
+            SteamOwnership.requireOwned(session)
+            LauncherLog.log("Steam verified a valid Silksong license")
 
             val depot = DepotLocation.resolve(this)
             if (depot == null || !DepotFetcher.isPresent(depot)) {
@@ -299,6 +304,7 @@ class AchievementService : Service() {
             // honor that lifecycle signal now rather than losing the session.
             runCatching { presenceExecutor.execute { applySteamPlayingState(gameWantsPlaying.get()) } }
         } catch (t: Throwable) {
+            if (t is SteamOwnership.NotOwned) ownershipDenied = true
             if (!shuttingDown.get()) failReady("Achievement Steam session failed", t)
         }
     }

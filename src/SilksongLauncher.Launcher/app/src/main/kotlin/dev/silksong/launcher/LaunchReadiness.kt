@@ -48,6 +48,16 @@ object LaunchReadiness {
         syncSaves: suspend () -> Boolean,
         manualAchievementCheck: Boolean = false,
     ): Prepared? {
+        if (credentials == null) {
+            android.app.AlertDialog.Builder(activity)
+                .setTitle(R.string.ownership_required_title)
+                .setMessage(R.string.ownership_sign_in)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.action_log_in) { _, _ ->
+                    activity.startActivity(android.content.Intent(activity, SteamAccountActivity::class.java))
+                }.show()
+            return null
+        }
         if (!LaunchOptions.chooseBeforeLaunch(activity, settings)) return null
         val screen = Screen(activity)
         screen.show()
@@ -94,7 +104,12 @@ object LaunchReadiness {
 
                 if (!awaitAchievementServiceReady()) {
                     LauncherLog.log("Launch readiness failed: achievement service did not become READY")
-                    screen.fail("Steam achievement data did not become ready. Check your Steam sign-in and connection, then try again.")
+                    if (AchievementService.ownershipDenied) {
+                        screen.dismiss()
+                        SteamOwnership.showNotOwned(activity)
+                    } else {
+                        screen.fail(activity.getString(R.string.ownership_unavailable))
+                    }
                     return null
                 }
                 LauncherLog.log("Launch readiness: Steam achievement service is READY and IPC is listening")
@@ -131,6 +146,7 @@ object LaunchReadiness {
     private suspend fun awaitAchievementServiceReady(): Boolean {
         val deadline = SystemClock.elapsedRealtime() + STEAM_READY_TIMEOUT_MS
         while (SystemClock.elapsedRealtime() < deadline) {
+            if (AchievementService.ownershipDenied) return false
             if (AchievementService.isReady()) return true
             delay(STEAM_POLL_MS)
         }

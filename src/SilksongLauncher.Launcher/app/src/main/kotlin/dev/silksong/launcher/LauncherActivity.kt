@@ -149,6 +149,8 @@ class LauncherActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        creds = tokenStore.read()
+        refreshLoginUi()
         btnAchievements.start()
         if (intent.getBooleanExtra("manual_achievement_check", false)) {
             intent.removeExtra("manual_achievement_check")

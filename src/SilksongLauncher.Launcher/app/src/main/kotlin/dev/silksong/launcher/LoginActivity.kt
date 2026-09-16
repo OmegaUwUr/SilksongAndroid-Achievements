@@ -230,7 +230,35 @@ class LoginActivity : Activity() {
 
     // ── shared ──────────────────────────────────────────────────────────────
 
-    private fun succeed(accountName: String, refreshToken: String) {
+    private suspend fun succeed(accountName: String, refreshToken: String) {
+        progress.visibility = View.VISIBLE
+        status.setText(R.string.ownership_checking)
+        btnSignIn.isEnabled = false
+        try {
+            val authenticated = session ?: error("Steam session unavailable")
+            withContext(Dispatchers.IO) {
+                // QR/password authentication already connected this transport.
+                // LogOn needs a fresh transport; never connect the auth session twice.
+                authenticated.close()
+                SteamSession().use { verification ->
+                    verification.logOn(TokenStore.Credentials(accountName, refreshToken))
+                    SteamOwnership.requireOwned(verification)
+                }
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (notOwned: SteamOwnership.NotOwned) {
+            progress.visibility = View.GONE
+            status.setText(R.string.ownership_not_owned)
+            SteamOwnership.showNotOwned(this) { cancelAndFinish() }
+            return
+        } catch (error: Exception) {
+            progress.visibility = View.GONE
+            status.setText(R.string.ownership_unavailable)
+            btnSignIn.isEnabled = true
+            LauncherLog.log("Steam ownership check failed", error)
+            return
+        }
+
         progress.visibility = View.GONE
         rowGuard.visibility = View.GONE
         status.text = getString(R.string.login_status_done, accountName)
