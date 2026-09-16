@@ -193,7 +193,7 @@ FPS: %2$s</string>
     <string name="steam_account_sign_out">Sign out</string>
     <string name="steam_account_sign_out_explain">Remove the saved Steam login from this app and stop its synchronization session? Your local game files and saves will remain on this device.</string>
     <string name="ownership_required_title">A valid Silksong copy is required</string>
-    <string name="ownership_not_owned">This Steam account does not own a valid copy of Hollow Knight: Silksong. A valid Steam copy is required to use this app, including when supplying your own game files. Open the Steam store to get the game, then sign in again.</string>
+    <string name="ownership_not_owned">Steam did not authorize access to Hollow Knight: Silksong for this account. A valid Steam copy is required to use this app, including when supplying your own game files. If you already own it, check that you signed in to the correct account and try again. Otherwise, open the Steam store to get the game.</string>
     <string name="ownership_open_store">Open Silksong on Steam</string>
     <string name="ownership_checking">Verifying Silksong ownership with Steam…</string>
     <string name="ownership_unavailable">Steam verification could not finish. Check your internet connection and Steam sign-in, then try again. This does not mean you do not own the game.</string>

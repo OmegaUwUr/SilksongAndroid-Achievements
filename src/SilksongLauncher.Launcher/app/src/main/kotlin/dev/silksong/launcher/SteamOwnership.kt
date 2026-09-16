@@ -11,14 +11,15 @@ import java.util.concurrent.TimeUnit
 /** Server-authorized license access, not an inference from local files or a public profile. */
 internal object SteamOwnership {
     const val APP_ID = 1030300
-    class NotOwned : Exception("Steam reports no license for Hollow Knight: Silksong")
+    class NotOwned : Exception("Steam denied the Silksong ownership-ticket request")
 
     /** Call off the UI thread, after this session has authenticated. Never log ticket bytes. */
     fun requireOwned(session: SteamSession) {
         val apps = session.steamClient.getHandler(SteamApps::class.java)
             ?: error("Steam apps handler unavailable")
         val response = apps.getAppOwnershipTicket(APP_ID).toFuture().get(30, TimeUnit.SECONDS)
-        if (response.result == EResult.NoLicense) throw NotOwned()
+        // Ticket access was denied; do not confuse transport failures with a license denial.
+        if (response.result == EResult.AccessDenied) throw NotOwned()
         check(response.result == EResult.OK && response.appID == APP_ID && response.ticket.isNotEmpty()) {
             "Steam ownership verification could not complete: ${response.result}"
         }

@@ -399,8 +399,8 @@ Steam sign-in if needed. A successful ticket response for the correct App ID wit
 non-empty ticket data is required; local files or a public Steam profile are not
 used as proof. This verifies Steam-authorized license access, not purchase receipts.
 
-When Steam explicitly reports NoLicense, the app explains that a valid Steam copy
-is required and offers the official Silksong Steam store page. Connection errors,
+When Steam denies the ownership-ticket request with AccessDenied, the app explains that a valid Steam copy
+is required and offers the official Silksong Steam store page. This denial alone does not prove that the account never purchased the game. Connection errors,
 timeouts, and other unconfirmed responses block verification with a retry message
 instead of claiming the account does not own the game. After buying the game,
 sign in again. Ticket contents are not stored or logged. Offline launch without
