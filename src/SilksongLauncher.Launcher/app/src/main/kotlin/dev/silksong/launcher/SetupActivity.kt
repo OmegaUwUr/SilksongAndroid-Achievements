@@ -51,7 +51,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -830,6 +833,55 @@ class SetupActivity : Activity() {
         run(download = creds)
     }
 
+    /** Independent downloads share at most two workers; compilation starts after both finish. */
+    private suspend fun prepareSupportingTools(unity: File, tools: File): Unit = coroutineScope {
+        val needUnity = !UnityFetcher.isPresent(unity)
+        val needCompiler = !ToolchainFetcher.isPresent(tools)
+        val manager = getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val memory = android.app.ActivityManager.MemoryInfo().also { manager.getMemoryInfo(it) }
+        val parallelism = if (memory.lowMemory || memory.availMem < 1536L * 1024 * 1024) 1 else 2
+        val downloads = Semaphore(parallelism)
+        LauncherLog.log("Supporting tools: $parallelism download workers (available memory ${memory.availMem})")
+        var engineStatus = if (needUnity) "Engine: preparing" else "Engine: ready"
+        var compilerStatus = if (needCompiler) "Compiler: preparing" else "Compiler: ready"
+        // These collectors run on the Activity's main dispatcher; each fetcher
+        // performs its blocking download/extraction on Dispatchers.IO.
+        fun report() = setBusy(true, "Preparing supporting tools", -1f,
+            "$engineStatus\n$compilerStatus")
+        suspend fun engine() {
+            if (needUnity) UnityFetcher.fetch(unity, downloads).collect {
+                engineStatus = "Engine: ${it.step} ${it.detail}".trim()
+                report()
+            }
+            engineStatus = "Engine: ready"
+            report()
+        }
+        suspend fun compiler() {
+            if (needCompiler) downloads.withPermit {
+                ToolchainFetcher.fetch(tools).collect {
+                    compilerStatus = "Compiler: ${it.step} ${it.detail}".trim()
+                    report()
+                }
+            }
+            compilerStatus = "Compiler: ready"
+            report()
+        }
+        launch { engine() }
+        launch { compiler() }
+    }
+
+    private suspend fun portingStage(name: String, action: suspend () -> Unit) {
+        val start = android.os.SystemClock.elapsedRealtime()
+        var outcome = "interrupted or failed"
+        try {
+            action()
+            outcome = "complete"
+        } finally {
+            val elapsed = android.os.SystemClock.elapsedRealtime() - start
+            LauncherLog.log("Porting stage [$name]: $outcome in ${elapsed}ms")
+        }
+    }
+
     /**
      * Every step, in order, behind one progress bar.
      *
@@ -890,8 +942,8 @@ class SetupActivity : Activity() {
 
                 // ── Step 2: the supporting tools ──────────────────────────
                 setStep(toolsStep, "Downloading supporting tools")
-                if (!UnityFetcher.isPresent(unity)) {
-                    UnityFetcher.fetch(unity).collect { setBusy(true, it.step, it.fraction, it.detail) }
+                portingStage("Supporting tool downloads") {
+                    prepareSupportingTools(unity, tools)
                 }
                 // The player's Java classes arrive with the module as ordinary
                 // Java bytecode, which ART cannot load. Dexing them here is
@@ -916,9 +968,6 @@ class SetupActivity : Activity() {
                     setBusy(true, "installing the engine", -1f, "")
                     withContext(Dispatchers.IO) { moveStaged() }
                 }
-                if (!ToolchainFetcher.isPresent(tools)) {
-                    ToolchainFetcher.fetch(tools).collect { setBusy(true, it.step, it.fraction, it.detail) }
-                }
                 MonoRuntime.stage(this@SetupActivity).collect { setBusy(true, it.step, it.fraction, it.detail) }
 
                 if (PlayerImage.depotData(depot) == null) {
@@ -940,10 +989,15 @@ class SetupActivity : Activity() {
                 PackageCompiler.compilePatches(unity, depot, this@SetupActivity, out, assets)
                     .collect { setBusy(true, it.step, it.fraction, it.detail) }
                 if (!Il2cppConverter.isPresent(out) || Il2cppConverter.isStale(out)) {
-                    Il2cppConverter.convert(unity, depot, this@SetupActivity, out).collect { setBusy(true, it.step, it.fraction, it.detail) }
+                    portingStage("Managed-to-C++ conversion") {
+                        Il2cppConverter.convert(unity, depot, this@SetupActivity, out)
+                            .collect { setBusy(true, it.step, it.fraction, it.detail) }
+                    }
                 }
-                NativeBuild.build(unity, tools, out, assets, install = engineDir)
-                    .collect { setBusy(true, it.step, it.fraction, it.detail) }
+                portingStage("Native compilation and linking") {
+                    NativeBuild.build(unity, tools, out, assets, install = engineDir)
+                        .collect { setBusy(true, it.step, it.fraction, it.detail) }
+                }
                 // Both of these are skipped when the image already matches
                 // what they would produce, which is every build where the
                 // conversion had nothing to do. Together they are a full
@@ -964,8 +1018,10 @@ class SetupActivity : Activity() {
                 // process is left the same answer, so it can remake the link
                 // itself if it comes back and finds it gone.
                 withContext(Dispatchers.IO) { DepotLocation.relink(this@SetupActivity, depot) }
-                PlayerImage.retargetContent(depot, this@SetupActivity, out, assets)
-                    .collect { setBusy(true, it.step, it.fraction, it.detail) }
+                portingStage("Game content preparation") {
+                    PlayerImage.retargetContent(depot, this@SetupActivity, out, assets)
+                        .collect { setBusy(true, it.step, it.fraction, it.detail) }
+                }
 
                 // Last, and only on the way out of a run that got here: this
                 // is what makes the build count as finished.

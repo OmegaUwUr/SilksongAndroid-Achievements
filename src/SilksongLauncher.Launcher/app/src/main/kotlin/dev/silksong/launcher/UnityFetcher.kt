@@ -16,6 +16,10 @@
 package dev.silksong.launcher
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -105,7 +109,7 @@ object UnityFetcher {
      * already extracted, so an interrupted first run is resumed by running it
      * again rather than starting over.
      */
-    fun fetch(root: File): Flow<Progress> = channelFlow {
+    fun fetch(root: File, downloads: Semaphore = Semaphore(1)): Flow<Progress> = channelFlow {
         root.mkdirs()
 
         // Progress arrives on whatever thread is reading the socket, which is
@@ -116,21 +120,37 @@ object UnityFetcher {
             trySend(Progress(step, done.toFloat() / total, mb(done, total)))
         }
 
-        val editor = File(root, "editor")
-        if (!File(editor, "Editor/Data/il2cpp/build/deploy/il2cpp.dll").isFile) {
-            send(Progress("Unity IL2CPP toolchain", 0f, "connecting"))
-            fetchEditor(editor) { done, total -> report("Unity IL2CPP toolchain", done, total) }
-        }
-
-        if (!File(packageDir(root), "InputSystem/Unity.InputSystem.asmdef").isFile) {
-            send(Progress("Unity Input System", 0f, "connecting"))
-            fetchInputSystem(root) { done, total -> report("Unity Input System", done, total) }
-        }
-
-        val android = File(root, "android")
-        if (engineLibsIn(android) == null) {
-            send(Progress("Unity Android engine", 0f, "connecting"))
-            fetchAndroidModule(android) { done, total -> report("Unity Android engine", done, total) }
+        // These archives write to separate directories. Share the caller's
+        // permits with the compiler fetch, rather than opening an unbounded
+        // set of downloads/decompressors on a phone. The scope waits for all
+        // pieces before stageEngine and cancels siblings if one fails.
+        coroutineScope {
+            launch {
+                val editor = File(root, "editor")
+                if (!File(editor, "Editor/Data/il2cpp/build/deploy/il2cpp.dll").isFile) {
+                    downloads.withPermit {
+                        send(Progress("Unity IL2CPP toolchain", 0f, "connecting"))
+                        fetchEditor(editor) { done, total -> report("Unity IL2CPP toolchain", done, total) }
+                    }
+                }
+            }
+            launch {
+                if (!File(packageDir(root), "InputSystem/Unity.InputSystem.asmdef").isFile) {
+                    downloads.withPermit {
+                        send(Progress("Unity Input System", 0f, "connecting"))
+                        fetchInputSystem(root) { done, total -> report("Unity Input System", done, total) }
+                    }
+                }
+            }
+            launch {
+                val android = File(root, "android")
+                if (engineLibsIn(android) == null) {
+                    downloads.withPermit {
+                        send(Progress("Unity Android engine", 0f, "connecting"))
+                        fetchAndroidModule(android) { done, total -> report("Unity Android engine", done, total) }
+                    }
+                }
+            }
         }
 
         // The engine has to end up somewhere the game can load it from, and

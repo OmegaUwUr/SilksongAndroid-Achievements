@@ -2,6 +2,21 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.29
+
+Reduces waiting during on-device porting and preserves successful native compile work across retries.
+
+- Overlaps independent Unity and compiler downloads through one shared limit of two download/extraction workers; uses one worker when Android reports memory pressure or less than 1.5 GiB available RAM.
+- Waits for all supporting tools before engine staging and compilation, retains existing download verification, and continues to skip downloaded components.
+- Schedules generated C++, generated C, IL2CPP runtime, GC, zlib, and brotli in one largest-first, memory-bounded native compile pool instead of waiting for each phase's slowest file.
+- Commits each successful object and its content stamp atomically so a failed or interrupted build reuses completed work on retry.
+- Invalidates native objects and precompiled headers when shared headers, runtime sources, compiler inputs, sysroot, or compiler flags change. The new cache format requires one native rebuild on upgrade.
+- Skips linking when the completed engine and all link inputs are unchanged. A failed compile cannot reuse its old object, and a failed link cannot replace the previous complete library.
+- Reports combined native compile progress and logs elapsed times for supporting-tool downloads, conversion, native compilation/linking, and content preparation.
+- Keeps the existing `-O2` optimization, Android target, ABI flags, Steam behavior, and game compatibility patches.
+
+Validation: native scheduler/cache tests run on the host with a fake compiler, and download orchestration was checked with Kotlin 2.1/coroutines using controlled fetchers. A full APK build, real-device port, gameplay check, and before/after timing are still required. No measured phone speedup is claimed.
+
 ## 1.0.3-achievements.22
 
 Cleans up the portrait launcher dashboard based on device UI testing without replacing or generating game artwork.

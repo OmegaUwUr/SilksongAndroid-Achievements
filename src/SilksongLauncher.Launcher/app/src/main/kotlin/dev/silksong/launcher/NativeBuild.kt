@@ -115,6 +115,9 @@ object NativeBuild {
                     if (line.startsWith("###")) {
                         val text = line.removePrefix("###").trim()
                         val named = when {
+                            text.startsWith("Checking compiler cache") -> "Checking saved build files" to null
+                            text.startsWith("Preparing precompiled headers") -> "Preparing the compiler" to null
+                            text.startsWith("PHASE N") -> "Compiling the game and engine" to ""
                             text.startsWith("PHASE A") -> "Compiling the game" to "g"
                             text.startsWith("PHASE B") -> "Compiling the game" to "c"
                             text.startsWith("PHASE C:") -> "Compiling the engine runtime" to "r"
