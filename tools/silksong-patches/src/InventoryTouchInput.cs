@@ -75,6 +75,7 @@ public class InventoryTouchInput : MonoBehaviour
             _finger = -1;
         }
         if (!open) return;
+        if (TouchControlsOverlay.IsEditing) { _finger = -1; return; }
 
         if (Input.touchCount == 0) { _finger = -1; return; }
 
@@ -87,7 +88,7 @@ public class InventoryTouchInput : MonoBehaviour
             // A touch on the second panel belongs to the second screen's own
             // UI, not to the game's inventory. Without this the bottom screen
             // drives the top one. No-op unless the second screen is live.
-            if (DsTouch.IsSecondScreen(t)) continue;
+            if (DsTouch.IsSecondScreen(t) || TouchControlsOverlay.Consumes(t)) continue;
 
             if (t.phase == TouchPhase.Began)
             {

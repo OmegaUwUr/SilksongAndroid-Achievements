@@ -33,6 +33,7 @@
     { "className": "IntroSkipper", "methodName": "Boot", "loadTypes": 0 },
     { "className": "PerfOverlay", "methodName": "Bootstrap", "loadTypes": 2 },
     { "className": "DualScreenV2", "methodName": "Bootstrap", "loadTypes": 0 },
+    { "className": "TouchControlsOverlay", "methodName": "Bootstrap", "loadTypes": 0 },
     { "className": "InventoryTouchInput", "methodName": "Bootstrap", "loadTypes": 0 },
 
     { "className": "AnimatorRebindFix", "methodName": "Bootstrap", "loadTypes": 2 },

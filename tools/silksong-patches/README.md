@@ -59,6 +59,7 @@ property spelled differently in Team Cherry's fork, and a missing
 | `WormAnimatorFix` | the off-camera frozen sand worm in Blasted Steps |
 | `ShaderWarmup` | prewarm shader variants to cut first-encounter hitches |
 | `InventoryTouchInput` | touch control for the game's own inventory |
+| `touch/` | opt-in virtual gamepad, saved layout editor and input model; see [the touch-control guide](../../docs/TOUCH_CONTROLS.md) |
 | `SteamAchievementRepair` | startup/lifecycle reconciliation for achievements missed by older builds or transient failures |
 | `AndroidSteamOnlineSubsystem` | reflection-injected Android implementation of Silksong's `DesktopOnlineSubsystem` achievement path |
 | `SteamAchievementToast` | Steam-style in-game notification after a confirmed new Steam unlock |
@@ -77,3 +78,14 @@ Two things to know:
 
 Subdirectories are safe: Gradle copies recursively and the on-device compile
 walks the tree.
+
+The touch controls also have host regression checks that need no game files:
+
+```sh
+python3 tools/silksong-patches/tests/touch/run_touch_checks.py \
+  --dotnet /path/to/dotnet --roslyn /path/to/Roslyn/bincore/csc.dll
+```
+
+These compile the production touch sources and shared pointer fence with test-only
+Unity stubs. They supplement `make check` and device testing; they do not replace
+either. Test sources are outside `src/` and are not packaged in the APK.

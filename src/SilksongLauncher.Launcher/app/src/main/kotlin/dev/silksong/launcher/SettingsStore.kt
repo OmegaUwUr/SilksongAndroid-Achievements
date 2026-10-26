@@ -22,6 +22,11 @@ class SettingsStore(context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    /** Opt-in virtual controller; layout is saved by the game on this device. */
+    var touchControls: Boolean
+        get() = prefs.getBoolean(KEY_TOUCH_CONTROLS, false)
+        set(value) { prefs.edit().putBoolean(KEY_TOUCH_CONTROLS, value).apply() }
+
     var launchFps: Int
         get() = prefs.getInt("launch_fps", -1).takeIf { it in FPS_OPTIONS } ?: -1
         set(value) { require(value in FPS_OPTIONS); prefs.edit().putInt("launch_fps", value).apply() }
@@ -112,6 +117,7 @@ class SettingsStore(context: Context) {
     fun exportForGame(context: Context, manualAchievementCheck: Boolean = false) {
         val dir = context.getExternalFilesDir(null) ?: return
         val text = buildString {
+            append(KEY_TOUCH_CONTROLS).append('=').append(touchControls).append('\n')
             append("launch_fps=").append(launchFps).append('\n')
             append("achievement_manual_check=").append(manualAchievementCheck).append('\n')
             append("launch_resolution=").append(launchResolution).append('\n')
@@ -146,6 +152,7 @@ class SettingsStore(context: Context) {
         const val KEY_PERF_OVERLAY = "perf_overlay"
         const val KEY_SKIP_INTRO = "skip_intro"
         const val KEY_DUAL_SCREEN = "dualscreen_enabled"
+        const val KEY_TOUCH_CONTROLS = "touch_controls"
     }
 }
 
