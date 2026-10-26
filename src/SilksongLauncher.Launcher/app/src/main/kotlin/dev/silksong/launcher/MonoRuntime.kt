@@ -196,47 +196,38 @@ object MonoRuntime {
     /** Below this there is no point continuing to squeeze; il2cpp needs it. */
     private const val FLOOR_HEAP_MB = 384
 
-    /**
-     * What this device gets, from what it has rather than what is free.
-     *
-     * Total memory rather than available: available is whatever the user
-     * happened to have open when the button was pressed, and a build that
-     * silently converts with two workers because a browser was in the
-     * background is a build whose duration nobody can explain. Total is a
-     * property of the phone, so the same phone always builds the same way.
-     *
-     * The tiers are deliberately coarse and the top one is "change nothing":
-     * every device this is known to work on is above it, and they should keep
-     * the behaviour they were measured with.
-     *
-     * The boundaries sit well inside each band rather than on it, because
-     * totalMem is not the number on the box. The kernel's own carveout comes
-     * off it first, and how much varies by a few percent between devices: a
-     * Retroid Pocket Flip 2 with 8 GB reports 7.52, and 4 GB devices report
-     * anywhere from about 3.4 to 3.9. A threshold placed at the nominal figure
-     * therefore splits a single class of device in two, and the half that
-     * falls through lands a whole tier below where it belongs -- a 4 GB phone
-     * would convert on one core because it happened to report 3.4 rather than
-     * 3.6. Each cut is made in the empty space between bands instead.
-     */
+    /** Total-RAM tiers, reduced when other apps leave little memory free. */
     fun budget(context: Context): Budget {
         val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
-        val total = runCatching {
+        val memory = runCatching {
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val mi = ActivityManager.MemoryInfo()
-            am.getMemoryInfo(mi)
-            mi.totalMem
-        }.getOrDefault(0L)
+            ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+        }.getOrNull()
+        return budgetForMemory(cores, memory?.totalMem ?: 0L, memory?.availMem ?: 0L, memory?.lowMemory ?: false)
+    }
+
+    internal fun budgetForMemory(cores: Int, total: Long, available: Long, lowMemory: Boolean): Budget {
+        val cpus = cores.coerceAtLeast(1)
         val gb = total / 1024.0 / 1024.0 / 1024.0
-        return when {
-            // Unknown is treated as roomy: a device that will not answer the
-            // question is not evidence that it is small, and capping every
-            // such device would slow builds that were never in trouble.
-            total <= 0L || gb >= 7.0 -> Budget(cores, 0)
-            gb >= 5.2 -> Budget(cores.coerceAtMost(4), 1024)
-            gb >= 3.2 -> Budget(cores.coerceAtMost(2), 640)
+        val device = when {
+            total <= 0L -> Budget(cpus.coerceAtMost(4), 1024)
+            gb >= 7.0 -> Budget(cpus, 0)
+            gb >= 5.2 -> Budget(cpus.coerceAtMost(4), 1024)
+            gb >= 3.2 -> Budget(cpus.coerceAtMost(2), 640)
             else -> Budget(1, FLOOR_HEAP_MB)
         }
+        val freeMb = available / 1024 / 1024
+        val live = when {
+            lowMemory -> Budget(1, FLOOR_HEAP_MB)
+            available <= 0L -> Budget(cpus.coerceAtMost(4), 1024)
+            freeMb < 1024 -> Budget(1, FLOOR_HEAP_MB)
+            freeMb < 2048 -> Budget(cpus.coerceAtMost(2), 640)
+            freeMb < 3072 -> Budget(cpus.coerceAtMost(4), 1024)
+            else -> return device
+        }
+        // These are soft GC limits, not a guarantee of peak process memory.
+        val heap = if (device.heapMb <= 0) live.heapMb else minOf(device.heapMb, live.heapMb)
+        return Budget(minOf(device.cores, live.cores), heap)
     }
 
     /**

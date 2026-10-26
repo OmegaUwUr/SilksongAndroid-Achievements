@@ -74,10 +74,9 @@ object NativeBuild {
             send(Progress("Preparing the build", -1f, "locating the sources"))
             val (script, pieces) = stage(unity, toolchain, root, assets)
 
-            // Audit the *translated* Steamworks.NET P/Invoke surface before
-            // spending minutes linking an engine that could only fail later at
-            // dlsym. This makes the Android shim a strict Valve-compatible ABI
-            // boundary rather than a best-effort collection of guessed exports.
+            // Log translated Steamworks.NET imports missing from our shim.
+            // This is diagnostic: the scan includes unused bindings, so it
+            // cannot prove which symbols gameplay will actually resolve.
             SteamAbiAudit.requireCompatible(Il2cppConverter.cppDir(root))
 
             val objDir = File(root, "obj")

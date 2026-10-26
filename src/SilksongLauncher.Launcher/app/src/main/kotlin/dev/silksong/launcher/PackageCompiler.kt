@@ -30,6 +30,7 @@
 package dev.silksong.launcher
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
@@ -38,6 +39,7 @@ import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.zip.ZipInputStream
+import kotlin.coroutines.coroutineContext
 
 object PackageCompiler {
 
@@ -79,33 +81,47 @@ object PackageCompiler {
     private suspend fun stageRoslyn(root: File, onProgress: (Long, Long) -> Unit): File {
         val dir = roslynDir(root)
         val csc = File(dir, "csc.dll")
-        if (ROSLYN_FILES.all { File(dir, it).length() > 0 }) return csc
+        if (CompletedArtifact.isReady(dir, ROSLYN_VERSION, ROSLYN_FILES)) return csc
 
-        dir.mkdirs()
+        val staged = File(root, "roslyn.part")
+        if (staged.exists() && !staged.deleteRecursively()) throw IOException("could not clear $staged")
+        staged.mkdirs()
         var seen = 0L
         ToolchainFetcher.open(ROSLYN_URL).use { raw ->
             ZipInputStream(BufferedInputStream(raw, 1 shl 16)).use { zip ->
                 while (true) {
+                    coroutineContext.ensureActive()
                     val entry = zip.nextEntry ?: break
                     val name = entry.name
                     if (!name.startsWith(ROSLYN_PREFIX)) continue
                     val leaf = name.removePrefix(ROSLYN_PREFIX)
                     if (leaf !in ROSLYN_FILES) continue
-                    File(dir, leaf).outputStream().use { out -> zip.copyTo(out, 1 shl 16) }
-                    seen += File(dir, leaf).length()
+                    File(staged, leaf).outputStream().use { out -> zip.copyTo(out, 1 shl 16) }
+                    seen += File(staged, leaf).length()
                     onProgress(seen, 9_617_787L)
                 }
             }
         }
-        val missing = ROSLYN_FILES.filter { File(dir, it).length() <= 0 }
-        if (missing.isNotEmpty()) throw IOException("Roslyn is incomplete: $missing")
+        coroutineContext.ensureActive()
+        CompletedArtifact.publish(staged, dir, ROSLYN_VERSION, ROSLYN_FILES)
         return csc
     }
 
     /** Where the compiled overrides go, for Il2cppConverter to prefer. */
     fun outputDir(root: File): File = File(root, "packages")
 
-    fun isPresent(root: File): Boolean = File(outputDir(root), ASSEMBLY).length() > 0
+    private fun inputSystemStamp(root: File) = File(root, "inputsystem.complete")
+
+    private fun inputSystemSignature(unity: File, depot: File): String = ConversionCache.inputs(listOf(
+        "input-system-v1-$ROSLYN_VERSION-${defines().joinToString(",")}" to references(unity, depot),
+        "verified-package" to listOf(File(UnityFetcher.packageDir(unity), ".complete")),
+    ))
+
+    fun isCurrent(unity: File, depot: File, root: File): Boolean = runCatching {
+        val out = File(outputDir(root), ASSEMBLY)
+        out.length() > 0 && inputSystemStamp(root).readText() ==
+            inputSystemSignature(unity, depot) + "\n" + ConversionCache.inputs(listOf("output" to listOf(out)))
+    }.getOrDefault(false)
 
     // ── the patches ────────────────────────────────────────────────────────
 
@@ -398,6 +414,9 @@ object PackageCompiler {
      * engine does not carry, UnityEngine.UI among them.
      */
     fun compile(unity: File, depot: File, context: android.content.Context, root: File): Flow<Progress> = channelFlow {
+        val stamp = inputSystemStamp(root)
+        if (stamp.exists() && !stamp.delete()) throw IOException("could not invalidate $stamp")
+        val signature = inputSystemSignature(unity, depot)
         val pkg = UnityFetcher.packageDir(unity)
         val sources = File(pkg, "InputSystem")
         if (!sources.isDirectory) throw IOException("the Input System source is missing: $sources")
@@ -435,8 +454,10 @@ object PackageCompiler {
         LauncherLog.log("Input System: ${cs.size} sources, ${nested.size} nested assemblies excluded")
 
         val refs = references(unity, depot)
-        val out = File(outputDir(root), ASSEMBLY)
+        // Preserve the assembly name while writing outside the live overrides.
+        val out = File(root, "inputsystem-build/$ASSEMBLY")
         out.parentFile.mkdirs()
+        if (out.exists() && !out.delete()) throw IOException("could not clear $out")
 
         send(Progress("Compiling the Input System", -1f, "${cs.size} sources"))
 
@@ -487,8 +508,14 @@ object PackageCompiler {
                     (errors.firstOrNull() ?: "exit ${result.code}").trim().take(300),
             )
         }
-        LauncherLog.log("Unity.InputSystem.dll: ${out.length()} bytes from ${cs.size} sources")
-        send(Progress("Input System ready", 1f, "${out.length() / 1024} KB"))
+        val published = File(outputDir(root), ASSEMBLY)
+        published.parentFile.mkdirs()
+        if (!out.renameTo(published)) throw IOException("could not publish $published")
+        val temporaryStamp = File(root, "inputsystem.complete.part")
+        temporaryStamp.writeText(signature + "\n" + ConversionCache.inputs(listOf("output" to listOf(published))))
+        if (!temporaryStamp.renameTo(stamp)) throw IOException("could not commit Input System compilation")
+        LauncherLog.log("Unity.InputSystem.dll: ${published.length()} bytes from ${cs.size} sources")
+        send(Progress("Input System ready", 1f, "${published.length() / 1024} KB"))
     }.flowOn(Dispatchers.IO)
 
     /**

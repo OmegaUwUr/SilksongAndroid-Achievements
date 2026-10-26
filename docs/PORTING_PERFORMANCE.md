@@ -2,7 +2,8 @@
 
 Revision 29 overlaps independent downloads and keeps native compiler workers busy
 across source groups. It preserves each completed object across failures and skips
-unchanged links. The existing `-O2` optimization and game/Steam behavior are retained.
+unchanged links. The existing `-O2` optimization and Steam behavior are retained. An unset game
+frame cap now defaults to 60 FPS; explicit FPS choices still take precedence.
 
 ## Changes and limits
 
@@ -22,8 +23,10 @@ unchanged links. The existing `-O2` optimization and game/Steam behavior are ret
   and the linker driver, lld, and `baselib.a`. A failed link keeps the previous complete output and cannot be
   mistaken for a successful new build.
 
-The cache schema changes once on upgrade, requiring one native rebuild. This does
-not redownload game files or supporting tools. The change does not eliminate the
+Completion and cache formats change once on upgrade. The first port refreshes
+Input System, Roslyn, and the extracted NDK sysroot, then rebuilds Input System,
+C++ conversion, and native output. Complete Unity editor/Android downloads and
+Steam game files are retained. The change does not eliminate the
 first compilation, add precompiled game files, or reduce compiler optimization.
 No numerical speedup has been measured on a real device yet.
 
@@ -47,6 +50,20 @@ During development, the changed setup/download methods and `NativeBuild.kt` were
 compiled with Kotlin 2.1.0 and coroutines 1.10.1 using Android/dependency stubs.
 Controlled fetchers checked the two-job bound, low-memory fallback, cached/partial
 setups, error propagation, and cancellation. This is not a full Android build.
+
+For the conversion, library publication, truncated-stream, and memory-policy
+checks (Kotlin 2.1 compiler/runtime jars, coroutines 1.10.1, commons-compress 1.27.1
+with commons-io 2.16.1 and commons-lang3 3.16.0, and xz 1.9 in the given directory):
+
+```sh
+PORTING_KOTLIN_JARS=/path/to/jars python3 tools/ondevice-il2cpp/tests/run_kotlin_checks.py
+python3 tools/depot-to-apk/check-native-libs.py /path/to/candidate.apk
+```
+
+The Kotlin suite compiles production fetcher/converter/cache classes with host
+stubs. It checks control flow and filesystem behavior, not actual Mono/IL2CPP
+execution or Android services. See [the compatibility audit](PORTING_COMPATIBILITY.md)
+for findings and the limits of the native APK check.
 
 ## Device validation
 

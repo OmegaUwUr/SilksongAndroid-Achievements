@@ -160,7 +160,14 @@ Completed native object files are saved individually. If setup is interrupted,
 retrying can reuse those files; downloaded tools and existing game files are also
 retained. A fully unchanged native build skips the link step. Changes to shared
 headers, runtime sources, compiler inputs, sysroot or flags invalidate the native
-cache, so upgrading to revision 29 requires one native rebuild.
+cache. Upgrading to revision 29 also refreshes the small Input System/Roslyn/sysroot
+caches and repeats conversion once to establish verified completion records.
+Complete Unity downloads and Steam game files are retained.
+
+Setup checks arm64/Vulkan support before downloads and reduces conversion workers
+under memory pressure. An unset game frame cap defaults to 60 FPS; explicit FPS
+choices still apply. See [the compatibility audit](docs/PORTING_COMPATIBILITY.md)
+for verified fixes and remaining device checks.
 
 Actual setup time still depends on network speed, CPU, available RAM, storage and
 thermal throttling. This revision has host regression checks but no measured

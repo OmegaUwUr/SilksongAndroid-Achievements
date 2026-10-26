@@ -40,11 +40,9 @@ public static class ResolutionConfigurator
      * GameSettings (LoadInt("VidVSync", ref vSync, 1)) and in the project's own
      * QualitySettings.asset (vSyncCount: 1).
      *
-     * There is no vsync-on path that reaches 120 here, because Unity ignores
-     * targetFrameRate entirely while vSyncCount is non-zero and the game only
-     * ever pairs vsync with -1. Holding vsync off and driving the rate from
-     * targetFrameRate is the only arrangement in which the cap means anything,
-     * which is why this does not try to preserve a vsync choice.
+     * Android ignores vSyncCount and uses targetFrameRate. The game's menu
+     * still couples its VSync option to -1, so keeping that option off leaves
+     * its frame-cap control usable. This does not disable Android display sync.
      *
      * THREE approaches failed before this one. Setting targetFrameRate once at
      * startup loses, because the game re-applies its own settings from menu
@@ -61,30 +59,9 @@ public static class ResolutionConfigurator
     const string PREF_FRAME_CAP = "VidTFR";
     const string PREF_VSYNC = "VidVSync";
 
-    /**
-     * The largest cap the game will accept, worked out the way it works it out.
-     *
-     * Its list is a fixed set topped at 120, plus the panel's own rate when
-     * that is higher -- and it derives that rate by taking the maximum over
-     * every mode in Screen.resolutions, not the mode currently in use. Those
-     * two can differ: a 120 Hz panel can report a 60 Hz current mode while
-     * still offering 120. Asking the same question the same way is what keeps
-     * our answer inside the set it will accept, on hardware nobody here has.
-     */
-    static int LargestAcceptedCap()
-    {
-        int max = 0;
-        foreach (var r in Screen.resolutions)
-        {
-            int hz = (int)Mathf.Round((float)r.refreshRateRatio.value);
-            if (hz > max) max = hz;
-        }
-        if (max <= 0) max = (int)Mathf.Round((float)Screen.currentResolution.refreshRateRatio.value);
-        if (max <= 0) max = 60;
-        // Above 120 the panel's exact rate joins the list; at or below, the
-        // list stops at 120 and the game clamps to it anyway.
-        return max > 120 ? max : 120;
-    }
+    // A stable starting point, without making every high-refresh device
+    // render at 120+ FPS. Explicit launcher and game choices still win.
+    const int DEFAULT_FRAME_CAP = 60;
 
     internal static int RequestedFrameCap()
     {
@@ -101,7 +78,7 @@ public static class ResolutionConfigurator
     {
         try
         {
-            int cap = LargestAcceptedCap();
+            int cap = DEFAULT_FRAME_CAP;
 
             int stored = PlayerPrefs.GetInt(PREF_FRAME_CAP, -1);
             if (stored <= 0)
@@ -113,7 +90,7 @@ public static class ResolutionConfigurator
             }
             else
             {
-                Debug.Log($"[ResolutionConfigurator] frame cap {stored} (kept; largest is {cap})");
+                Debug.Log($"[ResolutionConfigurator] frame cap {stored} (kept; default is {cap})");
             }
 
             // Likewise cosmetic, and for a better reason: with vsync showing as
@@ -605,7 +582,11 @@ public class FrameCapHolder : MonoBehaviour
 
     public static void Install(int cap)
     {
-        if (_instance != null) { _instance._cap = cap; return; }
+        if (_instance != null) {
+            _instance._cap = cap;
+            _instance._requested = ResolutionConfigurator.RequestedFrameCap();
+            return;
+        }
 
         var go = new GameObject("__FrameCapHolder__");
         DontDestroyOnLoad(go);

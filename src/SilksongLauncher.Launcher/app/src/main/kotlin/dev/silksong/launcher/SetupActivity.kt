@@ -174,7 +174,7 @@ class SetupActivity : Activity() {
      * The file holds a signature of what produced it, so a new app -- new
      * patches, new player-image logic -- invalidates the previous build
      * instead of being told it has nothing to do. Same reasoning as
-     * Il2cppConverter.isStale, one layer up.
+     * Il2cppConverter.isCurrent, one layer up.
      */
     private val builtMarker: File get() = File(pkgDir, ".built")
 
@@ -926,6 +926,12 @@ class SetupActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         scope.launch {
             try {
+                if ("arm64-v8a" !in android.os.Build.SUPPORTED_ABIS) {
+                    throw java.io.IOException("This port needs an Android device with arm64-v8a support.")
+                }
+                if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL)) {
+                    throw java.io.IOException("This port needs Vulkan graphics support, which this device does not report.")
+                }
                 // ── Step 1: the game ──────────────────────────────────────
                 if (download != null && !DepotFetcher.isPresent(depot)) {
                     setStep(1, "Downloading game files from Steam")
@@ -977,7 +983,7 @@ class SetupActivity : Activity() {
 
                 // ── Step 3: building ──────────────────────────────────────
                 setStep(buildStep, "Building Silksong")
-                if (!PackageCompiler.isPresent(out)) {
+                if (!withContext(Dispatchers.IO) { PackageCompiler.isCurrent(unity, depot, out) }) {
                     PackageCompiler.compile(unity, depot, this@SetupActivity, out).collect { setBusy(true, it.step, it.fraction, it.detail) }
                 }
                 // Always rebuilt: these are ours and change with the app, and
@@ -988,7 +994,7 @@ class SetupActivity : Activity() {
                     .collect { setBusy(true, it.step, it.fraction, it.detail) }
                 PackageCompiler.compilePatches(unity, depot, this@SetupActivity, out, assets)
                     .collect { setBusy(true, it.step, it.fraction, it.detail) }
-                if (!Il2cppConverter.isPresent(out) || Il2cppConverter.isStale(out)) {
+                if (!withContext(Dispatchers.IO) { Il2cppConverter.isCurrent(unity, depot, out) }) {
                     portingStage("Managed-to-C++ conversion") {
                         Il2cppConverter.convert(unity, depot, this@SetupActivity, out)
                             .collect { setBusy(true, it.step, it.fraction, it.detail) }

@@ -13,9 +13,18 @@ Reduces waiting during on-device porting and preserves successful native compile
 - Invalidates native objects and precompiled headers when shared headers, runtime sources, compiler inputs, sysroot, or compiler flags change. The new cache format requires one native rebuild on upgrade.
 - Skips linking when the completed engine and all link inputs are unchanged. A failed compile cannot reuse its old object, and a failed link cannot replace the previous complete library.
 - Reports combined native compile progress and logs elapsed times for supporting-tool downloads, conversion, native compilation/linking, and content preparation.
-- Keeps the existing `-O2` optimization, Android target, ABI flags, Steam behavior, and game compatibility patches.
+- Requires completed IL2CPP output tied to game/engine/package DLL contents before reusing a conversion; failed conversions and cancelled save rewrites cannot leave a valid completion marker.
+- Publishes Input System, Roslyn, and NDK sysroot downloads only after extraction completes; rejects truncated archive members and reruns the compiler probe after repairs.
+- Publishes the compiled Input System DLL only after success and invalidates it when its references, package version, or output change.
+- Reduces conversion workers and the soft GC heap budget when currently available RAM is low, while retaining the existing bounded retry policy.
+- Checks arm64 and Vulkan support before starting port downloads. Requires both Unity engine libraries before treating the Android module as present.
+- Uses a 60 FPS fallback for unset game frame caps while retaining positive game choices and explicit launcher FPS choices. Existing 720p first-launch defaults remain.
+- Explicitly aligns native APK entries to 16 KB and audits bundled ELF/ZIP alignment before signing.
+- Keeps the existing `-O2` optimization, Android target, ABI flags, null/bounds checks, Steam behavior, and game compatibility patches.
 
-Validation: native scheduler/cache tests run on the host with a fake compiler, and download orchestration was checked with Kotlin 2.1/coroutines using controlled fetchers. A full APK build, real-device port, gameplay check, and before/after timing are still required. No measured phone speedup is claimed.
+Validation: 16 native scheduler/cache tests, 12 Kotlin porting regression groups, seven controlled-fetcher checks, and a bundled-native audit of the published revision-28 APK passed on the host. The production Kotlin fetchers, converter, package compiler, cache helpers and native-build driver were compiled with Kotlin 2.1/coroutines and Android stubs. A full revision-29 APK build, patch compilation against the game, device port, gameplay check, and before/after timing are still required. No measured phone speedup or universal stability is claimed.
+
+Upgrade: legacy completion records are refreshed once. Input System, Roslyn, and the small extracted NDK sysroot are fetched again; Input System, conversion, and native output are rebuilt. Steam game files and complete Unity editor/Android downloads are retained. See [the compatibility audit](docs/PORTING_COMPATIBILITY.md).
 
 ## 1.0.3-achievements.22
 
