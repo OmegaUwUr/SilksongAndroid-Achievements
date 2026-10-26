@@ -2,6 +2,34 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.30 (candidate)
+
+Adds personalized touch controls, enabled from the launcher's Gameplay settings
+on the next game launch. The feature defaults off.
+
+- Adds an eight-direction movement pad and Jump, Attack, Sprint, Bind, Skill/Tool,
+  Clawline, Needolin, Quick Map, Inventory and Pause buttons through a virtual
+  Unity Input System gamepad. Movement and multiple actions can be held together.
+- Adds a title/pause-screen editor for dragging, resizing, hiding and rebinding
+  individual buttons, shared opacity, and left/right-hand presets. Save stores a
+  local layout; Cancel discards changes. Pause stays visible and bound to Menu.
+- Clamps controls to the screen's safe area and validates saved layout values.
+- Releases virtual input on missing/cancelled touches, sliding off actions,
+  app focus/pause changes, scene changes, resizing and editor transitions.
+- Filters captured fingers out of inventory/menu pointer handling and shares the
+  existing second-screen fence. Idle touch controls do not repeatedly update the
+  virtual controller or take over an attached controller.
+- Registers patch startup and ships the source recursively through the existing
+  on-device patch build. Upgrading recompiles patches and native output once.
+
+Validation: 24 host regression checks compile and exercise the production model,
+overlay, view and pointer fence with Roslyn and explicit Unity/Input System stubs.
+These cover simultaneous input, release/lifecycle behavior, saved/cancelled edits,
+safe areas, corrupt preferences, physical-controller coexistence and second-screen
+filtering. Host stubs do not verify Unity rendering, game bindings or Android input.
+A full APK build, patch compilation against the owned game depot and real-device
+gameplay checks remain required. See [the touch-control guide](docs/TOUCH_CONTROLS.md).
+
 ## 1.0.3-achievements.29
 
 Reduces waiting during on-device porting and preserves successful native compile work across retries.

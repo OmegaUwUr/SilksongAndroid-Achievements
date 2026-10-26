@@ -23,6 +23,8 @@
       </LinearLayout>
       <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp" android:layout_marginBottom="12dp" android:background="@drawable/launcher_card">
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_gameplay_card" android:textColor="@color/text_primary" android:textSize="18sp" android:layout_marginBottom="8dp" android:textStyle="bold" />
+        <Switch android:id="@+id/sw_touch_controls" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_touch_controls" android:textColor="@color/text_primary" android:textSize="15sp" android:minHeight="48dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_touch_controls_subtitle" android:textColor="@color/text_dim" android:textSize="14sp" android:layout_marginBottom="12dp" android:layout_marginStart="4dp" />
         <Switch android:id="@+id/sw_skip_intro" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_skip_intro" android:textColor="@color/text_primary" android:textSize="15sp" android:layout_marginTop="4dp" android:layout_marginBottom="2dp" android:minHeight="48dp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_skip_intro_subtitle" android:textColor="@color/text_dim" android:textSize="14sp" android:layout_marginBottom="8dp" android:layout_marginStart="4dp" />
       </LinearLayout>

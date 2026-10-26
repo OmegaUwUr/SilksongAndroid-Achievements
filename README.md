@@ -72,7 +72,10 @@ or Valve release.
   crests, tasks, and journal views using the game's data.
 - **Controller/game input support** through the port's Android player and Input
   System integration, plus touch interaction with inventory and secondary views.
-  This does not imply a complete on-screen touch gamepad.
+- **Personalized touch controls (revision 30 candidate):** optional movement and
+  action buttons with simultaneous presses, drag-to-position editing, individual
+  sizes and bindings, shared opacity, hidden buttons, and left/right-hand presets.
+  Layouts are saved on the device. Android gameplay validation is still pending.
 - **Settings:** automatic Cloud download/upload, skip startup logos/intro,
   performance overlay, and enable/disable the secondary screen.
 - **Port compatibility patches:** render-resolution configuration, shader warmup,
@@ -185,6 +188,20 @@ for the timing logs and device checks.
    The build takes 20–30 minutes on a Snapdragon 8 Gen 2, most of it the download and the compile.
 4. Play. Later launches reuse the prepared player, with content, save, and Steam
    readiness checks as applicable.
+
+### Set up personalized touch controls
+
+In a revision-30 build, enable **Settings → Gameplay → Personalized touch
+controls**, then launch the game. At the title or pause screen, tap **Edit
+controls**. Drag buttons, select **Smaller/Larger**, **Hide/Show**, or **Send** to
+choose a controller binding, and adjust opacity. **Save** keeps the layout;
+**Cancel** restores your last saved layout. **Right hand** and **Left hand** load
+presets. Pause stays visible and sends Menu so it remains available for editing.
+
+The overlay uses the game's new Input System controller path. If you changed
+in-game controller bindings, match the overlay's **Send** setting to those
+bindings. It does not detect the game's remaps. This feature defaults off and is
+not in the currently published APK. See the [controls and device test guide](docs/TOUCH_CONTROLS.md).
 
 The upstream project reports testing on the AYN Thor and Retroid Pocket Flip 2.
 Compatibility depends on Android version, ARM64 tooling execution, graphics

@@ -98,6 +98,10 @@ class SettingsActivity : Activity() {
         }
 
         settings = SettingsStore(this)
+        findViewById<Switch>(R.id.sw_touch_controls).apply {
+            isChecked = settings.touchControls
+            setOnCheckedChangeListener { _, checked -> settings.touchControls = checked }
+        }
         LaunchOptions.populateSettings(this, settings)
 
         swAutoPull = findViewById(R.id.sw_auto_pull)

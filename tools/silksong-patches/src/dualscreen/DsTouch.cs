@@ -140,19 +140,19 @@ public static class DsTouch
             _built = Time.frameCount;
 
             _keep.Clear();
-            int panel = 0, total = Input.touchCount;
+            int blocked = 0, total = Input.touchCount;
             for (int i = 0; i < total; i++)
             {
                 var t = Input.GetTouch(i);
-                if (IsSecondScreen(t)) panel++;
+                if (IsSecondScreen(t) || TouchControlsOverlay.Consumes(t)) blocked++;
                 else _keep.Add(t);
             }
 
-            // The synthesised mouse follows the primary touch, so it belongs to
-            // the panel exactly when every live touch does. With no touches at
-            // all this is false, which leaves a real mouse (or a trackpad)
-            // working normally.
-            _mouseIsPanel = total > 0 && panel == total;
+            // A control finger must not also click the menu underneath it.
+            // Mixed touches still need filtering when the primary is captured.
+            _mouseIsPanel = total > 0 && (blocked == total ||
+                IsSecondScreen(Input.GetTouch(0)) || TouchControlsOverlay.Consumes(Input.GetTouch(0)) ||
+                TouchControlsOverlay.BlocksPointer(Input.mousePosition));
             if (!_mouseIsPanel) _lastRealMouse = Input.mousePosition;
         }
 
@@ -249,11 +249,13 @@ public static class DsTouch
     /// <summary>Give the game its own input back.</summary>
     public static void RemoveFence()
     {
+        Enabled = false;
+        // The main-screen controller and second panel share this input filter.
+        if (TouchControlsOverlay.Active) return;
         for (int i = 0; i < _fenced.Count; i++)
             if (_fenced[i] != null && _fenced[i].inputOverride == _filter)
                 _fenced[i].inputOverride = null;
         _fenced.Clear();
-        Enabled = false;
     }
 }
 #endif
