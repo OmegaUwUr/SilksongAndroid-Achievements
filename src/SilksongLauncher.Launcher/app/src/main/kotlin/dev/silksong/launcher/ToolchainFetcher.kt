@@ -134,11 +134,19 @@ object ToolchainFetcher {
      * files are checked as well, because a marker on its own would survive
      * part of the tree being cleared.
      */
+    private val SYSROOT_REQUIRED = listOf(
+        "usr/include/stdio.h",
+        "usr/include/c++/v1/vector",
+        "usr/lib/aarch64-linux-android/33/libc.so",
+        "usr/lib/aarch64-linux-android/libc++_static.a",
+        "usr/lib/aarch64-linux-android/libc++abi.a",
+    )
+
+    private fun sysrootReady(root: File): Boolean =
+        CompletedArtifact.isReady(sysroot(root), NDK, SYSROOT_REQUIRED)
+
     fun isPresent(root: File): Boolean =
-        File(root, "verified").isFile &&
-            clang(root).canExecute() &&
-            File(sysroot(root), "usr/include/stdio.h").isFile &&
-            File(sysroot(root), "usr/lib/aarch64-linux-android/33/libc.so").isFile
+        File(root, "verified").isFile && clang(root).canExecute() && sysrootReady(root)
 
     /**
      * Fetches whatever is missing. Safe to re-run: each package is skipped
@@ -147,6 +155,9 @@ object ToolchainFetcher {
      */
     fun fetch(root: File): Flow<Progress> = channelFlow {
         root.mkdirs()
+        // A previous compile probe says nothing about files repaired below.
+        val verified = File(root, "verified")
+        if (verified.exists() && !verified.delete()) throw IOException("could not invalidate $verified")
 
         val index: Map<String, Package>
         if (TERMUX_PACKAGES.any { !staged(root, it) }) {
@@ -170,7 +181,7 @@ object ToolchainFetcher {
             markStaged(root, name)
         }
 
-        if (!File(sysroot(root), "usr/include/stdio.h").isFile) {
+        if (!sysrootReady(root)) {
             send(Progress("Android sysroot", 0f, "reading the archive index"))
             fetchNdkSysroot(root) { done, total ->
                 trySend(Progress("Android sysroot", done.toFloat() / total, mb(done, total)))
@@ -183,13 +194,10 @@ object ToolchainFetcher {
         // Nothing is called ready until it has compiled something. This is the
         // last thing a fetch does, and the marker it writes is what isPresent
         // reports on.
-        val verified = File(root, "verified")
-        if (!verified.isFile) {
-            send(Progress("Checking the compiler", -1f, "building a test library"))
-            val problem = Toolchain.verify(root)
-            if (problem != null) throw IOException("the fetched compiler does not work: $problem")
-            verified.writeText(notes.toString())
-        }
+        send(Progress("Checking the compiler", -1f, "building a test library"))
+        val problem = Toolchain.verify(root)
+        if (problem != null) throw IOException("the fetched compiler does not work: $problem")
+        verified.writeText(notes.toString())
         send(Progress("Compiler ready", 1f, ""))
     }.flowOn(Dispatchers.IO)
 
@@ -387,7 +395,9 @@ object ToolchainFetcher {
             .sortedBy { it.offset }
         if (wanted.isEmpty()) throw IOException("the NDK archive has no sysroot at $NDK_ROOT")
 
-        val dest = sysroot(root)
+        val dest = File(root, "sysroot.part")
+        if (dest.exists() && !dest.deleteRecursively()) throw IOException("could not clear $dest")
+        dest.mkdirs()
         val first = wanted.first().offset
         val bytes = wanted.sumOf { it.compressed }
         var done = 0L
@@ -430,6 +440,8 @@ object ToolchainFetcher {
                 onProgress(done, bytes)
             }
         }
+        coroutineContext.ensureActive()
+        CompletedArtifact.publish(dest, sysroot(root), NDK, SYSROOT_REQUIRED)
     }
 
     private fun centralDirectory(cd: ByteArray): List<ZipEntryInfo> {
@@ -657,13 +669,16 @@ object ToolchainFetcher {
         override fun read(): Int {
             if (remaining <= 0) return -1
             val b = input.read()
-            if (b >= 0) remaining--
+            if (b < 0) throw IOException("truncated archive member: $remaining bytes missing")
+            remaining--
             return b
         }
 
         override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (len == 0) return 0
             if (remaining <= 0) return -1
             val n = input.read(b, off, minOf(len.toLong(), remaining).toInt())
+            if (n < 0) throw IOException("truncated archive member: $remaining bytes missing")
             if (n > 0) remaining -= n
             return n
         }
@@ -673,13 +688,9 @@ object ToolchainFetcher {
         /** Consumes whatever the reader above did not, keeping the shared
          *  stream aligned on the next member. */
         fun drain() {
+            val scratch = ByteArray(1 shl 16)
             while (remaining > 0) {
-                val before = remaining
-                val scratch = ByteArray(minOf(remaining, 1L shl 16).toInt())
-                val n = input.read(scratch)
-                if (n < 0) { remaining = 0; return }
-                remaining -= n
-                if (remaining == before) return
+                if (read(scratch) == 0) read()
             }
         }
 

@@ -31,6 +31,8 @@
 # Hence find -L throughout: with a symlinked layout, a find rooted at a linked
 # directory returns the link and nothing under it, and the build silently
 # compiles nothing.
+set -eu
+
 ROOT="${ROOT:-/data/local/tmp/tx}"
 cd "$ROOT" || exit 1
 
@@ -77,6 +79,8 @@ fi
 # tier the conversion had to fall back to, for one -- and a terminal run is
 # often deliberately throttled to keep the phone usable.
 JOBS="${BUILD_JOBS:-$JOBS}"
+case "$JOBS" in ''|*[!0-9]*) echo "invalid BUILD_JOBS: $JOBS" >&2; exit 1 ;; esac
+[ "$JOBS" -ge 1 ] || { echo "BUILD_JOBS must be positive" >&2; exit 1; }
 
 # --sysroot points at the NDK (not Termux's) so the produced .so depends only
 # on bionic: liblog/libm/libdl/libc, exactly like Unity's own libil2cpp.so.
@@ -127,221 +131,66 @@ CXXFLAGS="-march=armv8-a $OPT -fPIC -fexceptions -fno-rtti -funwind-tables \
 rm -f err.log; : > err.log
 mkdir -p obj
 
-# ── incremental build ────────────────────────────────────────────────────────
-#
-# A full build is ~1550 translation units and about 20 minutes. Almost every
-# iteration changes far less than that: swapping one assembly reconverts ~500
-# of the generated TUs, and patching the runtime touches one. Rebuilding
-# everything each time dominates the edit-test loop, so objects are kept and
-# only genuinely changed sources are recompiled.
-#
-# Freshness is decided by content hash rather than timestamp. The generated
-# tree is rewritten wholesale by the converter, so every file looks new by
-# mtime even when its contents are identical -- which is the common case, and
-# exactly the case worth skipping.
-#
-# FULL=1 forces everything to be rebuilt.
-MANIFEST=obj/.hashes
-FLAGSIG=obj/.flagsig
+# One queue for generated code, runtime and support libraries. Keeping these
+# in separate pools leaves cores idle at the tail of every phase. Their compile
+# flags remain distinct; only scheduling is shared. Largest sources go first.
+# Cache records are committed per object, so a failed/interrupted build keeps
+# work that actually finished. A stamp never authorizes a partially written .o.
+T0=$(date +%s)
+echo "### device: $(getprop ro.product.model), $(nproc) cores, $JOBS parallel compiles"
+echo "### clang: $($CLANG --version | head -1)"
+echo "### Checking compiler cache inputs"
 
-# Any change to the flags invalidates every object, and comparing a signature
-# is cheaper and more reliable than remembering to wipe by hand.
-sig=$(printf '%s|%s|%s|%s' "$TGT" "$DEF" "$INC" "$CXXFLAGS" | sha256sum | cut -d' ' -f1)
+# Sources alone are not a sufficient cache key: shared headers, compiler,
+# sysroot and runtime changes affect the generated objects and PCH as well.
+# Hash common inputs in one batch rather than spawning sha256sum per header.
+resource=$($CLANG -print-resource-dir)
+[ -d "$resource" ] || { echo "missing clang resource directory: $resource" >&2; exit 1; }
+find -L "$LIBIL2CPP" "$EXTERNAL" "$SYSROOT" "$resource" -type f -print0 > obj/.inputs0
+find -L "$CPPDIR" -type f ! -name '*.cpp' ! -name '*.c' -print0 >> obj/.inputs0
+printf '%s\0' "$CLANG" >> obj/.inputs0
+xargs -0 sha256sum < obj/.inputs0 > obj/.input-hashes
+LC_ALL=C sort obj/.input-hashes > obj/.sorted-inputs
+common=$(sha256sum obj/.sorted-inputs | cut -d' ' -f1)
+# Bump the cache schema when any of the special support-library flags change.
+sig=$(printf '%s|%s|%s|%s|%s|%s' 'native-cache-v2' "$TGT" "$DEF" "$INC" "$CXXFLAGS" "$common" | sha256sum | cut -d' ' -f1)
+FLAGSIG=obj/.flagsig
 if [ "${FULL:-0}" = 1 ] || [ ! -f "$FLAGSIG" ] || [ "$(cat "$FLAGSIG")" != "$sig" ]; then
-    [ -f "$FLAGSIG" ] && echo "### flags changed — full rebuild"
-    rm -rf obj; mkdir -p obj
-    : > "$MANIFEST"
+    echo "### Compiler inputs changed — refreshing the native cache"
+    rm -rf obj
+    mkdir -p obj
     printf '%s' "$sig" > "$FLAGSIG"
 fi
-[ -f "$MANIFEST" ] || : > "$MANIFEST"
+rm -f obj/.inputs0 obj/.input-hashes obj/.sorted-inputs
 
-# Object names derive from the FULL path, not the basename: libil2cpp has 360
-# sources but only 247 distinct basenames (os/Posix/Thread.cpp vs
-# os/Win32/Thread.cpp), so basename-derived names silently overwrite each other
-# and quietly drop a third of the runtime.
-# The object's name, derived from the source path RELATIVE to its tree.
-#
-# Relative, not absolute, for two reasons. Names stay short -- an absolute path
-# on external storage is ~70 characters before the source path even starts, and
-# a filename has 255 to work with. And they stay the same whatever the storage
-# layout is, so moving the sources does not invalidate every object.
-#
-# The relative path, not the basename: there are ~950 generated sources but only
-# 247 distinct basenames (os/Posix/Thread.cpp vs os/Win32/Thread.cpp), so
-# basename-derived names silently overwrite each other and the link then fails
-# hundreds of objects later.
-obj_name() { printf 'obj/%s%s.o' "$1" "$(echo "${2#$3/}" | tr -c 'A-Za-z0-9._-' '_')"; }
+obj_name() { printf 'obj/%s%s.o' "$1" "$(printf '%s' "${2#$3/}" | tr -c 'A-Za-z0-9._-' '_')"; }
 
-: > obj/.seen
-: > obj/.objs
-
-# ── the worker ───────────────────────────────────────────────────────────────
-#
-# One translation unit, invoked by xargs with the source path as its argument.
-# It is a file rather than an inline `sh -c` because toybox xargs has no -I,
-# so the only way to pass the path is as a trailing argument -- which is
-# exactly what this takes.
-cat > obj/.cc <<'WORKER'
-#!/system/bin/sh
-f="$1"
-rel="${f#$CC_TREE/}"
-out=$(printf 'obj/%s%s.o' "$CC_PREFIX" "$(echo "$rel" | tr -c 'A-Za-z0-9._-' '_')")
-exec $CLANG -x "$CC_LANG" -std="$CC_STD" $CC_PCH $CXXFLAGS $DEF $INC $TGT \
-     -c "$f" -o "$out" 2>>err.log
-WORKER
-chmod +x obj/.cc
-export CLANG CXXFLAGS DEF INC TGT
-
-# ── precompiled headers ──────────────────────────────────────────────────────
-#
-# Every one of the 946 generated C++ units opens with #include "pch-cpp.hpp",
-# and every one of the 196 generated C units with "pch-c.h". Those headers pull
-# in the il2cpp internals plus <limits>, <cmath> and <cstring> -- so without a
-# precompiled header that work is done from source 1142 times over. Unity ships
-# the headers precisely so it need not be.
-#
-# The PCH must be built with the SAME flags as the units that use it; clang
-# refuses one compiled with different ones, which is why this shares $CXXFLAGS
-# $DEF $INC $TGT rather than naming them again. libil2cpp's own runtime sources
-# do not include either header, so phase C is compiled without one.
-#
-# A failure here is not fatal. The PCH is an optimisation, and a build that is
-# slower is better than a build that does not happen.
+# PCH is optional, but never reuse a partial file after an interrupted compile.
 build_pch() {
     hdr="$1"; lang="$2"; std="$3"; out="$4"
     [ -f "$hdr" ] || return 1
-    # Rebuilt when the header is newer, so a re-fetched or updated Unity does
-    # not leave a stale one behind. A flag change is already covered: that
-    # wipes obj/ wholesale via the signature check above, and the PCH with it.
-    [ -f "$out" ] && [ ! "$hdr" -nt "$out" ] && return 0
-    $CLANG -x "$lang-header" -std="$std" $CXXFLAGS $DEF $INC $TGT \
-        -o "$out" "$hdr" 2>>err.log
-}
-
-pch_for() {
-    hdr="$1"; lang="$2"; std="$3"; out="$4"
-    if build_pch "$hdr" "$lang" "$std" "$out"; then
-        # Not `printf -- '-include-pch %s'`. That guard against printf reading
-        # the flag as an option is the usual advice and it is wrong here:
-        # this printf treats `--` as the FORMAT and prints it literally, so
-        # the flags became a bare `--`, which tells clang that everything
-        # after it is an input file. Every subsequent flag was then reported
-        # as "no such file or directory: '-march=armv8-a'" -- and the phase
-        # that passed no PCH at all compiled perfectly, which is what made it
-        # look like a PCH problem rather than a quoting one.
-        printf '%s %s' -include-pch "$out"
+    [ -s "$out" ] && return 0
+    rm -f "$out.part"
+    if $CLANG -x "$lang-header" -std="$std" $CXXFLAGS $DEF $INC $TGT \
+        -o "$out.part" "$hdr" 2>>err.log && [ -s "$out.part" ]; then
+        mv "$out.part" "$out"
     else
-        echo "### PCH unavailable for $lang, compiling without one" >&2
+        rm -f "$out.part"
+        return 1
+    fi
+}
+pch_for() {
+    if build_pch "$1" "$2" "$3" "$4"; then
+        printf '%s %s' -include-pch "$4"
+    else
+        echo "### PCH unavailable for $2, compiling without one" >&2
         printf ''
     fi
 }
-
-compile_all() {
-    tree="$1"; prefix="$2"; ext="$3"; lang="$4"; std="$5"; pch="$6"
-    srcs=$(find -L "$tree" -name "*.$ext" | sort)
-    [ -z "$srcs" ] && return 0
-
-    # One sha256sum call for the whole phase: per-file invocations cost more
-    # than the hashing itself.
-    echo "$srcs" | xargs sha256sum > obj/.now
-    cat obj/.now >> obj/.seen
-
-    # Decide what needs doing before doing any of it, so the work can be handed
-    # to a pool rather than dribbled out one batch at a time.
-    : > obj/.todo
-    built=0
-    while read -r hash f; do
-        out=$(obj_name "$prefix" "$f" "$tree")
-        echo "$out" >> obj/.objs
-        old=$(grep -F "  $f" "$MANIFEST" 2>/dev/null | head -1 | cut -d' ' -f1)
-        if [ -f "$out" ] && [ "$old" = "$hash" ]; then
-            continue
-        fi
-        printf '%s\n' "$f" >> obj/.todo
-        built=$((built+1))
-    done < obj/.now
-
-    if [ "$built" -gt 0 ]; then
-        # Largest first. With a pool the run ends when the last unit ends, so
-        # starting the long ones early keeps the tail short -- a 2 MB generated
-        # file scheduled last leaves seven cores idle while it finishes.
-        #
-        # Only adopted if the sort produced a line for every source: a stat
-        # that handled fewer arguments than it was given would silently drop
-        # work, and a dropped translation unit is a link error hundreds of
-        # objects later.
-        if xargs stat -c '%s %n' < obj/.todo 2>/dev/null | sort -rn | cut -d' ' -f2- > obj/.todo.sorted &&
-           [ "$(wc -l < obj/.todo.sorted)" = "$(wc -l < obj/.todo)" ]; then
-            mv obj/.todo.sorted obj/.todo
-        else
-            rm -f obj/.todo.sorted
-        fi
-
-        # A refilling pool, not batches. The previous form launched $JOBS
-        # compiles and then called bare `wait`, which blocks until the WHOLE
-        # batch is done -- so each batch cost as much as its slowest member and
-        # the cores drained idle waiting for it. Measured on an 8-core device
-        # that left about a third of the CPU unused: concurrency oscillated
-        # between 1 and 8 and idle time swung from 14% to 596% of 800%. It is
-        # worse than it sounds because the cores are not equal (3 at 2.0 GHz,
-        # 4 at 2.8, 1 at 3.19), so a batch waits on whichever unit landed on a
-        # little core.
-        #
-        # xargs -P keeps $JOBS running at all times, starting a new unit the
-        # moment one finishes. It is absent from toybox's --help but present
-        # and working.
-        CC_LANG="$lang" CC_STD="$std" CC_PREFIX="$prefix" CC_PCH="$pch" CC_TREE="$tree" \
-            xargs -P "$JOBS" -n 1 sh obj/.cc < obj/.todo
-
-        # Every unit must have produced an object, and this is checked rather
-        # than assumed. The link allows undefined symbols, so a phase that
-        # compiled nothing at all still links -- into a library a fraction of
-        # the right size that fails at dlopen, long after the thing that broke.
-        # That is exactly what a stray `--` in the flags once did here: 1142 of
-        # 1546 units failed, the build reported success, and the first sign of
-        # trouble was the game crashing on launch.
-        failed=0
-        while read -r f; do
-            [ -f "$(obj_name "$prefix" "$f" "$tree")" ] || failed=$((failed + 1))
-        done < obj/.todo
-        if [ "$failed" -gt 0 ]; then
-            echo "### FAILED: $failed of $built translation units produced no object" >&2
-            grep -m 5 'error:' err.log >&2
-            exit 1
-        fi
-    fi
-    echo "  $built rebuilt, $(( $(wc -l < obj/.now) - built )) unchanged"
-}
-
-
-echo "### device: $(getprop ro.product.model), $(nproc) cores, $JOBS parallel compiles"
-echo "### clang: $($CLANG --version 2>/dev/null | head -1)"
-
-T0=$(date +%s)
+echo "### Preparing precompiled headers"
 PCH_CPP=$(pch_for "$LIBIL2CPP/pch/pch-cpp.hpp" c++ c++11 obj/pch-cpp.pch)
-echo "### PHASE A: compiling generated C++ ($(find -L "$CPPDIR" -name '*.cpp' | wc -l) TUs)"
-compile_all "$CPPDIR" g cpp c++ c++11 "$PCH_CPP"
-echo "  objects: $(ls obj/g*.o 2>/dev/null | wc -l)  $(( $(date +%s)-T0 ))s"
-
-T1=$(date +%s)
 PCH_C=$(pch_for "$LIBIL2CPP/pch/pch-c.h" c c11 obj/pch-c.pch)
-echo "### PHASE B: compiling generated C ($(find -L "$CPPDIR" -name '*.c' | wc -l) TUs)"
-compile_all "$CPPDIR" c c c c11 "$PCH_C"
-echo "  objects: $(ls obj/c*.o 2>/dev/null | wc -l)  $(( $(date +%s)-T1 ))s"
-
-T2=$(date +%s)
-echo "### PHASE C: compiling libil2cpp runtime ($(find -L "$LIBIL2CPP" -name '*.cpp' | wc -l) TUs)"
-# No PCH: libil2cpp's own sources do not include either pch header, and one
-# built for them would have to be a different header from the one the
-# generated code uses.
-compile_all "$LIBIL2CPP" r cpp c++ c++11 ""
-echo "  objects: $(ls obj/r*.o 2>/dev/null | wc -l)  $(( $(date +%s)-T2 ))s"
-
-# Boehm GC. Unity builds bdwgc as ONE amalgamated translation unit
-# (extra/gc.c, which #includes the individual sources). Compiling the
-# top-level .c files separately links but then fails at dlopen with
-# "cannot locate symbol maybe_finalize": several cross-file helpers are
-# static, so they only resolve inside the single-TU build.
+BR="$LIBIL2CPP/os/ClassLibraryPAL/brotli"
 GCDEF="-DANDROID -DHAVE_INTTYPES_H -DNDEBUG -DGC_NOT_DLL -DHAVE_BOEHM_GC \
      -DALL_INTERIOR_POINTERS=1 -DGC_GCJ_SUPPORT=1 -DJAVA_FINALIZATION=1 \
      -DNO_EXECUTE_PERMISSION=1 -DGC_NO_THREADS_DISCOVERY=1 \
@@ -350,73 +199,122 @@ GCDEF="-DANDROID -DHAVE_INTTYPES_H -DNDEBUG -DGC_NOT_DLL -DHAVE_BOEHM_GC \
      -DGC_THREADS=1 -DUSE_MMAP=1 -DUSE_MUNMAP=1 \
      -DIL2CPP_ENABLE_WRITE_BARRIERS=1 -DIL2CPP_INCREMENTAL_TIME_SLICE=3 \
      -D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__"
-T2b=$(date +%s)
-echo "### PHASE C2: compiling bdwgc (amalgamated)"
-# C2-C4 are vendored sources that never change between iterations, so an
-# existing object is always current -- a flag change wipes obj/ wholesale via
-# the signature check above.
-if [ ! -f obj/zgc_amalgam.o ]; then
-$CLANG -x c -std=gnu99 -march=armv8-a $OPT -fPIC -fvisibility=hidden \
-       -Wno-implicit-function-declaration $GCDEF \
-       -I"$EXTERNAL/bdwgc/include" -I"$EXTERNAL/bdwgc/libatomic_ops/src" \
-       $TGT -c "$EXTERNAL/bdwgc/extra/gc.c" -o obj/zgc_amalgam.o 2>>err.log
+export CLANG CXXFLAGS DEF INC TGT OPT CPPDIR LIBIL2CPP EXTERNAL BR GCDEF PCH_CPP PCH_C
+
+cat > obj/.cc <<'WORKER'
+#!/system/bin/sh
+set -eu
+prefix="$1"; hash="$2"; f="$3"
+case "$prefix" in
+    g|c) tree="$CPPDIR" ;;
+    r) tree="$LIBIL2CPP" ;;
+    b) tree="$EXTERNAL/bdwgc/extra" ;;
+    z) tree="$EXTERNAL/zlib" ;;
+    t) tree="$BR" ;;
+    *) echo "unknown compile group: $prefix" >&2; exit 1 ;;
+esac
+rel="${f#$tree/}"
+out=$(printf 'obj/%s%s.o' "$prefix" "$(printf '%s' "$rel" | tr -c 'A-Za-z0-9._-' '_')")
+# An old object must not make a failing compiler look successful.
+rm -f "$out" "$out.sha256" "$out.part" "$out.sha256.part"
+trap 'rm -f "$out.part" "$out.sha256.part"' EXIT
+case "$prefix" in
+    g) set -- -x c++ -std=c++11 $PCH_CPP $CXXFLAGS $DEF $INC ;;
+    c) set -- -x c -std=c11 $PCH_C $CXXFLAGS $DEF $INC ;;
+    r) set -- -x c++ -std=c++11 $CXXFLAGS $DEF $INC ;;
+    b) set -- -x c -std=gnu99 -march=armv8-a $OPT -fPIC -fvisibility=hidden \
+        -Wno-implicit-function-declaration $GCDEF \
+        -I"$EXTERNAL/bdwgc/include" -I"$EXTERNAL/bdwgc/libatomic_ops/src" ;;
+    z) set -- -x c -std=gnu99 -march=armv8-a $OPT -fPIC -fvisibility=hidden \
+        -DZ_PREFIX -DHAVE_HIDDEN -DNDEBUG -DANDROID -I"$EXTERNAL/zlib" ;;
+    t) set -- -x c -std=gnu99 -march=armv8-a $OPT -fPIC -fvisibility=hidden \
+        -DNDEBUG -DANDROID -I"$BR/include" -I"$LIBIL2CPP" -I"$BR" ;;
+esac
+if ! "$CLANG" "$@" $TGT -c "$f" -o "$out.part" 2>>err.log; then
+    echo "### COMPILE FAILED: $f" >&2
+    exit 1
 fi
-echo "  $([ -f obj/zgc_amalgam.o ] && echo OK || echo FAILED)  $(( $(date +%s)-T2b ))s"
+[ -s "$out.part" ] || { echo "### EMPTY OBJECT: $f" >&2; exit 1; }
+mv "$out.part" "$out"
+printf '%s' "$hash" > "$out.sha256.part"
+mv "$out.sha256.part" "$out.sha256"
+WORKER
 
-# zlib. Unity renames every symbol to il2cpp_z_* via Z_PREFIX in zconf.h, so
-# the runtime's calls only resolve against a Z_PREFIX build of these sources.
-T2c=$(date +%s)
-echo "### PHASE C3: compiling zlib ($(ls "$EXTERNAL"/zlib/*.c | wc -l) TUs)"
-n=0
-for f in "$EXTERNAL"/zlib/*.c; do
-    out="obj/zl_$(basename "$f").o"
-    [ -f "$out" ] && continue
-    $CLANG -x c -std=gnu99 -march=armv8-a $OPT -fPIC -fvisibility=hidden \
-           -DZ_PREFIX -DHAVE_HIDDEN -DNDEBUG -DANDROID \
-           -I"$EXTERNAL/zlib" $TGT -c "$f" -o "$out" 2>>err.log &
-    # Bounded like every other phase. These are small and there are only a
-    # dozen of them, so this is never the phase that runs a device out of
-    # memory -- but a build that has been throttled to one compile at a time
-    # has been throttled for a reason, and starting twelve here ignores it.
-    n=$((n+1)); [ $((n % JOBS)) -eq 0 ] && wait
-done
-wait
-echo "  objects: $(ls obj/zl_*.o 2>/dev/null | wc -l)  $(( $(date +%s)-T2c ))s"
+: > obj/.objs
+: > obj/.sources
+: > obj/.tasks
+queue_tree() {
+    tree="$1"; prefix="$2"; pattern="$3"
+    # NUL-delimited inputs keep filenames with spaces as one compiler input.
+    find -L "$tree" -type f -name "$pattern" -print0 > obj/.files0
+    [ -s obj/.files0 ] || { echo "missing sources for $prefix under $tree" >&2; exit 1; }
+    xargs -0 sha256sum < obj/.files0 > obj/.now
+    cat obj/.now >> obj/.sources
+    while read -r hash f; do
+        out=$(obj_name "$prefix" "$f" "$tree")
+        printf '%s\n' "$out" >> obj/.objs
+        if [ -s "$out" ] && [ -f "$out.sha256" ] && [ "$(cat "$out.sha256")" = "$hash" ]; then
+            continue
+        fi
+        size=$(stat -c '%s' "$f")
+        printf '%s %s %s %s\n' "$size" "$prefix" "$hash" "$f" >> obj/.tasks
+    done < obj/.now
+}
+queue_tree "$CPPDIR" g '*.cpp'
+queue_tree "$CPPDIR" c '*.c'
+queue_tree "$LIBIL2CPP" r '*.cpp'
+# Boehm must be compiled as its single amalgamated TU, never individual .c files.
+queue_tree "$EXTERNAL/bdwgc/extra" b 'gc.c'
+queue_tree "$EXTERNAL/zlib" z '*.c'
+queue_tree "$BR" t '*.c'
 
-# brotli. Its headers include il2cpp-config.h, so libil2cpp has to be on the
-# include path as well as brotli's own. Without this the link still succeeds
-# but the .so dies at dlopen on BrotliDecoderCreateInstance.
-BR="$LIBIL2CPP/os/ClassLibraryPAL/brotli"
-T2d=$(date +%s)
-echo "### PHASE C4: compiling brotli ($(find -L "$BR" -name '*.c' | wc -l) TUs)"
-n=0
-for f in $(find -L "$BR" -name '*.c'); do
-    out="obj/br_$(echo "$f" | tr -c 'A-Za-z0-9._-' '_').o"
-    [ -f "$out" ] && continue
-    $CLANG -x c -std=gnu99 -march=armv8-a $OPT -fPIC -fvisibility=hidden \
-           -DNDEBUG -DANDROID -I"$BR/include" -I"$LIBIL2CPP" -I"$BR" \
-           $TGT -c "$f" -o "$out" 2>>err.log &
-    n=$((n+1)); [ $((n % JOBS)) -eq 0 ] && wait
-done
-wait
-echo "  objects: $(ls obj/br_*.o 2>/dev/null | wc -l)  $(( $(date +%s)-T2d ))s"
+# Drop objects removed from the source set, including support-library objects.
+find obj -maxdepth 1 -type f -name '*.o' > obj/.existing
+if grep -Fvx -f obj/.objs obj/.existing > obj/.stale; then
+    while IFS= read -r out; do rm -f "$out" "$out.sha256"; done < obj/.stale
+fi
 
-# Objects whose source has disappeared must go, or the link silently keeps
-# code for types that no longer exist -- which is exactly the kind of stale
-# state that produces an internally inconsistent player.
-stale=0
-for o in obj/g*.o obj/c*.o obj/r*.o; do
-    [ -f "$o" ] || continue
-    case "$o" in obj/zgc_*|obj/zl_*) continue ;; esac
-    grep -q "^$o\$" obj/.objs 2>/dev/null || { rm -f "$o"; stale=$((stale+1)); }
-done
-[ "$stale" -gt 0 ] && echo "### pruned $stale stale object(s)"
+total=$(wc -l < obj/.objs)
+rebuilt=$(wc -l < obj/.tasks)
+echo "### PHASE N: compiling game and engine ($total TUs)"
+echo "### $rebuilt to compile, $((total - rebuilt)) cached, $JOBS workers"
+if [ "$rebuilt" -gt 0 ]; then
+    LC_ALL=C sort -rn obj/.tasks > obj/.tasks.sorted
+    while read -r size prefix hash f; do
+        printf '%s\0%s\0%s\0' "$prefix" "$hash" "$f"
+    done < obj/.tasks.sorted > obj/.todo0
+    if ! xargs -0 -P "$JOBS" -n 3 sh obj/.cc < obj/.todo0; then
+        echo "### Compilation failed; completed objects are saved for retry" >&2
+        tail -20 err.log >&2
+        exit 1
+    fi
+fi
+while IFS= read -r out; do
+    [ -s "$out" ] && [ -s "$out.sha256" ] || { echo "### Missing compiled object: $out" >&2; exit 1; }
+done < obj/.objs
 
-# Record what was built so the next run can skip it. Written only after every
-# phase has succeeded, so an interrupted build re-does its work rather than
-# trusting a half-written manifest.
-mv obj/.seen "$MANIFEST"
-rm -f obj/.now obj/.objs
+echo "### Compiled: $rebuilt rebuilt, $((total - rebuilt)) cached in $(( $(date +%s)-T0 ))s"
+
+# The successful library can be reused only when every input to its link is
+# unchanged. This avoids re-linking and reinstalling it after a no-op retry.
+LINKFLAGS="-shared -fPIC -fuse-ld=lld -nostdlib++ -Wl,-soname,libil2cpp.so -Wl,-z,max-page-size=16384"
+LINKLIBS="-lc++_static -lc++abi -llog -lm -ldl -lc -Wl,--allow-shlib-undefined"
+{
+    printf '%s\n' "$sig" "$TGT" "$LINKFLAGS" "$LINKLIBS"
+    LC_ALL=C sort obj/.sources
+    LC_ALL=C sort obj/.objs
+    sha256sum "$BASELIB"
+    sha256sum "$USR/bin/clang++"
+    # lld can change independently of the compiler driver in a toolchain update.
+    if [ -f "$USR/bin/ld.lld" ]; then sha256sum "$USR/bin/ld.lld"; fi
+} > obj/.link-inputs
+link_sig=$(sha256sum obj/.link-inputs | cut -d' ' -f1)
+if [ "$rebuilt" -eq 0 ] && [ -s "$ROOT/libil2cpp.so" ] &&
+    [ -f obj/.linksig ] && [ "$(cat obj/.linksig)" = "$link_sig" ]; then
+    echo "### Engine library is current; skipping link"
+    echo "total build time: $(( $(date +%s)-T0 ))s"
+    exit 0
+fi
 
 T3=$(date +%s)
 echo "### PHASE D: linking libil2cpp.so"
@@ -451,35 +349,31 @@ echo "### PHASE D: linking libil2cpp.so"
 #   #00 pc 00000000030f3740  <unknown>
 #   #01 linker64 (__dl__ZN6soinfo17call_constructorsEv+752)
 #
-# So: no pipe, the status is kept, and a failed link takes its output with it
-# rather than leaving a corpse for the installer to pick up and the engine to
-# dlopen twenty minutes later.
+# So: no pipe, the status is kept, and a failed link discards its temporary output instead of replacing the
+# previous complete library.
 #
 # max-page-size is 16 KB because Android 15 allows devices whose pages are,
 # and a library aligned for 4 KB cannot be mapped on one. lld defaults to 4 KB
 # for Android, so it has to be asked. Nothing is lost on a 4 KB device -- the
 # alignment is padding between segments, which such a kernel maps happily, and
 # every other .so in the APK is already built this way.
-"$USR/bin/clang++" $TGT -shared -fPIC -fuse-ld=lld -nostdlib++ \
-    -Wl,-soname,libil2cpp.so \
-    -Wl,-z,max-page-size=16384 \
-    -o "$ROOT/libil2cpp.so" obj/*.o "$BASELIB" \
-    -lc++_static -lc++abi -llog -lm -ldl -lc \
-    -Wl,--allow-shlib-undefined >>err.log 2>&1
-link_status=$?
+# Publish only a completed link, keeping any previous valid library intact.
+rm -f "$ROOT/libil2cpp.so.part"
+link_status=0
+"$USR/bin/clang++" $TGT $LINKFLAGS \
+    -o "$ROOT/libil2cpp.so.part" obj/*.o "$BASELIB" \
+    $LINKLIBS >>err.log 2>&1 || link_status=$?
 echo "  $(( $(date +%s)-T3 ))s"
 
 echo "### RESULT"
-if [ "$link_status" -ne 0 ]; then
+if [ "$link_status" -ne 0 ] || [ ! -s "$ROOT/libil2cpp.so.part" ]; then
     echo "### LINK FAILED (exit $link_status)" >&2
     tail -20 err.log >&2
-    rm -f "$ROOT/libil2cpp.so"
+    rm -f "$ROOT/libil2cpp.so.part"
     exit 1
 fi
-if [ ! -f "$ROOT/libil2cpp.so" ]; then
-    echo "### LINK PRODUCED NOTHING" >&2
-    tail -20 err.log >&2
-    exit 1
-fi
+mv "$ROOT/libil2cpp.so.part" "$ROOT/libil2cpp.so"
+printf '%s' "$link_sig" > obj/.linksig.part
+mv obj/.linksig.part obj/.linksig
 ls -la "$ROOT/libil2cpp.so"
 echo "total build time: $(( $(date +%s)-T0 ))s"

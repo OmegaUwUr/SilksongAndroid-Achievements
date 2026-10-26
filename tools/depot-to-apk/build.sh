@@ -563,7 +563,11 @@ step_6_package() {
     rm -f "$unsigned" "$OUT/aligned.apk"
     "$jdk/jar" --create --file "$unsigned" --no-manifest --no-compress -C "$stage" .
 
-    "$(bt_tool "$bt" zipalign)" -p -f 4 "$unsigned" "$OUT/aligned.apk"
+    # Match the 16 KB ELF alignment of the bundled native libraries. This is
+    # compatible with 4 KB devices too; -p only promises 4 KB ZIP alignment.
+    "$(bt_tool "$bt" zipalign)" -P 16 -f 4 "$unsigned" "$OUT/aligned.apk"
+    "$(bt_tool "$bt" zipalign)" -c -P 16 4 "$OUT/aligned.apk"
+    python3 "$SCRIPT_DIR/check-native-libs.py" "$OUT/aligned.apk"
 
     # Signing.
     #

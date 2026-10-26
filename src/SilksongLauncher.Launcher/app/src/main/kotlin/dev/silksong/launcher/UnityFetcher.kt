@@ -16,6 +16,10 @@
 package dev.silksong.launcher
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -77,8 +81,7 @@ object UnityFetcher {
 
     /** True once both pieces are on disk. */
     fun isPresent(root: File): Boolean =
-        File(root, "editor/Editor/Data/il2cpp/build/deploy/il2cpp.dll").isFile &&
-            File(packageDir(root), "InputSystem/Unity.InputSystem.asmdef").isFile &&
+        editorReady(File(root, "editor")) && inputSystemReady(root) &&
             engineLibsIn(File(root, "android")) != null
 
     /**
@@ -94,7 +97,7 @@ object UnityFetcher {
         android.walkTopDown().maxDepth(8).forEach { d ->
             if (d.isDirectory && d.name == "arm64-v8a" &&
                 d.path.replace('\\', '/').endsWith(suffix.path.replace('\\', '/')) &&
-                File(d, "libunity.so").isFile
+                CompletedArtifact.hasFiles(d, listOf("libunity.so", "libmain.so"))
             ) return d
         }
         return null
@@ -105,7 +108,7 @@ object UnityFetcher {
      * already extracted, so an interrupted first run is resumed by running it
      * again rather than starting over.
      */
-    fun fetch(root: File): Flow<Progress> = channelFlow {
+    fun fetch(root: File, downloads: Semaphore = Semaphore(1)): Flow<Progress> = channelFlow {
         root.mkdirs()
 
         // Progress arrives on whatever thread is reading the socket, which is
@@ -116,21 +119,37 @@ object UnityFetcher {
             trySend(Progress(step, done.toFloat() / total, mb(done, total)))
         }
 
-        val editor = File(root, "editor")
-        if (!File(editor, "Editor/Data/il2cpp/build/deploy/il2cpp.dll").isFile) {
-            send(Progress("Unity IL2CPP toolchain", 0f, "connecting"))
-            fetchEditor(editor) { done, total -> report("Unity IL2CPP toolchain", done, total) }
-        }
-
-        if (!File(packageDir(root), "InputSystem/Unity.InputSystem.asmdef").isFile) {
-            send(Progress("Unity Input System", 0f, "connecting"))
-            fetchInputSystem(root) { done, total -> report("Unity Input System", done, total) }
-        }
-
-        val android = File(root, "android")
-        if (engineLibsIn(android) == null) {
-            send(Progress("Unity Android engine", 0f, "connecting"))
-            fetchAndroidModule(android) { done, total -> report("Unity Android engine", done, total) }
+        // These archives write to separate directories. Share the caller's
+        // permits with the compiler fetch, rather than opening an unbounded
+        // set of downloads/decompressors on a phone. The scope waits for all
+        // pieces before stageEngine and cancels siblings if one fails.
+        coroutineScope {
+            launch {
+                val editor = File(root, "editor")
+                if (!editorReady(editor)) {
+                    downloads.withPermit {
+                        send(Progress("Unity IL2CPP toolchain", 0f, "connecting"))
+                        fetchEditor(editor) { done, total -> report("Unity IL2CPP toolchain", done, total) }
+                    }
+                }
+            }
+            launch {
+                if (!inputSystemReady(root)) {
+                    downloads.withPermit {
+                        send(Progress("Unity Input System", 0f, "connecting"))
+                        fetchInputSystem(root) { done, total -> report("Unity Input System", done, total) }
+                    }
+                }
+            }
+            launch {
+                val android = File(root, "android")
+                if (engineLibsIn(android) == null) {
+                    downloads.withPermit {
+                        send(Progress("Unity Android engine", 0f, "connecting"))
+                        fetchAndroidModule(android) { done, total -> report("Unity Android engine", done, total) }
+                    }
+                }
+            }
         }
 
         // The engine has to end up somewhere the game can load it from, and
@@ -271,6 +290,9 @@ object UnityFetcher {
         "Editor/Data/MonoBleedingEdge/lib/mono/unityaot-linux/mscorlib.dll" to MSCORLIB_SHA256,
     )
 
+    private fun editorReady(editor: File): Boolean =
+        CompletedArtifact.hasFiles(editor, EDITOR_REQUIRED.keys.toList())
+
     // ── Unity packages ─────────────────────────────────────────────────────
 
     /**
@@ -311,6 +333,11 @@ object UnityFetcher {
 
     fun packageDir(root: File): File = File(root, "packages/com.unity.inputsystem")
 
+    private val INPUTSYSTEM_REQUIRED = listOf("InputSystem/Unity.InputSystem.asmdef", "package.json")
+
+    private fun inputSystemReady(root: File): Boolean =
+        CompletedArtifact.isReady(packageDir(root), INPUTSYSTEM_SHA256, INPUTSYSTEM_REQUIRED)
+
     private suspend fun fetchInputSystem(root: File, onProgress: (Long, Long) -> Unit) {
         val dest = packageDir(root)
         val url = "https://packages.unity.com/com.unity.inputsystem/-/" +
@@ -325,19 +352,23 @@ object UnityFetcher {
             tmp.delete()
             throw java.io.IOException("com.unity.inputsystem: expected sha256 $INPUTSYSTEM_SHA256 but got $got")
         }
-        dest.deleteRecursively()
-        dest.mkdirs()
+        val extracted = File(dest.parentFile, "com.unity.inputsystem.part")
+        if (extracted.exists() && !extracted.deleteRecursively()) throw java.io.IOException("could not clear $extracted")
+        extracted.mkdirs()
         tmp.inputStream().use { raw ->
             TarArchiveInputStream(GzipCompressorInputStream(BufferedInputStream(raw, 1 shl 16))).use { tar ->
                 while (true) {
+                    coroutineContext.ensureActive()
                     val entry = tar.nextEntry ?: break
                     // npm-style tarballs wrap everything in package/.
                     val name = entry.name.removePrefix("./").removePrefix("package/")
                     if (entry.isDirectory || name.isEmpty()) continue
-                    write(File(dest, name), tar)
+                    write(File(extracted, name), tar)
                 }
             }
         }
+        coroutineContext.ensureActive()
+        CompletedArtifact.publish(extracted, dest, INPUTSYSTEM_SHA256, INPUTSYSTEM_REQUIRED)
         tmp.delete()
     }
 
@@ -367,7 +398,7 @@ object UnityFetcher {
                 throw java.io.IOException(
                     "Android module: expected md5 $ANDROID_PKG_MD5 but got $got")
             }
-            part.renameTo(pkg)
+            if (!part.renameTo(pkg)) throw java.io.IOException("could not move $part to $pkg")
         }
 
         val tmp = File(dest.parentFile, "android.part")

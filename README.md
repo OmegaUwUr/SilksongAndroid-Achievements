@@ -149,6 +149,31 @@ unlocks are never undone by these switches.
   is cleared or the app is uninstalled; export a copy first. There is no automatic
   rollback or in-app local-ZIP restore in this update.
 
+## Porting performance (revision 29)
+
+Supporting downloads can overlap, with up to two active download/extraction jobs
+across Unity and compiler preparation. Low-memory devices use one. Native
+compilation uses one shared work queue for the game, runtime and support libraries,
+while keeping the existing memory-based worker limit and gameplay optimization.
+
+Completed native object files are saved individually. If setup is interrupted,
+retrying can reuse those files; downloaded tools and existing game files are also
+retained. A fully unchanged native build skips the link step. Changes to shared
+headers, runtime sources, compiler inputs, sysroot or flags invalidate the native
+cache. Upgrading to revision 29 also refreshes the small Input System/Roslyn/sysroot
+caches and repeats conversion once to establish verified completion records.
+Complete Unity downloads and Steam game files are retained.
+
+Setup checks arm64/Vulkan support before downloads and reduces conversion workers
+under memory pressure. An unset game frame cap defaults to 60 FPS; explicit FPS
+choices still apply. See [the compatibility audit](docs/PORTING_COMPATIBILITY.md)
+for verified fixes and remaining device checks.
+
+Actual setup time still depends on network speed, CPU, available RAM, storage and
+thermal throttling. This revision has host regression checks but no measured
+real-device speedup yet. See [the porting performance validation guide](docs/PORTING_PERFORMANCE.md)
+for the timing logs and device checks.
+
 ## Getting started
 
 1. Download the latest APK from

@@ -27,6 +27,7 @@
 
 package dev.silksong.launcher
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -91,46 +92,23 @@ object Il2cppConverter {
      */
     private const val DEFAULT_SOURCES = 1148
 
-    fun isPresent(root: File): Boolean =
-        metadata(root).length() > 0 &&
-            cppDir(root).listFiles()?.any { it.name.endsWith(".cpp") } == true
+    /** Completed output for exactly these source assemblies and converter. */
+    fun isCurrent(unity: File, depot: File, root: File): Boolean =
+        runCatching { ConversionCache.isCurrent(root, inputSignature(unity, depot, root)) }
+            .getOrDefault(false)
 
-    /**
-     * Whether the conversion is older than what it was made from.
-     *
-     * Only our own assemblies are checked, because only they change without
-     * anything else changing: the depot is fixed and the Input System is
-     * rebuilt from a pinned version, but the port's own code is edited between
-     * builds. Without this a changed patch compiles happily, is copied into
-     * the assembly set, and is then skipped by a conversion that thinks it has
-     * nothing to do -- so the player keeps running the previous version and
-     * nothing says otherwise.
-     *
-     * BOTH of ours, and that is not a tidiness point. SilksongIo arrived in a
-     * release whose patch sources had not changed at all, so a check that
-     * looked only at SilksongPatches said "nothing to do" and skipped the
-     * conversion that applies the File.Replace redirect -- which would have
-     * shipped a release whose headline fix reached nobody who already had a
-     * build. An assembly of ours that is missing from the staged set counts as
-     * stale for the same reason: that is exactly what an upgrade looks like.
-     */
-    fun isStale(root: File): Boolean {
-        val ours = listOf(PackageCompiler.patchAssembly(root), PackageCompiler.ioAssembly(root))
-        for (built in ours) {
-            if (!built.isFile) continue
-            val staged = File(asmDir(root), built.name)
-            if (!staged.isFile) return true
-            // Content, not length. Two builds of the patches differ in what
-            // they do far more often than in how big they are, and a same-size
-            // assembly read as "unchanged" means the conversion is skipped, the
-            // old generated C++ is recompiled, and the device runs the previous
-            // version of a patch while every log line says the build succeeded.
-            // That is not hypothetical: it cost three rounds of chasing a bug
-            // that had already been fixed.
-            if (staged.length() != built.length()) return true
-            if (!staged.readBytes().contentEquals(built.readBytes())) return true
-        }
-        return false
+    private fun inputSignature(unity: File, depot: File, root: File): String {
+        val managed = depotManaged(depot) ?: throw IOException("missing game assemblies")
+        fun dlls(dir: File): List<File> = dir.listFiles()?.filter {
+            it.isFile && it.extension == "dll"
+        }?.takeIf { it.isNotEmpty() } ?: throw IOException("no assemblies in $dir")
+        return ConversionCache.inputs(listOf(
+            "bcl" to dlls(bclDir(unity)),
+            "android-engine" to dlls(engineManagedDir(unity)),
+            "game" to dlls(managed),
+            "rebuilt-packages" to dlls(PackageCompiler.outputDir(root)),
+            "converter" to listOf(File(deployDir(unity), "il2cpp.dll")),
+        ))
     }
 
     // ── inputs ─────────────────────────────────────────────────────────────
@@ -175,6 +153,10 @@ object Il2cppConverter {
         if (!engine.isDirectory) throw IOException("the Android player's Managed folder is missing: $engine")
         if (!File(deploy, "il2cpp.dll").isFile) throw IOException("il2cpp.dll is missing: $deploy")
 
+        // Invalidate BEFORE staging: even cancellation during a save rewrite
+        // must not leave the previous success marker attached to new inputs.
+        ConversionCache.invalidate(root)
+        val inputSignature = inputSignature(unity, depot, root)
         send(Progress("Preparing the converter", -1f, "assemblies"))
         val assemblies = stageAssemblies(bcl, engine, managed, PackageCompiler.outputDir(root), asmDir(root))
         LauncherLog.log("il2cpp input: ${assemblies.size} assemblies")
@@ -303,6 +285,7 @@ object Il2cppConverter {
 
         val cpp = cppDir(root).listFiles()?.count { it.name.endsWith(".cpp") } ?: 0
         val c = cppDir(root).listFiles()?.count { it.name.endsWith(".c") } ?: 0
+        ConversionCache.complete(root, inputSignature)
         rememberSources(root)
         LauncherLog.log(
             "il2cpp: ${seconds}s, $cpp cpp + $c c, metadata ${metadata(root).length()} bytes",
@@ -397,7 +380,9 @@ object Il2cppConverter {
                 context,
                 listOf("redirect-file-replace", assembly.absolutePath, helper.absolutePath),
             ) { line -> LauncherLog.log("save fix: ${line.trim()}") }
-        } catch (t: Throwable) {
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (t: Exception) {
             LauncherLog.log("save fix: could not redirect File.Replace -- saving may fail on devices " +
                 "whose storage cannot do it", t)
         }

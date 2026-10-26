@@ -74,10 +74,9 @@ object NativeBuild {
             send(Progress("Preparing the build", -1f, "locating the sources"))
             val (script, pieces) = stage(unity, toolchain, root, assets)
 
-            // Audit the *translated* Steamworks.NET P/Invoke surface before
-            // spending minutes linking an engine that could only fail later at
-            // dlsym. This makes the Android shim a strict Valve-compatible ABI
-            // boundary rather than a best-effort collection of guessed exports.
+            // Log translated Steamworks.NET imports missing from our shim.
+            // This is diagnostic: the scan includes unused bindings, so it
+            // cannot prove which symbols gameplay will actually resolve.
             SteamAbiAudit.requireCompatible(Il2cppConverter.cppDir(root))
 
             val objDir = File(root, "obj")
@@ -115,6 +114,9 @@ object NativeBuild {
                     if (line.startsWith("###")) {
                         val text = line.removePrefix("###").trim()
                         val named = when {
+                            text.startsWith("Checking compiler cache") -> "Checking saved build files" to null
+                            text.startsWith("Preparing precompiled headers") -> "Preparing the compiler" to null
+                            text.startsWith("PHASE N") -> "Compiling the game and engine" to ""
                             text.startsWith("PHASE A") -> "Compiling the game" to "g"
                             text.startsWith("PHASE B") -> "Compiling the game" to "c"
                             text.startsWith("PHASE C:") -> "Compiling the engine runtime" to "r"
