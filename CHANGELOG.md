@@ -2,6 +2,32 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.31 (candidate)
+
+Adds a game catalog and compatibility-inspection foundation. **This is not a
+working Hollow Knight port or a universal Unity-game converter.**
+
+- Adds Games & compatibility to setup and the dashboard, listing Silksong,
+  Hollow Knight (Steam app 367520), and an Other Unity game inspection option.
+- Makes each entry's status explicit. Only the existing Silksong entry can open
+  porting setup; adding a catalog flag cannot activate another game's adapter.
+- Inspects Unity serialized headers, managed PE/CLI indicators, desktop IL2CPP,
+  content layout and native plugin ELF architecture without modifying game files.
+- Rejects ambiguous folders and records incomplete/unsupported metadata clearly.
+- Adds a shareable metadata report and a Python PC inspector using the same catalog.
+- Guards Silksong setup, patch compilation, conversion, content rewriting and
+  launch against files belonging to a different game. Identity uses app.info's
+  product, with the original Silksong folder name as a fallback when it is absent.
+- Registers the new activity in both Android manifests and the packaged-manifest
+  check. Adds credits and the remaining per-game integration requirements.
+
+Validation: 16 Python inspector regression tests, Android XML/resource references,
+manifest-registration checks, shell syntax and diff whitespace checks passed.
+No Kotlin, C#, native or APK compilation was run for this revision, in accordance
+with the requested manual build policy. Kotlin checks were added/prepared but not
+run. Hollow Knight's actual Linux files and Android gameplay validation are still
+needed before an adapter can be implemented and promoted.
+
 ## 1.0.3-achievements.30 (candidate)
 
 Adds personalized touch controls, enabled from the launcher's Gameplay settings

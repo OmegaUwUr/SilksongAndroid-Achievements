@@ -218,6 +218,7 @@ object PlayerImage {
     ): Flow<Progress> = channelFlow {
         val data = depotData(depot)
             ?: throw IOException("no *_Data directory with globalgamemanagers under $depot")
+        GameCompatibility.requireSilksongData(data)
         val converted = Il2cppConverter.dataDir(root)
         if (!File(converted, "Metadata/global-metadata.dat").isFile) {
             throw IOException("the conversion has not run: no global-metadata.dat")
@@ -455,6 +456,7 @@ object PlayerImage {
         assets: android.content.res.AssetManager,
     ): Flow<Progress> = channelFlow {
         val data = depotData(depot) ?: throw IOException("no player data under $depot")
+        GameCompatibility.requireSilksongData(data)
         val aa = File(data, "StreamingAssets/aa")
         if (!aa.isDirectory) throw IOException("no Addressables content at $aa")
 

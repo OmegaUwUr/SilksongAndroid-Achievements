@@ -234,6 +234,10 @@ step_5_apk_shell() {
             android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.launcher.GameLibraryActivity"
+            android:exported="false" android:process=":launcher"
+            android:label="@string/game_library_title"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <activity android:name="dev.silksong.launcher.AchievementViewerActivity"
             android:exported="false" android:process=":launcher"
             android:label="@string/achievements_title"
@@ -395,6 +399,8 @@ EOF
             --file AndroidManifest.xml > "$sh/manifest-tree.txt"
         grep -Fq 'dev.silksong.launcher.AchievementViewerActivity' "$sh/manifest-tree.txt" \
             || fail "Packaged manifest is missing AchievementViewerActivity"
+        grep -Fq 'dev.silksong.launcher.GameLibraryActivity' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing GameLibraryActivity"
     fi
 
     # GameActivity and the activity that hosts the player (shell/*.java) are

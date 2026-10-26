@@ -190,3 +190,17 @@ styles, and the scrolling Back layout are original changes for this repository.
 
 Steam initialization retry/cleanup and license-request diagnostics are original
 changes for this repository, using the existing JavaSteam integration credited above.
+
+## Personalized controls and game compatibility tools
+
+The revision-30 touch layout/editor and revision-31 game catalog, read-only
+inspectors and game-identity guards were developed for this repository with
+assistance from **ChatGPT (OpenAI)**. They extend **jakobkhansen and the
+SilksongAndroid contributors'** launcher and porting foundation credited above.
+
+The inspectors use the [Microsoft PE/COFF format specification](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format)
+as a file-format reference. Unity metadata inspection follows the serialized
+header layout already used by this project's AssetsTools.NET-based tooling.
+No separate third-party Hollow Knight port implementation was imported. The
+Hollow Knight catalog entry is an inspection target, not a claim of a completed
+or endorsed Android port. Hollow Knight and Silksong remain Team Cherry's games.

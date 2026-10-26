@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game_library_title">Games &amp; compatibility</string>
+    <string name="game_library_back">Back</string>
+    <string name="game_library_intro">Choose a game to see its porting status or inspect your own installed game files. File inspection does not download, compile or change your game.</string>
+    <string name="game_port_available">Porting available · Linux files required</string>
+    <string name="game_inspection_only">File inspection only · port not implemented</string>
+    <string name="game_silksong_description">Use the existing Silksong setup, Steam achievements, Cloud saves and controls.</string>
+    <string name="game_hollow_knight_description">Hollow Knight needs a separate porting adapter. Check your installation to identify its Unity version and required libraries. Porting and play are not available yet.</string>
+    <string name="game_other_description">Inspect another Unity game. Sharing an engine does not guarantee Android compatibility; each title needs its own engine, assets, libraries, controls and save support.</string>
+    <string name="game_check_files">Check game files</string>
+    <string name="game_open_silksong">Open Silksong setup / launcher</string>
+    <string name="game_inspecting">Inspecting %1$s files…</string>
+    <string name="game_share_report">Share compatibility report</string>
+    <string name="game_report_title">Game compatibility report</string>
+    <string name="game_check_another">Back to game options</string>
+    <string name="game_catalog_error">The game catalog could not be read. Return to the launcher and reinstall this app version if the problem continues.</string>
+    <string name="game_folder_picker_error">The folder picker could not be opened. Use the PC inspection script included in the repository.</string>
+    <string name="game_read_permission_required">Reading local game files requires storage access. You can retry or use the PC inspection script.</string>
+    <string name="game_local_folder_required">Choose one game folder on internal storage or an SD card. Cloud-provider folders cannot be inspected here.</string>
+    <string name="game_inspection_failed">Could not inspect these files: %1$s</string>
+</resources>

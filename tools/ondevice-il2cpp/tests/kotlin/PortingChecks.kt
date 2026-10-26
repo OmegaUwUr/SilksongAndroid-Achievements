@@ -29,6 +29,7 @@ fun main() = runBlocking {
         val depot = File(root, "depot")
         val build = File(root, "build")
         val game = Fixture.write(depot, "Managed/Assembly-CSharp.dll", "gameA")
+        Fixture.write(depot, "app.info", "Team Cherry\nHollow Knight Silksong\n")
         Fixture.write(unity, "editor/Editor/Data/MonoBleedingEdge/lib/mono/unityaot-linux/mscorlib.dll")
         Fixture.write(unity, "editor/Editor/Data/il2cpp/build/deploy/il2cpp.dll")
         Fixture.write(unity, "android/Variations/il2cpp/Managed/UnityEngine.CoreModule.dll")

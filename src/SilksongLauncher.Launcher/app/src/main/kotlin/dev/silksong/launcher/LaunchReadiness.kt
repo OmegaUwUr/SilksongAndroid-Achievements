@@ -74,7 +74,11 @@ object LaunchReadiness {
             }
 
             try {
-                withContext(Dispatchers.IO) { DepotLocation.relink(activity, depot) }
+                withContext(Dispatchers.IO) {
+                    GameCompatibility.requireSilksongData(PlayerImage.depotData(depot)
+                        ?: throw java.io.IOException("No game data found"))
+                    DepotLocation.relink(activity, depot)
+                }
             } catch (t: Throwable) {
                 LauncherLog.log("Launch readiness failed while linking game content", t)
                 screen.fail("The installed game content could not be prepared.")

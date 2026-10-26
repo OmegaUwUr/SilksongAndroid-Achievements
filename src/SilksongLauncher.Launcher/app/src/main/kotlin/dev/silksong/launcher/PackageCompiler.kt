@@ -150,6 +150,8 @@ object PackageCompiler {
         root: File,
         assets: android.content.res.AssetManager,
     ): Flow<Progress> = channelFlow {
+        GameCompatibility.requireSilksongData(PlayerImage.depotData(depot)
+            ?: throw IOException("No game data found for Silksong patches"))
         send(Progress("Compiling the patches", -1f, ""))
         val csc = stageRoslyn(root) { done, total ->
             trySend(Progress("Fetching Roslyn", done.toFloat() / total, ToolchainFetcher.mb(done, total)))

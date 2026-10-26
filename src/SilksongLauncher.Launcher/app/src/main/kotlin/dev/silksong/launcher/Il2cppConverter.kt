@@ -137,6 +137,8 @@ object Il2cppConverter {
     // ── the run ────────────────────────────────────────────────────────────
 
     fun convert(unity: File, depot: File, context: android.content.Context, root: File): Flow<Progress> = channelFlow {
+        GameCompatibility.requireSilksongData(PlayerImage.depotData(depot)
+            ?: throw IOException("No game data found for Silksong conversion"))
         val bcl = bclDir(unity)
         val engine = engineManagedDir(unity)
         val deploy = deployDir(unity)

@@ -126,6 +126,9 @@ class LauncherActivity : Activity() {
             startActivity(Intent(this, AchievementViewerActivity::class.java))
         }
         btnLaunch.setOnClickListener { onLaunchClicked() }
+        findViewById<Button>(R.id.btn_game_library).setOnClickListener {
+            startActivity(Intent(this, GameLibraryActivity::class.java))
+        }
 
         showLaunchPanel()
     }
