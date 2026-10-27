@@ -43,6 +43,24 @@ static fake_interface_t g_stats;
 static bool g_ready = false;
 static uint64_t g_steam_id = 0;
 
+// This bridge belongs only to Silksong's default game process. Hollow Knight
+// runs in :hollow_knight and must never send stats to Silksong's Steam app ID.
+// Fail closed if process identity cannot be read; do not infer it from callers.
+static pthread_once_t g_process_once = PTHREAD_ONCE_INIT;
+static bool g_silksong_process = false;
+static void read_process_identity(void) {
+    char name[256] = {0};
+    FILE *input = fopen("/proc/self/cmdline", "rb");
+    if (!input) return;
+    size_t count = fread(name, 1, sizeof(name) - 1, input);
+    fclose(input);
+    g_silksong_process = count > 0 && memchr(name, '\0', count) != NULL && strchr(name, ':') == NULL;
+}
+static bool silksong_bridge_allowed(void) {
+    pthread_once(&g_process_once, read_process_identity);
+    return g_silksong_process;
+}
+
 typedef struct {
     uint64_t game_id;
     int32_t result;
@@ -151,6 +169,7 @@ static void set_socket_timeout(int fd, int option, int timeout_ms) {
 }
 
 static int connect_service(void) {
+    if (!silksong_bridge_allowed()) return -1;
     int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0) return -1;
 
@@ -199,6 +218,7 @@ static bool request_bool(const char *message, char *response, size_t response_si
 bool SteamAPI_Init(void) {
     char response[8];
     g_ready = false;
+    if (!silksong_bridge_allowed()) return false;
     for (int attempt = 0; attempt < 10 && !g_ready; ++attempt) {
         g_ready = request_bool("PING\n", response, sizeof(response));
         if (!g_ready && attempt != 9) usleep(500000);
@@ -312,14 +332,14 @@ DEFINE_CLIENT_GETTER(GetISteamRemotePlay, &g_stub)
 // is alive. Keep these conservative and deterministic on Android.
 bool SteamAPI_ISteamUser_BLoggedOn(void *self) { (void)self; return g_ready; }
 uint64_t SteamAPI_ISteamUser_GetSteamID(void *self) { (void)self; return g_steam_id; }
-uint32_t SteamAPI_ISteamUtils_GetAppID(void *self) { (void)self; return (uint32_t)SILKSONG_APP_ID; }
+uint32_t SteamAPI_ISteamUtils_GetAppID(void *self) { (void)self; return silksong_bridge_allowed() ? (uint32_t)SILKSONG_APP_ID : 0; }
 bool SteamAPI_ISteamUtils_IsOverlayEnabled(void *self) { (void)self; return false; }
-bool SteamAPI_ISteamApps_BIsSubscribed(void *self) { (void)self; return true; }
+bool SteamAPI_ISteamApps_BIsSubscribed(void *self) { (void)self; return silksong_bridge_allowed(); }
 bool SteamAPI_ISteamApps_BIsSubscribedApp(void *self, uint32_t app_id) {
-    (void)self; return app_id == (uint32_t)SILKSONG_APP_ID;
+    (void)self; return silksong_bridge_allowed() && app_id == (uint32_t)SILKSONG_APP_ID;
 }
 bool SteamAPI_ISteamApps_BIsAppInstalled(void *self, uint32_t app_id) {
-    (void)self; return app_id == (uint32_t)SILKSONG_APP_ID;
+    (void)self; return silksong_bridge_allowed() && app_id == (uint32_t)SILKSONG_APP_ID;
 }
 bool SteamAPI_ISteamApps_BIsDlcInstalled(void *self, uint32_t app_id) {
     (void)self; (void)app_id; return false;

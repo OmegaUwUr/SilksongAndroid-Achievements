@@ -47,6 +47,19 @@
             android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
+        <activity android:name="dev.silksong.launcher.HollowKnightSetupActivity"
+            android:exported="false" android:process=":launcher"
+            android:label="@string/hk_title"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.shell.HollowKnightActivity"
+            android:exported="false" android:process=":hollow_knight" android:launchMode="singleTask"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
+            android:screenOrientation="sensorLandscape" android:resizeableActivity="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
+        </activity>
+
         <activity android:name="dev.silksong.launcher.GameLibraryActivity"
             android:exported="false" android:process=":launcher"
             android:label="@string/game_library_title"

@@ -234,6 +234,19 @@ step_5_apk_shell() {
             android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.launcher.HollowKnightSetupActivity"
+            android:exported="false" android:process=":launcher"
+            android:label="@string/hk_title"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.shell.HollowKnightActivity"
+            android:exported="false" android:process=":hollow_knight" android:launchMode="singleTask"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
+            android:screenOrientation="sensorLandscape" android:resizeableActivity="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
+        </activity>
+
         <activity android:name="dev.silksong.launcher.GameLibraryActivity"
             android:exported="false" android:process=":launcher"
             android:label="@string/game_library_title"
@@ -401,6 +414,8 @@ EOF
             || fail "Packaged manifest is missing AchievementViewerActivity"
         grep -Fq 'dev.silksong.launcher.GameLibraryActivity' "$sh/manifest-tree.txt" \
             || fail "Packaged manifest is missing GameLibraryActivity"
+        grep -Fq 'dev.silksong.shell.HollowKnightActivity' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing HollowKnightActivity"
     fi
 
     # GameActivity and the activity that hosts the player (shell/*.java) are
@@ -425,6 +440,8 @@ EOF
     if (( have_launcher )); then
         cp="$cp:$sh/aar/classes.jar"
         changed+=("$sh/aar/classes.jar")
+        cp -f "$SCRIPT_DIR/shell/HollowKnightActivity.java" "$sh/src/"
+        srcs+=("$sh/src/HollowKnightActivity.java")
         local jar
         for jar in "$launcher_deps"/*.jar; do
             [[ -f "$jar" ]] || continue

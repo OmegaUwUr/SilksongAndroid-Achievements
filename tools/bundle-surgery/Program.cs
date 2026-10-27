@@ -44,12 +44,14 @@ internal static class Program
     static string ClassDataPath { get; } = Path.Combine(
         AppContext.BaseDirectory, "classdata.tpk");
 
-    static int Main(string[] args)
+    internal static int Main(string[] args)
     {
         if (args.Length < 1)
         {
             Console.Error.WriteLine("usage: BundleSurgery <command> [args]");
             Console.Error.WriteLine("commands:");
+            Console.Error.WriteLine("  manifest-classic-tree <source-root> <report.json>");
+            Console.Error.WriteLine("  retarget-classic-tree <source-root> <output-root> <profile-manifest.json> <report.json>");
             Console.Error.WriteLine("  extract-vulkan-android <in.bundle> <out.bundle>  — extract Vulkan SPIR-V slice + retarget to Android (the main pipeline command)");
             Console.Error.WriteLine("  set-unity-version <file> <version>               — rewrite the Unity version stamped in a SerializedFile (e.g. strip an internal branch suffix)");
             Console.Error.WriteLine("  set-graphics-apis <globalgamemanagers> <ids>     — set BuildSettings.m_GraphicsAPIs (21=Vulkan, 11=GLES3, 17=OpenGLCore)");
@@ -70,6 +72,13 @@ internal static class Program
             "patch-catalog-path" when args.Length >= 4 => PatchCatalogPath(args[1], args[2], args[3]),
             "redirect-file-replace" when args.Length >= 3 => RedirectFileReplace.Run(args[1], args[2]),
             "retarget-tree" when args.Length >= 3 => RetargetTree(args[1], args[2]),
+            "retarget-serialized-android" when args.Length == 3 => RetargetSerializedAndroid(args[1], args[2]),
+            "manifest-classic-tree" when args.Length == 3 =>
+                ClassicTreeCommands.Manifest(args[1], args[2]),
+            "create-classic-profile-manifest" when args.Length == 6 =>
+                ClassicTreeCommands.CreateProfileManifest(args[1], args[2], args[3], args[4], args[5]),
+            "retarget-classic-tree" when args.Length == 5 =>
+                ClassicTreeCommands.Retarget(args[1], args[2], args[3], args[4]),
             "extract-vulkan-android" when args.Length >= 3 => ExtractVulkanAndroid(args[1], args[2]),
             "shader-report" when args.Length >= 2 => ShaderReport(args[1]),
             _ => Usage(),
@@ -481,6 +490,12 @@ internal static class Program
     }
 
 
+
+    static int RetargetSerializedAndroid(string input, string output)
+    {
+        SerializedFileTransformer.Transform(input, output, requireVulkan: true);
+        return 0;
+    }
 
     static int ExtractVulkanAndroid(string inputPath, string outputPath)
     {

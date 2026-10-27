@@ -1,0 +1,5 @@
+{
+  "entryPoints": [
+    { "nameSpace": "HollowKnightPatches", "className": "PortBootstrap", "methodName": "Start", "loadTypes": 1 }
+  ]
+}

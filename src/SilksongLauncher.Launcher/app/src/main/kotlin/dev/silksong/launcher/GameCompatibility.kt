@@ -150,6 +150,8 @@ object GameCompatibility {
         facts += "Selected game: ${profile.title}"
         facts += "Steam App ID: ${profile.steamAppId ?: "not configured"}"
         if (!profile.hasPortAdapter) blockers += "A port adapter for ${profile.title} is not implemented. Download, port and play are disabled for this entry."
+        if (profile.id == "hollow-knight" && profile.hasPortAdapter)
+            notes += "Experimental adapter: exact Linux 1.5.12620 file hashes are checked during setup. Controller required; Steam sync and touch controls are not enabled."
         val candidates = findDataFolders(root)
         if (candidates.size != 1) {
             blockers += if (candidates.isEmpty()) "No readable Unity data folder was found. Select the installed game's folder containing globalgamemanagers."
@@ -183,7 +185,7 @@ object GameCompatibility {
         val catalog = File(aa, "catalog.bin").isFile && File(aa, "settings.json").isFile
         val levels = data.listFiles().orEmpty().count { it.isFile && it.name.matches(Regex("level[0-9]+")) }
         facts += "Content: ${if (catalog) "binary Addressables catalog" else "no binary Addressables catalog"}; $levels loose level files"
-        if (profile.hasPortAdapter && !catalog) blockers += "The Silksong adapter requires StreamingAssets/aa/catalog.bin and settings.json."
+        if (profile.id == "silksong" && profile.hasPortAdapter && !catalog) blockers += "The Silksong adapter requires StreamingAssets/aa/catalog.bin and settings.json."
         if (!profile.hasPortAdapter) blockers += "Asset packaging, game patches, input and save/Steam integration have not been adapted for this title."
 
         val plugins = mutableListOf<String>()

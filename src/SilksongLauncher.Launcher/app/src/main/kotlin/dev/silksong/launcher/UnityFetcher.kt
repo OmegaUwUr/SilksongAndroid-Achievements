@@ -43,18 +43,6 @@ object UnityFetcher {
 
     const val UNITY_VERSION = "6000.0.50f1"
 
-    // The changeset is part of every download URL. It is the hash the player
-    // reports at startup: "Version '6000.0.50f1 (f1ef1dca8bff)'".
-    private const val CHANGESET = "f1ef1dca8bff"
-    private const val DL = "https://download.unity3d.com/download_unity/$CHANGESET"
-
-    private const val IL2CPP_DLL_SHA256 =
-        "02d9d225cc8968fe39284dfbf2a9912796b3b0666d274294cfa6b90cf5e946bb"
-    private const val IL2CPP_CONFIG_SHA256 =
-        "38d4d2855d372bb2a12de7dce3cde110d1ec9780232a6a298153bee96c352259"
-    private const val MSCORLIB_SHA256 =
-        "2efab59f0bdc59e1242b40203aff1f96e529e880f752585286c2816871e4496c"
-
     /**
      * Roughly how much of the editor archive gets read before everything
      * wanted has gone past. Used only to show a progress bar, so being a
@@ -62,11 +50,6 @@ object UnityFetcher {
      * not when this number is reached.
      */
     private const val EDITOR_APPROX_BYTES = 640L * 1024 * 1024
-
-    // Unity's own value, published per artifact through its releases API. For
-    // this version the Android module is offered only as a macOS .pkg.
-    private const val ANDROID_PKG_MD5 = "8dfad5f83024fa533ac02b58a83d0898"
-    private const val ANDROID_PKG_BYTES = 673_712_656L
 
     /** Everything lands under here, and is skipped if already present. */
     fun rootFor(context: android.content.Context): File =
@@ -80,8 +63,8 @@ object UnityFetcher {
     )
 
     /** True once both pieces are on disk. */
-    fun isPresent(root: File): Boolean =
-        editorReady(File(root, "editor")) && inputSystemReady(root) &&
+    fun isPresent(root: File, target: PortTarget = PortTarget.SILKSONG): Boolean =
+        versionMatches(root, target) && editorReady(File(root, "editor"), target) && inputSystemReady(root) &&
             engineLibsIn(File(root, "android")) != null
 
     /**
@@ -108,7 +91,18 @@ object UnityFetcher {
      * already extracted, so an interrupted first run is resumed by running it
      * again rather than starting over.
      */
-    fun fetch(root: File, downloads: Semaphore = Semaphore(1)): Flow<Progress> = channelFlow {
+    private fun versionMatches(root: File, target: PortTarget): Boolean {
+        val marker = File(root, "unity-version.txt")
+        return if (marker.isFile) marker.readText().trim() == target.unityVersion
+        else target == PortTarget.SILKSONG // adopt the original, single-version download
+    }
+
+    fun fetch(root: File, downloads: Semaphore = Semaphore(1), target: PortTarget = PortTarget.SILKSONG): Flow<Progress> = channelFlow {
+        if (target == PortTarget.HOLLOW_KNIGHT) require(root.path.replace('\\', '/').endsWith("/games/hollow-knight/unity")) {
+            "Hollow Knight needs its own Unity download directory"
+        }
+        val distribution = UnityDistribution.forTarget(target)
+        val versionOk = versionMatches(root, target)
         root.mkdirs()
 
         // Progress arrives on whatever thread is reading the socket, which is
@@ -126,10 +120,10 @@ object UnityFetcher {
         coroutineScope {
             launch {
                 val editor = File(root, "editor")
-                if (!editorReady(editor)) {
+                if (!versionOk || !editorReady(editor, target)) {
                     downloads.withPermit {
                         send(Progress("Unity IL2CPP toolchain", 0f, "connecting"))
-                        fetchEditor(editor) { done, total -> report("Unity IL2CPP toolchain", done, total) }
+                        fetchEditor(editor, target, distribution) { done, total -> report("Unity IL2CPP toolchain", done, total) }
                     }
                 }
             }
@@ -143,10 +137,10 @@ object UnityFetcher {
             }
             launch {
                 val android = File(root, "android")
-                if (engineLibsIn(android) == null) {
+                if (!versionOk || engineLibsIn(android) == null) {
                     downloads.withPermit {
                         send(Progress("Unity Android engine", 0f, "connecting"))
-                        fetchAndroidModule(android) { done, total -> report("Unity Android engine", done, total) }
+                        fetchAndroidModule(android, target, distribution) { done, total -> report("Unity Android engine", done, total) }
                     }
                 }
             }
@@ -159,6 +153,7 @@ object UnityFetcher {
         send(Progress("Unity", -1f, "staging the engine"))
         stageEngine(root, File(root.parentFile, "staging"))
 
+        File(root, "unity-version.txt").writeText(target.unityVersion)
         send(Progress("Unity", 1f, "ready"))
     }.flowOn(Dispatchers.IO)
 
@@ -208,11 +203,11 @@ object UnityFetcher {
 
     // ── the editor archive ─────────────────────────────────────────────────
 
-    private suspend fun fetchEditor(dest: File, onProgress: (Long, Long) -> Unit) {
+    private suspend fun fetchEditor(dest: File, target: PortTarget, distribution: UnityDistribution, onProgress: (Long, Long) -> Unit) {
         val tmp = File(dest.parentFile, "editor.part")
         tmp.deleteRecursively()
 
-        open("$DL/LinuxEditorInstaller/Unity-$UNITY_VERSION.tar.xz").use { raw ->
+        open("${distribution.downloadRoot}/LinuxEditorInstaller/Unity-${target.unityVersion}.tar.xz").use { raw ->
             val counted = CountingInputStream(raw, EDITOR_APPROX_BYTES, onProgress)
             // Stopping early means closing the stream part-way through, so the
             // decoders are cut off mid-archive and say so. That is the
@@ -223,7 +218,7 @@ object UnityFetcher {
             }.exceptionOrNull()?.let { if (it is Enough) Unit else throw it }
         }
 
-        for ((path, want) in EDITOR_REQUIRED) {
+        for ((path, want) in distribution.editorRequired) {
             val f = File(tmp, path)
             if (!f.isFile) {
                 tmp.deleteRecursively()
@@ -284,14 +279,8 @@ object UnityFetcher {
      * digest only for the archive as a whole, which is of no use when most of
      * it is never fetched.
      */
-    private val EDITOR_REQUIRED = mapOf(
-        "Editor/Data/il2cpp/build/deploy/il2cpp.dll" to IL2CPP_DLL_SHA256,
-        "Editor/Data/il2cpp/libil2cpp/il2cpp-config.h" to IL2CPP_CONFIG_SHA256,
-        "Editor/Data/MonoBleedingEdge/lib/mono/unityaot-linux/mscorlib.dll" to MSCORLIB_SHA256,
-    )
-
-    private fun editorReady(editor: File): Boolean =
-        CompletedArtifact.hasFiles(editor, EDITOR_REQUIRED.keys.toList())
+    private fun editorReady(editor: File, target: PortTarget): Boolean =
+        CompletedArtifact.hasFiles(editor, UnityDistribution.forTarget(target).editorRequired.keys.toList())
 
     // ── Unity packages ─────────────────────────────────────────────────────
 
@@ -379,24 +368,24 @@ object UnityFetcher {
     // xar header is fixed-size and its table of contents is deflate-compressed
     // XML, and commons-compress reads the rest.
 
-    private suspend fun fetchAndroidModule(dest: File, onProgress: (Long, Long) -> Unit) {
+    private suspend fun fetchAndroidModule(dest: File, target: PortTarget, distribution: UnityDistribution, onProgress: (Long, Long) -> Unit) {
         val pkg = File(dest.parentFile, "android-support.pkg")
-        if (pkg.length() != ANDROID_PKG_BYTES) {
+        if (pkg.length() != distribution.androidBytes || sha256(pkg) != distribution.androidSha256) {
             pkg.parentFile?.mkdirs()
             val part = File(dest.parentFile, "android-support.part")
-            val digest = MessageDigest.getInstance("MD5")
-            open("$DL/MacEditorTargetInstaller/UnitySetup-Android-Support-for-Editor-$UNITY_VERSION.pkg")
+            val digest = MessageDigest.getInstance("SHA-256")
+            open("${distribution.downloadRoot}/MacEditorTargetInstaller/UnitySetup-Android-Support-for-Editor-${target.unityVersion}.pkg")
                 .use { raw ->
-                    val counted = CountingInputStream(raw, ANDROID_PKG_BYTES, onProgress)
+                    val counted = CountingInputStream(raw, distribution.androidBytes, onProgress)
                     DigestInputStream(counted, digest).use { input ->
                         part.outputStream().use { out -> input.copyTo(out, 1 shl 20) }
                     }
                 }
             val got = digest.digest().joinToString("") { "%02x".format(it) }
-            if (got != ANDROID_PKG_MD5) {
+            if (got != distribution.androidSha256) {
                 part.delete()
                 throw java.io.IOException(
-                    "Android module: expected md5 $ANDROID_PKG_MD5 but got $got")
+                    "Android module: expected sha256 ${distribution.androidSha256} but got $got")
             }
             if (!part.renameTo(pkg)) throw java.io.IOException("could not move $part to $pkg")
         }

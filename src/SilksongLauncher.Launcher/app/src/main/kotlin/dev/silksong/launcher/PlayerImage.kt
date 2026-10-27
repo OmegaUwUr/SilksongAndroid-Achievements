@@ -815,7 +815,7 @@ object PlayerImage {
     }
 
     /** The Android IL2CPP runtime reads boot.config to pick its init path. */
-    private fun setScriptingBackend(boot: File) {
+    internal fun setScriptingBackend(boot: File) {
         if (!boot.isFile) return
         val kept = boot.readLines().filterNot { it.startsWith("scripting-backend=") }
         boot.writeText((kept + "scripting-backend=il2cpp").joinToString("\n") + "\n")
@@ -836,8 +836,8 @@ object PlayerImage {
      * Both edits are idempotent -- an entry already present is not added twice
      * -- because this runs again on every rebuild.
      */
-    private fun registerPatches(img: File, root: File) {
-        val assembly = PackageCompiler.patchAssembly(root)
+    internal fun registerPatches(img: File, root: File, target: PortTarget = PortTarget.SILKSONG) {
+        val assembly = PackageCompiler.patchAssembly(root, target)
         if (!assembly.isFile) {
             LauncherLog.log("no patches to register")
             return
@@ -874,14 +874,14 @@ object PlayerImage {
             val methodName = e.getString("methodName")
             val exists = (0 until rows.length()).any {
                 val r = rows.getJSONObject(it)
-                r.optString("assemblyName") == "SilksongPatches" &&
+                r.optString("assemblyName") == name.removeSuffix(".dll") &&
                     r.optString("className") == className &&
                     r.optString("methodName") == methodName
             }
             if (exists) continue
             rows.put(
                 org.json.JSONObject()
-                    .put("assemblyName", "SilksongPatches")
+                    .put("assemblyName", name.removeSuffix(".dll"))
                     // The ported patches sit in the global namespace, as the
                     // game's own classes do; only the newer ones are scoped.
                     .put("nameSpace", e.optString("nameSpace", ""))
@@ -899,7 +899,7 @@ object PlayerImage {
     }
 
     /** A UUID derived from the metadata, so it changes when the metadata does. */
-    private fun guidFromMetadata(metadata: File): String {
+    internal fun guidFromMetadata(metadata: File): String {
         val sha = MessageDigest.getInstance("SHA-256")
         metadata.inputStream().use { input ->
             val buf = ByteArray(1 shl 20)

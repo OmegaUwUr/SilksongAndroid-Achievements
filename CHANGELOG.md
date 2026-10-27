@@ -2,6 +2,37 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.32 (experimental candidate)
+
+Adds a source implementation of the Hollow Knight porting path for the exact
+Linux 1.5.12620 release. **No APK or Android gameplay validation has been run.**
+
+- Adds experimental Hollow Knight setup/port/play/rebuild options, with separate
+  Unity 6000.0.61f1 downloads, patch compilation, runtime process, dex, caches,
+  preferences and save directories.
+- Adapts Darkaxt/HollowKnightAndroid's MIT classic converter and APK/OBB packaging.
+  Validates the complete 1,748-file source manifest and Vulkan shader slices;
+  keeps the original game tree unchanged and excludes desktop native libraries.
+- Builds directly into the converted image to avoid an additional full-tree copy.
+  Uses resumable conversion, existing compiler caches, storage checks, a runtime
+  file lock and package replacement that preserves the previous build on failure.
+- Blocks Hollow Knight and other named processes from using the Silksong native
+  Steam achievement bridge. HK Steam/Cloud support and touch controls remain off;
+  the first adapter uses a physical controller, a 60 FPS target and 1280-pixel
+  maximum rendering width. These settings are not a stability guarantee.
+- Adds `--verify-exact` to the read-only PC inspector; Other Unity game stays
+  inspection-only. Updates all profile status text and both activity manifests.
+- Preserves upstream MIT notices and credits Darkaxt, jakobkhansen and contributors,
+  and ChatGPT (OpenAI) for this integration work.
+
+Validation: 24 Python checks, 12 Kotlin porting groups plus compatibility guards,
+37 C# classic/serialized cases, and 4 native Steam process cases pass on the host.
+New Android integration and Java shell code type-check against API 35 with service,
+pipeline and Unity API stubs. C# uses the actual production converter and synthetic
+assets. Android resources, manifests, shell syntax and whitespace checks pass.
+No APK build, real-game patch compile, Android port or gameplay test has run;
+the workflow remains manual. See docs/MULTI_GAME_PORTING.md for testing limits.
+
 ## 1.0.3-achievements.31 (candidate)
 
 Adds a game catalog and compatibility-inspection foundation. **This is not a

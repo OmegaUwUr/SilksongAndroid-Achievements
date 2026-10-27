@@ -8,6 +8,8 @@ Steam credentials, save contents or the absolute installation path.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import os
 import json
 from pathlib import Path
 import re
@@ -173,7 +175,9 @@ def plugin_inventory(data: Path) -> tuple[list[dict], bool]:
 
 
 def inspect(root: Path, profile: dict) -> dict:
-    adapter = profile["id"] == "silksong" and profile["adapter"] == "silksong-linux-v1" and profile["steamAppId"] == 1030300
+    adapter = (profile["id"] == "silksong" and profile["adapter"] == "silksong-linux-v1" and profile["steamAppId"] == 1030300) or (
+        profile["id"] == "hollow-knight" and profile["adapter"] == "hollow-knight-linux-1.5.12620-v1" and
+        profile["steamAppId"] == 367520 and profile["unityVersions"] == ["6000.0.61f1"])
     report = {"schema_version": 1, "game": profile["title"], "profile": profile["id"],
               "steam_app_id": profile["steamAppId"], "adapter_present": adapter,
               "basic_checks_passed": False, "gameplay_verified_by_inspection": False,
@@ -184,6 +188,8 @@ def inspect(root: Path, profile: dict) -> dict:
     blockers, observed = report["blockers"], report["observed"]
     if not adapter:
         blockers.append("A port adapter for this game is not implemented. Download, port and play are unavailable.")
+    if profile["id"] == "hollow-knight" and adapter:
+        report["not_verified"].append("Experimental adapter. Requires exact Linux 1.5.12620 files and a controller; Steam sync and touch controls are not enabled. Use --verify-exact to check the release hashes.")
     folders = data_folders(root)
     if len(folders) != 1:
         blockers.append("No readable Unity data folder found." if not folders else "Multiple Unity data folders found; choose one game installation or its data folder.")
@@ -216,7 +222,7 @@ def inspect(root: Path, profile: dict) -> dict:
     has_catalog = (aa / "catalog.bin").is_file() and (aa / "settings.json").is_file()
     observed["binary_addressables_catalog"] = has_catalog
     observed["loose_level_count"] = sum(1 for p in data.iterdir() if p.is_file() and re.fullmatch(r"level[0-9]+", p.name))
-    if adapter and not has_catalog:
+    if adapter and profile["id"] == "silksong" and not has_catalog:
         blockers.append("The Silksong adapter requires StreamingAssets/aa/catalog.bin and settings.json.")
     if not adapter:
         blockers.append("Asset packaging, game patches, input and save/Steam integration have not been adapted for this title.")
@@ -228,16 +234,88 @@ def inspect(root: Path, profile: dict) -> dict:
     return report
 
 
+
+def manifest_digest(manifest: dict) -> str:
+    actions = {"transform": "TRANSFORM", "copy": "COPY", "exclude": "EXCLUDE", "replaceAtAssembly": "REPLACE_AT_ASSEMBLY"}
+    fields = [str(manifest["schemaVersion"]), manifest["profileId"], manifest["gameVersion"],
+              manifest["unityVersion"], manifest["platform"].lower(), str(manifest["converterReportSchema"])]
+    canonical = "\n".join(fields) + "\n"
+    for entry in sorted(manifest["requiredFiles"], key=lambda item: (item["relativePath"].lower(), item["relativePath"])):
+        canonical += "\0".join([entry["relativePath"], str(entry["size"]), entry["sha256"].lower(),
+                                 actions[entry["action"]], entry.get("ownerRelativePath") or ""]) + "\n"
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def verify_exact(data: Path, manifest: dict) -> dict:
+    """Check bytes, completeness and links without changing or executing any source file."""
+    if (manifest.get("schemaVersion") != 1 or manifest.get("converterReportSchema") != 1 or
+            manifest.get("profileId") != "hollow-knight" or manifest.get("gameVersion") != "1.5.12620" or
+            manifest.get("unityVersion") != "6000.0.61f1" or manifest.get("platform") != "linux" or
+            manifest_digest(manifest) != manifest.get("manifestSha256")):
+        raise ValueError("Invalid Hollow Knight source manifest")
+    if data.is_symlink():
+        raise ValueError("Game source cannot be a symbolic link")
+    data = data.resolve()
+    expected, problems = set(), []
+    checked_bytes = 0
+    for entry in manifest["requiredFiles"]:
+        relative = entry["relativePath"]
+        path = Path(relative)
+        if (not relative or "\\" in relative or path.is_absolute() or ".." in path.parts or
+                path.as_posix() != relative or relative.lower() in expected):
+            raise ValueError("Invalid or duplicate path in source manifest")
+        expected.add(relative.lower())
+        file = data / path
+        if file.resolve() != file or not inside(file, data) or file.is_symlink():
+            problems.append({"path": relative, "reason": "symbolic link"})
+        elif not file.is_file():
+            problems.append({"path": relative, "reason": "missing"})
+        elif file.stat().st_size != entry["size"]:
+            problems.append({"path": relative, "reason": "different size"})
+        else:
+            digest = hashlib.sha256()
+            with file.open("rb") as source:
+                while chunk := source.read(1024 * 1024):
+                    digest.update(chunk)
+                    checked_bytes += len(chunk)
+            if digest.hexdigest() != entry["sha256"]:
+                problems.append({"path": relative, "reason": "different SHA-256"})
+    for directory, dirs, files in os.walk(data, followlinks=False):
+        for name in dirs + files:
+            path = Path(directory) / name
+            relative = path.relative_to(data).as_posix()
+            if path.is_symlink():
+                problems.append({"path": relative, "reason": "symbolic link"})
+            elif path.is_file() and relative.lower() not in expected:
+                problems.append({"path": relative, "reason": "unexpected file"})
+    return {"game_version": manifest["gameVersion"], "matches": not problems,
+            "expected_file_count": len(expected), "checked_bytes": checked_bytes,
+            "problem_count": len(problems), "problems": problems[:50],
+            "problems_truncated": len(problems) > 50, "gameplay_verified": False}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("folder", type=Path, help="one installed game folder or its Unity data folder")
     parser.add_argument("--game", choices=list(catalog()), required=True)
+    parser.add_argument("--verify-exact", action="store_true", help="hash every Hollow Knight file against the supported Linux 1.5.12620 manifest (read-only)")
     parser.add_argument("--output", type=Path, help="new JSON report outside the game folder; otherwise print to stdout")
     args = parser.parse_args()
     try:
         if args.output and inside(args.output, args.folder):
             parser.error("Save the report outside the game folder")
+        if args.verify_exact and args.game != "hollow-knight":
+            parser.error("--verify-exact currently supports Hollow Knight only")
         report = inspect(args.folder, catalog()[args.game])
+        if args.verify_exact:
+            folders = data_folders(args.folder)
+            if len(folders) != 1:
+                parser.error("Select exactly one Unity data folder for exact verification")
+            manifest = json.loads((CATALOG.parent / "profiles/hollow-knight-1.5.12620.json").read_text(encoding="utf-8"))
+            report["exact_source"] = verify_exact(folders[0], manifest)
+            if not report["exact_source"]["matches"]:
+                report["basic_checks_passed"] = False
+                report["blockers"].append("Files do not match the complete, unmodified Linux Hollow Knight 1.5.12620 release.")
         text = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
         if args.output:
             # A report can never silently replace a game file or existing report.

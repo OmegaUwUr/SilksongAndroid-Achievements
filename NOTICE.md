@@ -91,3 +91,13 @@ See [CREDITS.md](CREDITS.md) for the original Android project, achievement-viewe
 contributors, shader-format and Steam compatibility references, and the
 Termux, LLVM, Roslyn, Unity, and other tools fetched during on-device setup.
 That file distinguishes these roles from components bundled in the APK.
+
+
+## Hollow Knight classic-player adapter
+
+Parts of the experimental Hollow Knight adapter and its regression fixtures are
+adapted from Darkaxt/HollowKnightAndroid, commit
+b65f577a0ab9fb49075de3435fc78095d4222e39, under the MIT license.
+See CREDITS.md for the component map and
+third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt for the unmodified notice.
+No game content is distributed with these source files.

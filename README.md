@@ -179,30 +179,35 @@ for the timing logs and device checks.
 
 ## Getting started
 
-### Game options and compatibility (revision 31 candidate)
+### Game options and compatibility (revision 32 candidate)
 
-**Games & compatibility** is available from setup and the dashboard. It lists
-**Hollow Knight: Silksong**, **Hollow Knight**, and **Other Unity game**. Silksong
-uses its existing setup. The other entries provide read-only file inspection;
-**Hollow Knight and other Unity games cannot be ported or played by this revision**.
-Their engine, asset packaging, plugins, patches and save/Steam integration still
-need separate adapters and device validation.
+**Games & compatibility** lists **Hollow Knight: Silksong**, **Hollow Knight**,
+and **Other Unity game**. Silksong keeps its existing setup. Hollow Knight now
+has an **experimental local-files porting path** for the exact Linux **1.5.12620**
+release, using Unity **6000.0.61f1**. This candidate has not been built into an APK or
+validated on an Android device yet.
 
-The inspector reports the selected installation's Unity version/platform, managed
-or IL2CPP indicators, assemblies, content layout and native plugin architectures.
-A matching Unity version does not prove compatibility. Reports can be shared from
-the app; they do not contain game/save contents or Steam credentials.
+Hollow Knight uses separate engine, build, runtime, preferences and save storage.
+Its first adapter requires a **physical controller**, ARM64/Vulkan and about
+**17 GB free during porting**. Steam achievements, Cloud sync and touch controls
+are not enabled for Hollow Knight. The original Linux source remains unchanged.
+Other Unity games remain **inspection-only**; they need individual adapters.
 
-You can produce a report on a PC without building the APK:
+The inspector reports Unity/platform, Mono/IL2CPP, assemblies, content layout and
+native plugin architectures. A matching Unity version does not prove compatibility.
+You can check Hollow Knight's exact source on a PC without building the APK:
 
 ```sh
-python tools/game-compat/inspect_game.py "/path/to/Hollow Knight" --game hollow-knight --output hk-compatibility.json
+python tools/game-compat/inspect_game.py "/path/to/Hollow Knight" --game hollow-knight --verify-exact --output hk-compatibility.json
 ```
 
-Use your own installed files and save the report outside the game directory. The
-script requires Python 3.10+ and the repository checkout. See the
-[multi-game integration guide](docs/MULTI_GAME_PORTING.md) for the exact status
-and what is needed to implement Hollow Knight's port.
+Use your own installed files and save the report outside the game directory.
+The script requires Python 3.10+ and this repository. Reports contain metadata,
+not game/save contents or Steam credentials. See the
+[multi-game integration guide](docs/MULTI_GAME_PORTING.md) for limitations and
+remaining build/device checks. The classic converter is adapted from
+[Darkaxt/HollowKnightAndroid](https://github.com/Darkaxt/HollowKnightAndroid);
+full authorship and license information is in [CREDITS.md](CREDITS.md).
 
 ### Install and play Silksong
 

@@ -73,7 +73,7 @@ class GameLibraryActivity : Activity() {
                 setPadding(dp(14), dp(12), dp(14), dp(12))
             }
             card.addView(label(profile.title, 20f, true))
-            card.addView(label(getString(if (profile.hasPortAdapter) R.string.game_port_available else R.string.game_inspection_only), 14f))
+            card.addView(label(getString(if (profile.id == "hollow-knight" && profile.hasPortAdapter) R.string.hk_experimental else if (profile.hasPortAdapter) R.string.game_port_available else R.string.game_inspection_only), 14f))
             card.addView(label(getString(when (profile.id) {
                 "silksong" -> R.string.game_silksong_description
                 "hollow-knight" -> R.string.game_hollow_knight_description
@@ -82,8 +82,9 @@ class GameLibraryActivity : Activity() {
             card.addView(button(getString(R.string.game_check_files)) {
                 if (!busy) { selected = profile; requestInspection() }
             })
-            if (profile.hasPortAdapter) card.addView(button(getString(R.string.game_open_silksong), true) {
-                startActivity(Intent(this, SetupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+            if (profile.hasPortAdapter) card.addView(button(getString(if (profile.id == "hollow-knight") R.string.hk_open_setup else R.string.game_open_silksong), true) {
+                val setup = if (profile.id == "hollow-knight") HollowKnightSetupActivity::class.java else SetupActivity::class.java
+                startActivity(Intent(this, setup).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
                 finish()
             })
             content.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
@@ -126,8 +127,9 @@ class GameLibraryActivity : Activity() {
             try {
                 val report = withContext(Dispatchers.IO) { GameCompatibility.inspect(directory, profile).asText() }
                 showReport(report)
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { showReport(getString(R.string.game_inspection_failed, error.message ?: error.javaClass.simpleName)) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) { showReport(getString(R.string.game_inspection_failed, error.message ?: error.javaClass.simpleName)) }
             finally { busy = false }
         }
     }

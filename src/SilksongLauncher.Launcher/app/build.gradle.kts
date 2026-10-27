@@ -372,6 +372,20 @@ val stagePatches by tasks.registering(Sync::class) {
 }
 tasks.named("preBuild") { dependsOn(stagePatches) }
 
+val stageHollowKnightPatches by tasks.registering(Sync::class) {
+    from(rootProject.file("../../tools/hollow-knight-patches/src")) { into("src") }
+    from(rootProject.file("../../tools/hollow-knight-patches/entrypoints.json"))
+    into(layout.projectDirectory.dir("src/main/assets/ondevice/hollow-knight-patches"))
+}
+tasks.named("preBuild") { dependsOn(stageHollowKnightPatches) }
+
+val stageHollowKnightLicense by tasks.registering(Copy::class) {
+    from(rootProject.file("../../third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt"))
+    into(layout.projectDirectory.dir("src/main/assets/licenses"))
+}
+tasks.named("preBuild") { dependsOn(stageHollowKnightLicense) }
+
+
 // SafeIo, staged the same way and for the same reasons, but kept apart from
 // the patches above because it is compiled apart from them. The patches are
 // built AGAINST the depot's Assembly-CSharp so that they can name the game's

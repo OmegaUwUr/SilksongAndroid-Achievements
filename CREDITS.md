@@ -201,6 +201,34 @@ SilksongAndroid contributors'** launcher and porting foundation credited above.
 The inspectors use the [Microsoft PE/COFF format specification](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format)
 as a file-format reference. Unity metadata inspection follows the serialized
 header layout already used by this project's AssetsTools.NET-based tooling.
-No separate third-party Hollow Knight port implementation was imported. The
-Hollow Knight catalog entry is an inspection target, not a claim of a completed
-or endorsed Android port. Hollow Knight and Silksong remain Team Cherry's games.
+The inspection-only revision 31 did not include a Hollow Knight port. Revision 32
+adds the experimental adapter credited below. Hollow Knight and Silksong remain
+Team Cherry's games; neither Team Cherry nor the upstream authors endorse this fork.
+
+## Experimental Hollow Knight adapter (revision 32)
+
+**[Darkaxt](https://github.com/Darkaxt) and the
+[HollowKnightAndroid contributors](https://github.com/Darkaxt/HollowKnightAndroid)**
+provided the MIT-licensed implementation used for this adaptation. The reference
+is pinned to commit [b65f577a0ab9fb49075de3435fc78095d4222e39](https://github.com/Darkaxt/HollowKnightAndroid/commit/b65f577a0ab9fb49075de3435fc78095d4222e39).
+
+- Imported `ClassicPlayerTree.cs`, `ClassicTreeCommands.cs`, `ClassicTreeConverter.cs`,
+  `SerializedFileDetection.cs`, `SerializedFileTransformer.cs`, their synthetic
+  asset fixtures and classic/serialized regression tests.
+- Imported the exact Linux Hollow Knight 1.5.12620 file inventory (names, sizes and
+  hashes only) and Unity 6000.0.61f1 download identities.
+- Adapted first-scene/ZIP32 APK + OBB packing in `ClassicPlayerImage.kt`, including
+  matching OBB GUIDs and the private expansion-directory approach.
+- The original porting foundation remains **jakobkhansen/SilksongAndroid and its
+  contributors**, credited above.
+
+The upstream copyright and permission notice is preserved verbatim in
+[third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt](third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt)
+and staged into the APK's license assets. Upstream artwork, skins, mods and
+companion-screen interfaces are not included in this adaptation.
+
+The isolated setup/runtime wiring, exact-source CLI verification, native Steam
+process guard and integration work were developed for this repository with
+**ChatGPT (OpenAI)**. This project was made possible through ChatGPT assistance
+and the human authors' code credited here. Source integration is experimental;
+it is not evidence of Android gameplay validation.

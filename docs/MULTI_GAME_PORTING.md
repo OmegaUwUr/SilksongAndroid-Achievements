@@ -1,141 +1,143 @@
-# Multi-game porting: current status and Hollow Knight integration
+# Multi-game porting status
 
-Revision 31 adds game selection and file inspection. **It does not yet port or
-play Hollow Knight or arbitrary Unity games.** The existing runtime, downloader,
-patch set, Steam integration and save paths still serve Silksong.
+Revision 32 is an **experimental source candidate without an APK build** stacked on the
+porting-performance and personalized Silksong touch-control candidates.
 
-| Game option | Available now in this candidate | Still needed |
+| Game | Candidate behavior | Input / current limits |
 | --- | --- | --- |
-| Hollow Knight: Silksong | Existing setup/launcher; compatibility report | Candidate build and device regression checks |
-| Hollow Knight | Catalog profile (Steam app 367520), read-only file report | A separate port adapter and actual game/device validation |
-| Other Unity game | Inspect an installation and share metadata | Named game, owned files, engine/toolchain and per-game adapter |
+| Hollow Knight: Silksong | Existing port, Steam achievements, Cloud and controls | Existing supported Linux build; pending regression testing of this stacked candidate |
+| Hollow Knight | Experimental setup, on-device conversion, pack, launch and rebuild path | Exact Linux 1.5.12620 / Unity 6000.0.61f1; physical controller; no HK Steam sync, Cloud or touch overlay yet |
+| Other Unity game | Read-only compatibility inspection | Requires a game-specific adapter before conversion or launch |
 
-The UI explicitly labels the last two entries **File inspection only · port not
-implemented**. It offers no download/port/play action for them. Selecting an entry
-does not change the active game, Steam App ID, ownership checks, cloud operations,
-achievement schema, depot pointer, native player or saves.
+This is not a universal Unity converter. An engine version match alone cannot
+establish that textures, shaders, native plugins, game code or saves work on Android.
+No real Hollow Knight game files or Android device are available in this workspace.
 
-## Inspect Hollow Knight without compiling anything
+## What changed after the inspection-only catalog
 
-Download/clone this branch of the repository, install Python 3.10 or newer, and
-run from its root:
+The MIT-licensed Darkaxt/HollowKnightAndroid implementation provided an existing
+classic-player adapter for Hollow Knight. This integration pins its source to
+`b65f577a0ab9fb49075de3435fc78095d4222e39`. Imported/adapted components and their
+human authors are listed in [CREDITS.md](../CREDITS.md); its complete license is
+preserved in `third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt` and packaged
+with the launcher license assets. The original foundation remains
+jakobkhansen/SilksongAndroid. Integration work was developed with ChatGPT (OpenAI).
 
-```sh
-python tools/game-compat/inspect_game.py "/path/to/Hollow Knight" --game hollow-knight --output hk-compatibility.json
-```
+The new path is local-files-only. It does not reuse Silksong's Steam login,
+downloader, achievement session or cloud synchronization for Hollow Knight.
 
-On Windows, the folder argument can be a quoted Windows path. Point it at your
-own complete game installation, its `_Data` directory, or a folder wrapping that
-installation by at most three levels. A Linux copy is needed for the current
-porting approach; inspecting a Windows copy is still useful but reports the
-platform mismatch. The exact game build/engine is read from the files, not assumed
-from the game title or the latest patch announcement.
+1. Choose Hollow Knight in Games & compatibility, then select the complete Linux
+   data folder. `app.info`, Unity platform/version and managed assembly headers
+   are checked before the source is remembered.
+2. Start porting explicitly. The 1,748-file manifest verifies every required size
+   and SHA-256, rejects missing/extra files and links, and catches mixed or modified
+   releases before downloading tools. It includes metadata only, not game content.
+3. Fetch the separate Unity 6000.0.61f1 converter and Android module from Unity;
+   verify pinned hashes. Build the Android Input System and HK-only patch assembly,
+   convert the managed game code, and compile ARM64 output using the existing cache.
+4. Convert all classic scenes/assets with the imported serializer and Vulkan checks.
+   Exclude desktop native plugins and replace engine resources and IL2CPP metadata.
+   The source is never rewritten. Conversion writes directly into the player image,
+   avoiding another full copy of the roughly 5 GB source tree.
+5. Package Unity's first-scene set into ZIP32 `data.apk` and the remaining resources
+   into a main OBB. Both archives carry the matching OBB GUID. Publish the package
+   only after conversion, compilation and packaging succeed.
+6. Launch in the private `:hollow_knight` Android process, using its scoped context,
+   dex, native libraries, archives, preferences and external files directory.
 
-Save the output outside the game folder. The script refuses an existing output
-file and never changes the input files. Omit `--output` to print JSON. To inspect
-another game, use `--game other-unity`; to inspect Silksong, use `--game silksong`.
+The initial HK patch targets 60 FPS and caps rendering width at 1280 pixels.
+Those are conservative defaults, not measured performance or stability guarantees.
+There is no import of upstream mods, skins, companion-screen UI or game artwork.
 
-In a future APK built from this branch, open **Games & compatibility → Hollow
-Knight → Check game files**, select a local folder and choose **Share compatibility
-report**. The screen requests read access and does not retain a depot selection.
-Cloud-document providers are unsupported by the current raw-file inspector.
+## Isolation and failure behavior
 
-Reports contain:
+Silksong retains its original paths. HK uses `games/hollow-knight` beneath app
+internal files, cache and external files. Preferences use a `hollow-knight.` prefix.
+The application's early dex injection uses the dedicated game process identity;
+there is no mutable global "selected engine" shared between games.
 
-- The selected profile, Steam App ID if configured, declared product and data-folder name.
-- Unity version, serialized-file format and target platform from `globalgamemanagers`.
-- PE/CLI header presence for `Managed/Assembly-CSharp.dll`, desktop IL2CPP indicators,
-  and a bounded list of managed assembly names.
-- Whether the expected binary Addressables catalog/settings exist, and loose scene-file count.
-- A bounded `Plugins` inventory with ELF machine identifiers where readable.
-- Explicit blockers and checks that inspection cannot perform.
+A file lock prevents rebuilding while the HK runtime owns the package. New output
+is assembled under `pkg.next`; the old package is renamed to `pkg.previous` during
+publication, with rollback on failure and recovery on the next build after a kill
+between renames. Saves live outside those package directories. An app update
+invalidates readiness and requires rebuilding the experimental port.
 
-They do not include an absolute installation path, game/assembly contents, save
-contents or Steam credentials. Review filenames before sharing. The inspector
-does not load assemblies, run executables, authenticate to Steam or download files.
+The native Steam shim fails closed for named processes, including `:hollow_knight`.
+Its socket transport cannot submit HK achievements to Silksong App ID 1030300.
+HK activities never start Silksong Cloud or presence services. Steam integration
+for HK must be implemented against App ID 367520 and separately validated later.
 
-## Why a game needs its own adapter
+Porting needs roughly 17 GB free on shared phone storage. When internal and external
+storage are separate, the checks require 7 GB internal and 10 GB external. Actual
+requirements depend on generated native output; checks do not guarantee against
+storage exhaustion. Source files and any existing package consume additional space
+already in use. Free space after testing can be improved by a later explicit cache
+cleanup feature; no save directories are deleted by this implementation.
 
-The current pipeline downloads Unity **6000.0.50f1** with pinned artifacts and
-rebuilds Input System **1.14.2**. It compiles patches directly against Silksong's
-types, expects Silksong's binary Addressables catalog, assembles selected startup
-assets and `level0`, and retargets that content's available Vulkan shader slices.
-The native Steam bridge and launcher services use Silksong's App ID **1030300**.
-Those assumptions are spread across Kotlin, C#, Java and native C.
+## Inspect without building
 
-[Team Cherry's February 2026 announcement](https://www.teamcherry.com.au/blog/hollowknightupgraded)
-confirms that Hollow Knight received improvements brought over from Silksong.
-It does not establish that a particular installed depot shares this port's Unity
-build, shader variants, packaging or patch API. [Unity's asset-bundle documentation](https://docs.unity3d.com/6000.0/Documentation/Manual/AssetBundles-Building.html)
-also explains that target changes involve platform-specific asset representations.
-Changing an engine-version string or a Steam ID does not supply the missing code,
-assets or native libraries.
-
-Hollow Knight implementation needs these concrete steps after inspecting its files:
-
-1. Register the actual Unity Android player and converter version with verified
-   download identities. Do not redirect Hollow Knight into Silksong's fixed toolchain.
-2. Inventory managed references and native P/Invokes. Provide compatible Android
-   ARM64 implementations for required desktop plugins. An AArch64 ELF header alone
-   cannot establish Android ABI compatibility.
-3. Adapt packaging for the real scene/asset layout, shader slices, texture formats,
-   catalogs and initialization lists. Copying only Silksong's asset subset can omit
-   most of another game's content.
-4. Create a Hollow Knight patch set and controls against its actual assemblies.
-   Silksong's dual-screen, inventory, touch labels and achievement-repair types
-   must not be compiled into another game unchanged.
-5. Isolate native output, player image, Unity classes, caches, settings and saves
-   by game; define process restart behavior before switching Unity runtimes.
-6. Parameterize and validate ownership, downloads, Steam presence, cloud saves,
-   native IPC and achievements with App ID 367520 and per-game state. Verify that
-   neither game's saves or achievements can reach the other's account namespace.
-7. Complete an authorized build and device port, then test startup, graphics,
-   audio, input, save/load, background/resume, Steam operations and sustained play.
-
-The first required input is a report from the intended Hollow Knight Linux
-installation. If source-level adaptation is needed, the next input is its
-`app.info`, `globalgamemanagers`, `Managed` assemblies and plugin details. These
-are not present in this workspace. Other titles need their names and the same
-inspection; this catalog deliberately does not advertise untested popular games.
-
-## Implementation and validation
-
-`game-catalog.json` is shared by Android and the PC script. `GameProfile` recognizes
-only the implemented Silksong adapter; changing JSON alone cannot enable another
-game. `GameCompatibility` provides the Android inspector and identity guard.
-`GameLibraryActivity` is registered in both the AAR and generated APK manifests.
-The generated-manifest audit checks its presence as well.
-
-The identity guard runs before accepting a writable depot, before supporting-tool
-downloads, before patch compilation/conversion and asset rewriting, and before
-launch preparation reaches Cloud saves. Explicit `app.info` product identity wins
-over a renamed directory. A missing product can fall back to the original
-`Hollow Knight Silksong_Data` name. This is an accidental-game-mixup guard, not a
-license check or cryptographic authentication; Steam ownership checks still apply.
-
-Inspection is deliberately limited. It does not prove every assembly is complete,
-resolve every native import, inspect all shader/texture data or validate every
-asset bundle. Discovery is bounded and rejects multiple installations rather than
-choosing one silently. Native libraries outside the scanned Plugins tree, deeper
-plugin layouts and managed P/Invokes need further review. Reports say **basic
-checks passed**, never **guaranteed compatible**.
-
-Validation completed without compilation:
+Requires Python 3.10+ and a repository checkout:
 
 ```sh
-python3 -B -m unittest discover -s tools/game-compat/tests -v
-bash -n tools/depot-to-apk/build.sh
-git diff --check
+python tools/game-compat/inspect_game.py "/path/to/Hollow Knight" --game hollow-knight --verify-exact --output hk-compatibility.json
 ```
 
-All 16 Python checks passed, covering serialized formats/byte order, truncated
-metadata, PE/CLI detection, wrong games/platforms/versions, IL2CPP rejection,
-adapter isolation, ambiguous roots, symlink boundaries, native architecture,
-read-only behavior and safe report output. Android XML/string references and both
-activity declarations were statically checked too.
+Save the report outside the installation. Existing report files are not overwritten.
+Without `--verify-exact`, the script does the shorter inventory only. The exact
+check reads the complete source and can take some time; it neither executes code
+nor modifies game files. Reports contain relative names and technical metadata,
+not game bytes, save contents, credentials or an absolute installation path.
 
-Kotlin regression fixtures were added to the existing porting-check runner but
-were **not compiled or run**. No Kotlin, C#, native or APK compilation, Android UI
-test or real Hollow Knight gameplay test was performed for revision 31. Builds
-remain manual until requested. This branch is stacked on the touch-control and
-porting-improvement candidates; all of their pending device checks still apply.
+For other titles:
+
+```sh
+python tools/game-compat/inspect_game.py "/path/to/Unity game" --game other-unity --output unity-compatibility.json
+```
+
+The app catalog cannot enable an arbitrary adapter: executable targets are a fixed
+code enum and catalog identifiers must match the implemented game, Steam ID and
+engine. An additional game needs its own source requirements, engine downloads,
+asset conversion, native plugin replacements, controls and isolated runtime.
+
+## Validation and remaining gates
+
+Completed host checks:
+
+- 24 Python inventory/exact-source tests pass, including same-size modified
+  assemblies, missing/extra files, links, manifest integrity and unchanged inputs.
+- The production Kotlin fetchers, compiler/converter, cache helpers and profile
+  guards compile and pass 12 porting regression groups plus the compatibility
+  suite. Existing platform/runtime test stubs are used for those host tests.
+- The new HK integration, scoped context, catalog UI, dex injection and application
+  compile against Android API 35, with existing pipeline/service edges stubbed.
+  The Java shell and HK activity also type-check against API 35 and Unity API stubs.
+- The production C# bundle-surgery tool compiles with .NET 8/Roslyn. All 37
+  classic-tree/serialized xUnit cases pass via a direct host runner with synthetic
+  assets. The regular dotnet/MSBuild entry points cannot read process metadata in
+  this environment, so the compiler and test methods were invoked directly.
+- Four native Steam process cases pass against the actual C shim: the default
+  Silksong process retains its App ID; HK, launcher and other named processes
+  make zero Steam socket attempts, including exported achievement calls.
+- Android resources and both manifest registrations match. Shell syntax and diff
+  checks pass. The imported manifest/license and existing type database match the
+  pinned upstream. No source check establishes gameplay compatibility.
+
+The APK workflow remains manual and no APK has been built or deployed for revision
+32. Keep this change a draft until the following device and integration gates pass:
+
+1. Build the complete Android launcher and native shim with the production SDK
+   dependencies. Run the standard Kotlin/C# test commands on a normal build host.
+   The C# project is `tools/bundle-surgery-tests/BundleSurgery.Tests.csproj`.
+2. Build an APK through the manual workflow and verify generated manifest, dex and
+   source/license assets. No engine or game binaries should be bundled.
+3. On an ARM64 Vulkan device, port the exact HK Linux release. Verify first launch,
+   new game, multiple scenes, graphics, sound, language, controller mappings, pause,
+   background/resume, repeated launch and sustained gameplay/thermal behavior.
+4. Verify the actual Unity persistent-data and PlayerPrefs paths are HK-scoped;
+   save/load, exit/reopen and switch games. Confirm both games retain their own saves.
+5. With Silksong signed into Steam, verify HK submits no Steam stats, achievements,
+   presence or Cloud traffic. Re-test Silksong synchronization and touch controls.
+6. Interrupt a build and test retry; try rebuilding with HK running, low storage,
+   wrong versions, mixed files, extra plugins and corrupt output. Validate rollback.
+
+A successful source or host check cannot establish Android gameplay stability.

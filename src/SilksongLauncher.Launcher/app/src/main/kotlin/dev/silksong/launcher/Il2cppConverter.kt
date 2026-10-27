@@ -136,9 +136,9 @@ object Il2cppConverter {
 
     // ── the run ────────────────────────────────────────────────────────────
 
-    fun convert(unity: File, depot: File, context: android.content.Context, root: File): Flow<Progress> = channelFlow {
-        GameCompatibility.requireSilksongData(PlayerImage.depotData(depot)
-            ?: throw IOException("No game data found for Silksong conversion"))
+    fun convert(unity: File, depot: File, context: android.content.Context, root: File, target: PortTarget = PortTarget.SILKSONG): Flow<Progress> = channelFlow {
+        target.requireData(PlayerImage.depotData(depot)
+            ?: throw IOException("No game data found for ${target.id} conversion"))
         val bcl = bclDir(unity)
         val engine = engineManagedDir(unity)
         val deploy = deployDir(unity)
@@ -163,7 +163,7 @@ object Il2cppConverter {
         val assemblies = stageAssemblies(bcl, engine, managed, PackageCompiler.outputDir(root), asmDir(root))
         LauncherLog.log("il2cpp input: ${assemblies.size} assemblies")
 
-        redirectSaveCalls(context, root)
+        if (target == PortTarget.SILKSONG) redirectSaveCalls(context, root)
 
         prepareTool(deploy)
 

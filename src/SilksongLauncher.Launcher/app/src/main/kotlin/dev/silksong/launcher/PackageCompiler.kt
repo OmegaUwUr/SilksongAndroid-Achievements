@@ -125,11 +125,8 @@ object PackageCompiler {
 
     // ── the patches ────────────────────────────────────────────────────────
 
-    private const val PATCHES = "SilksongPatches.dll"
-    private const val PATCH_ASSETS = "ondevice/patches"
-
     /** Our own code, once compiled. Added to the build, not substituted into it. */
-    fun patchAssembly(root: File): File = File(outputDir(root), PATCHES)
+    fun patchAssembly(root: File, target: PortTarget = PortTarget.SILKSONG): File = File(outputDir(root), target.patchAssembly)
 
     fun patchesPresent(root: File): Boolean = patchAssembly(root).length() > 0
 
@@ -149,15 +146,16 @@ object PackageCompiler {
         context: android.content.Context,
         root: File,
         assets: android.content.res.AssetManager,
+        target: PortTarget = PortTarget.SILKSONG,
     ): Flow<Progress> = channelFlow {
-        GameCompatibility.requireSilksongData(PlayerImage.depotData(depot)
-            ?: throw IOException("No game data found for Silksong patches"))
+        target.requireData(PlayerImage.depotData(depot)
+            ?: throw IOException("No game data found for ${target.id} patches"))
         send(Progress("Compiling the patches", -1f, ""))
         val csc = stageRoslyn(root) { done, total ->
             trySend(Progress("Fetching Roslyn", done.toFloat() / total, ToolchainFetcher.mb(done, total)))
         }
         val src = File(root, "patches").apply { deleteRecursively(); mkdirs() }
-        copyAssets(assets, PATCH_ASSETS, src)
+        copyAssets(assets, target.patchAssets, src)
 
         val cs = File(src, "src").walkTopDown()
             .filter { it.isFile && it.extension == "cs" }
@@ -165,7 +163,7 @@ object PackageCompiler {
             .toList()
         if (cs.isEmpty()) throw IOException("no patch sources in the APK")
 
-        val out = patchAssembly(root)
+        val out = patchAssembly(root, target)
         out.parentFile.mkdirs()
         val rsp = File(root, "patches.rsp")
         rsp.printWriter().use { w ->
@@ -198,7 +196,7 @@ object PackageCompiler {
                     (errors.firstOrNull() ?: "exit ${result.code}").trim().take(300),
             )
         }
-        LauncherLog.log("SilksongPatches.dll: ${out.length()} bytes from ${cs.size} sources")
+        LauncherLog.log("${target.patchAssembly}: ${out.length()} bytes from ${cs.size} sources")
         send(Progress("Patches ready", 1f, ""))
     }.flowOn(Dispatchers.IO)
 

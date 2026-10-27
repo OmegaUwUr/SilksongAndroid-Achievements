@@ -66,7 +66,7 @@ class InspectionChecks(unittest.TestCase):
 
     def test_catalog_identity_and_no_unimplemented_adapter(self):
         self.assertEqual(self.profiles["hollow-knight"]["steamAppId"], 367520)
-        self.assertIsNone(self.profiles["hollow-knight"]["adapter"])
+        self.assertEqual(self.profiles["hollow-knight"]["adapter"], "hollow-knight-linux-1.5.12620-v1")
         self.assertIsNone(self.profiles["other-unity"]["adapter"])
         self.assertEqual(self.profiles["silksong"]["steamAppId"], 1030300)
 
@@ -81,9 +81,9 @@ class InspectionChecks(unittest.TestCase):
         self.game("hollow_knight_Data", "Hollow Knight")
         report = self.report("hollow-knight")
         self.assertEqual(report["observed"]["product"], "Hollow Knight")
-        self.assertFalse(report["adapter_present"])
+        self.assertTrue(report["adapter_present"])
         self.assertFalse(report["basic_checks_passed"])
-        self.assertTrue(any("not implemented" in value for value in report["blockers"]))
+        self.assertTrue(any("Unity version does not match" in value for value in report["blockers"]))
 
     def test_catalog_flag_alone_cannot_enable_another_game(self):
         self.game("hollow_knight_Data", "Hollow Knight")

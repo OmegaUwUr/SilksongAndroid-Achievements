@@ -4,20 +4,20 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** Written for the next authorized Kotlin test run; no game files are required. */
+/** Host regression checks; no game files are required. */
 fun main() {
     val root = kotlin.io.path.createTempDirectory("game-compat-checks").toFile()
     val profile = GameProfile("silksong", "Hollow Knight: Silksong", 1030300, "silksong-linux-v1",
         listOf("Hollow Knight Silksong_Data"), listOf("Hollow Knight Silksong"), listOf("6000.0.50f1"))
     fun write(path: String, bytes: ByteArray): File = File(root, path).also { it.parentFile.mkdirs(); it.writeBytes(bytes) }
-    fun serialized(format: Int = 22, big: Boolean = false): ByteArray {
+    fun serialized(format: Int = 22, big: Boolean = false, stamp: String = "6000.0.50f1"): ByteArray {
         val bytes = ByteArray(256)
         val b = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
         b.putInt(0, 120); b.putInt(4, 256); b.putInt(8, format); b.putInt(12, 192)
         bytes[16] = if (big) 1 else 0
         if (format >= 22) { b.putInt(20, 120); b.putLong(24, 256); b.putLong(32, 192) }
         val start = if (format >= 22) 48 else 20
-        val version = "6000.0.50f1\u0000".toByteArray()
+        val version = "$stamp\u0000".toByteArray()
         version.copyInto(bytes, start)
         b.order(if (big) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN).putInt(start+version.size, 24)
         return bytes
@@ -59,6 +59,18 @@ fun main() {
         check(before == after)
         write("second_Data/globalgamemanagers", serialized())
         check(!GameCompatibility.inspect(root, profile).basicChecksPassed)
+        val hk = profile.copy(id="hollow-knight", title="Hollow Knight", steamAppId=367520,
+            adapter="hollow-knight-linux-1.5.12620-v1", products=listOf("Hollow Knight"), unityVersions=listOf("6000.0.61f1"))
+        check(hk.hasPortAdapter)
+        check(!hk.copy(steamAppId=1030300).hasPortAdapter)
+        info.writeText("Team Cherry\nHollow Knight\n")
+        check(runCatching { PortTarget.HOLLOW_KNIGHT.requireData(data) }.isFailure)
+        header.writeBytes(serialized(stamp="6000.0.61f1"))
+        PortTarget.HOLLOW_KNIGHT.requireData(data)
+        check(runCatching { PortTarget.SILKSONG.requireData(data) }.isFailure)
+        val distribution = UnityDistribution.forTarget(PortTarget.HOLLOW_KNIGHT)
+        check(distribution.changeset == "74a0adb02c31")
+        check(distribution.androidSha256.length == 64 && distribution.editorRequired.size == 3)
         println("PASS Kotlin compatibility headers, identity guard, adapter isolation, ambiguity and read-only inventory")
     } finally { root.deleteRecursively() }
 }

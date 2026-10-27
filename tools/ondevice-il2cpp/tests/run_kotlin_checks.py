@@ -34,7 +34,7 @@ suspend fun exec(context: android.content.Context, dll: File, args: List<String>
 ''')
     sources = [SRC / (name + ".kt") for name in (
         "CompletedArtifact", "ConversionCache", "UnityFetcher", "ToolchainFetcher",
-        "Il2cppConverter", "PackageCompiler", "GameProfile", "GameCompatibility",
+        "Il2cppConverter", "PackageCompiler", "GameProfile", "GameCompatibility", "PortTarget", "UnityDistribution",
     )] + sorted(FIXTURES.glob("*.kt")) + sorted((ROOT / "tools/game-compat/tests/kotlin").glob("*.kt")) + [stub]
     jar = tmp / "tests.jar"
     subprocess.run(["java", "-cp", classpath, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
