@@ -2,6 +2,33 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.34 (candidate)
+
+- Corrects Hollow Knight's Steam depot from 367522 (macOS) to 367523 (Linux).
+  Both game downloads now check Steam's actual depot platform and public manifest
+  before fetching game files, then pin the attempt to that inspected manifest.
+  Explicit depot selection bypasses JavaSteam's OS filter, so `os = "linux"`
+  alone did not prevent revision 33 from downloading the macOS build.
+- Uses `games/hollow-knight/depot-367523` for corrected downloads. The old download,
+  local sources, installed port and saves are preserved; the setup screen explains
+  that the previous download remains stored separately. Exact Linux 1.5.12620
+  validation still runs before a download is marked ready or porting begins.
+- Assigns a distinct LoginID to each Steam session so overlapping library scans,
+  downloads and background services do not share JavaSteam's default identity.
+- Logs the Hollow Knight failure stage and useful exception causes. Download log
+  forwarding removes URLs, common credential fields and Steam IDs before logging;
+  the displayed failure also uses the sanitized diagnostic.
+
+Evidence: the owner's revision-33 device log recorded the wrong depot completing,
+retries reusing it, CDN timeouts and a `LogonSessionReplaced` event. This fix does
+not claim to eliminate Steam CDN failures. The private log is not included here.
+
+Validation: all launcher Kotlin sources type-check against Android API 35 and the
+configured JavaSteam fork with real dependencies. 24 synthetic Steam metadata,
+dependency, isolation, retry and diagnostic checks pass; Android resources compile
+with aapt2. Revision 34 still needs an APK build and a successful device download,
+port and gameplay retest. The APK workflow remains manual.
+
 ## 1.0.3-achievements.33 (candidate)
 
 - Makes Choose a game the app entry point and the destination after Steam login.
@@ -10,9 +37,10 @@ All Android achievement-fork revisions are tracked separately from the upstream 
 - Reflows Steam sign-in into a scrolling form on narrow/portrait windows and two
   columns on wide windows. Supports keyboard resizing, 48 dp controls, Guard-field
   scrolling and rotation without restarting authentication.
-- Adds Hollow Knight Steam Linux depot 367522 download/resume under its own storage,
-  using app 367520 ownership verification and exact 1.5.12620 hashes before marking
-  the download ready. A newer/different public release is rejected before porting.
+- Adds Hollow Knight Steam download/resume under its own storage, using app 367520
+  ownership verification and exact 1.5.12620 hashes before marking the download
+  ready. This revision incorrectly selected macOS depot 367522; revision 34 fixes
+  the depot selection. A newer/different source is rejected before porting.
 - Adds authenticated Steam library discovery with batched product-info requests and
   HTTPS depot-manifest inspection. Scans metadata, not full game payloads. Reports
   potential Linux Mono candidates, unsupported IL2CPP/mixed builds and incomplete

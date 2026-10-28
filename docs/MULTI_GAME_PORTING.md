@@ -1,6 +1,6 @@
 # Multi-game porting status
 
-Revision 33 is an **experimental source candidate without an APK build** stacked on the
+Revision 34 is an **experimental source candidate without an APK build** stacked on the
 porting-performance and personalized Silksong touch-control candidates.
 
 | Game | Candidate behavior | Input / current limits |
@@ -23,11 +23,31 @@ preserved in `third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt` and packaged
 with the launcher license assets. The original foundation remains
 jakobkhansen/SilksongAndroid. Integration work was developed with ChatGPT (OpenAI).
 
-Revision 33 shares account sign-in and the downloader implementation while selecting
-Hollow Knight App ID 367520 / Linux depot 367522 explicitly. Downloads go under
-`games/hollow-knight/depot`; local sources remain supported. Ownership is checked
+Revision 34 shares account sign-in and the downloader implementation while selecting
+Hollow Knight App ID 367520 / Linux depot 367523 explicitly. Downloads go under
+`games/hollow-knight/depot-367523`; local sources remain supported. Ownership is checked
 for the selected game, not at sign-in. Hollow Knight does not use Silksong's
 achievement session, presence or Cloud synchronization.
+
+The owner's revision-33 failure log showed depot 367522 completing and later retries
+reusing it. That depot contains macOS files; the Linux depot is 367523, also recorded
+in the actual Steam download commands in
+[InputSystemBackport's development notes](https://github.com/Ajadaz/InputSystemBackport/blob/main/DEVELOPMENT_STORY.md).
+JavaSteam bypasses its OS filter for an explicitly selected depot. Revision 34
+therefore checks Steam's own `config/oslist` and public manifest before downloading
+either game, then pins the attempt to that inspected manifest. It rejects missing,
+wrong-platform or cross-app metadata before downloading the game payload.
+
+The old `games/hollow-knight/depot` is left untouched. The new Linux folder cannot
+reuse its macOS files or resume metadata. The old files continue to occupy storage;
+there is no automatic deletion or migration. Exact source hashing remains required.
+
+The same log also recorded CDN timeouts and `LogonSessionReplaced`. Each SteamSession
+now gets its own non-default LoginID, as required for simultaneous connections from
+one public IP by [SteamKit's login contract](https://github.com/SteamRE/SteamKit/blob/master/SteamKit2/SteamKit2/Steam/Handlers/SteamUser/SteamUser.cs).
+This addresses shared session identities, not Steam CDN availability. HK failures
+now identify the storage, Steam or source-verification stage and preserve useful
+exception causes with URLs, common credential fields and Steam IDs removed.
 
 1. Sign in, choose Hollow Knight, then download it from Steam or select the complete
    Linux data folder. Downloading requires the account's ownership ticket. The
@@ -122,12 +142,15 @@ include known plugin families and unknown native files and explicitly require fu
 P/Invoke/dynamic-loading review. New executable dependencies must be pinned, licensed,
 and validated on Android before an adapter can enable porting.
 
-Revision-33 host checks compile all launcher Kotlin against real Android API 35 and
+Revision-34 host checks compile all launcher Kotlin against real Android API 35 and
 JavaSteam dependencies, with generated resource IDs (no service/pipeline stubs).
-The Steam rules test uses synthetic KeyValue/depot layouts and tiny source-detector
-stubs only for enum linking. Live login, private/large libraries, cancellation on a
-phone, Steam download resume, portrait/landscape with the keyboard and large fonts,
-HK source/version mismatch, and gameplay/save/controller regression remain device gates.
+The 24 Steam checks use synthetic KeyValue/depot layouts and tiny source-detector
+stubs only for enum linking. They cover independent platform fixtures, both games'
+manifest parsing, old-download isolation, concurrent login IDs and safe diagnostics.
+The owner supplied a revision-33 device failure log, but the revision-34 live download
+and resume still need retesting. Private/large libraries, cancellation on a phone,
+portrait/landscape with the keyboard and large fonts, HK source/version mismatch,
+and gameplay/save/controller regression remain device gates.
 
 ## Inspect without building
 
@@ -177,14 +200,19 @@ Completed host checks:
   checks pass. The imported manifest/license and existing type database match the
   pinned upstream. No source check establishes gameplay compatibility.
 
-The APK workflow remains manual and no APK has been built or deployed for revision
-32. Keep this change a draft until the following device and integration gates pass:
+The APK workflow remains manual and revision 34 has not been built or deployed here.
+The revision-33 device download failed; it does not establish porting or gameplay
+compatibility. Keep this change a draft until the following integration gates pass:
 
 1. Build the complete Android launcher and native shim with the production SDK
    dependencies. Run the standard Kotlin/C# test commands on a normal build host.
    The C# project is `tools/bundle-surgery-tests/BundleSurgery.Tests.csproj`.
 2. Build an APK through the manual workflow and verify generated manifest, dex and
    source/license assets. No engine or game binaries should be bundled.
+   With revision 33's old download present, verify the new APK selects Linux depot
+   367523, completes exact source verification and resumes an interrupted download.
+   Check that library scans and background Steam sessions do not replace it; repeat
+   a Silksong download to cover the shared preflight and LoginID changes.
 3. On an ARM64 Vulkan device, port the exact HK Linux release. Verify first launch,
    new game, multiple scenes, graphics, sound, language, controller mappings, pause,
    background/resume, repeated launch and sustained gameplay/thermal behavior.

@@ -20,6 +20,8 @@ import `in`.dragonbra.javasteam.depotdownloader.DepotDownloader
 import `in`.dragonbra.javasteam.depotdownloader.IDownloadListener
 import `in`.dragonbra.javasteam.depotdownloader.data.AppItem
 import `in`.dragonbra.javasteam.depotdownloader.data.DownloadItem
+import `in`.dragonbra.javasteam.steam.handlers.steamapps.PICSRequest
+import `in`.dragonbra.javasteam.steam.handlers.steamapps.SteamApps
 import `in`.dragonbra.javasteam.util.log.LogListener
 import `in`.dragonbra.javasteam.util.log.LogManager
 import kotlinx.coroutines.Dispatchers
@@ -154,9 +156,7 @@ object DepotFetcher {
         // wait loop still needs to know whether the collector is still there.
         val producer = this
         if (target == SteamDepotTarget.HOLLOW_KNIGHT) {
-            check(installDir.canonicalPath.replace('\\', '/').endsWith("/games/hollow-knight/depot")) {
-                "Hollow Knight must use its own download directory."
-            }
+            target.requireHollowKnightDirectory(installDir)
         }
         installDir.mkdirs()
         stagingDir.mkdirs()
@@ -177,6 +177,20 @@ object DepotFetcher {
             SteamSession().use { session ->
                 session.logOn(credentials)
                 SteamOwnership.requireOwned(session, target.appId)
+                // Explicit depots bypass the downloader's OS filter. Verify Steam's
+                // platform metadata first and pin this attempt to the inspected manifest.
+                val apps = requireNotNull(session.steamClient.getHandler(SteamApps::class.java))
+                val tokens = apps.picsGetAccessTokens(listOf(target.appId), emptyList())
+                    .toFuture().get(30, TimeUnit.SECONDS)
+                val metadata = apps.picsGetProductInfo(
+                    listOf(PICSRequest(target.appId, tokens.appTokens[target.appId] ?: 0L)), emptyList())
+                    .toFuture().get(45, TimeUnit.SECONDS)
+                check(metadata.complete && !metadata.failed) { "Steam depot metadata was incomplete. Retry the download." }
+                val app = metadata.results.firstNotNullOfOrNull { it.apps[target.appId] }
+                    ?: error("Steam did not return metadata for the selected game. Retry the download.")
+                check(!app.isMissingToken) { "Steam did not authorize access to the game's depot metadata." }
+                val manifest = SteamDepotMetadata.requireLinuxManifest(target, app.id, app.keyValues)
+                LauncherLog.log("Steam confirmed Linux depot ${target.depotId}; manifest ${manifest.toULong()}")
 
                 // The downloader needs to know what the account may download,
                 // and Steam sends that on its own callback shortly after
@@ -238,6 +252,7 @@ object DepotFetcher {
                             // Android and is not a platform this game ships.
                             os = "linux",
                             depot = listOf(target.depotId),
+                            manifest = listOf(manifest),
                         )
                     )
                     downloader.finishAdding()
@@ -275,8 +290,8 @@ object DepotFetcher {
             forward("ERROR ", clazz, message, throwable)
 
         private fun forward(level: String, clazz: Class<*>, message: String?, throwable: Throwable?) {
-            LauncherLog.log("[${clazz.simpleName}] $level${message.orEmpty()}" +
-                (throwable?.let { " — $it" } ?: ""))
+            LauncherLog.log(SteamDownloadDiagnostics.sanitize("[${clazz.simpleName}] $level${message.orEmpty()}" +
+                (throwable?.let { " — $it" } ?: "")))
         }
     }
 }

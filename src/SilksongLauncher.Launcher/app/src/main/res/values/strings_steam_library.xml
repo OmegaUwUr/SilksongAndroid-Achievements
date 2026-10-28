@@ -22,5 +22,10 @@
     <string name="hk_verifying">Verifying the exact Hollow Knight release…</string>
     <string name="hk_download_ready">Steam download verified. Choose Port Hollow Knight to build it on this device.</string>
     <string name="hk_not_owned">This Steam account could not verify ownership of Hollow Knight. Sign in with an account that owns the game.</string>
-    <string name="hk_download_failed">Download or verification failed: %1$s\n\nThe adapter accepts only the complete Linux 1.5.12620 release. Your existing port and saves are kept.</string>
+    <string name="hk_download_failed">Hollow Knight download failed during %1$s.\n%2$s\n\nYou can retry. Your existing port and saves are kept.</string>
+    <string name="hk_stage_storage">storage preparation</string>
+    <string name="hk_stage_download">Steam connection or download</string>
+    <string name="hk_stage_access">Steam ownership verification</string>
+    <string name="hk_stage_verify">game-file verification</string>
+    <string name="hk_previous_download">An earlier download is still stored separately. This version downloads the correct Linux depot into a new folder and keeps existing builds and saves.</string>
 </resources>

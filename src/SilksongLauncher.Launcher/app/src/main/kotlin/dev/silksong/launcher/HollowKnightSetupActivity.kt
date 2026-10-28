@@ -53,6 +53,8 @@ class HollowKnightSetupActivity : Activity() {
         column.addView(label(getString(R.string.hk_title), 25f))
         column.addView(label(getString(R.string.hk_experimental)))
         column.addView(label(getString(R.string.hk_requirements)))
+        if (portContext.getExternalFilesDir(null)?.let { File(it, "depot").isDirectory } == true)
+            column.addView(label(getString(R.string.hk_previous_download)))
         status = label("").also(column::addView)
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 1000; visibility = View.GONE
@@ -178,10 +180,11 @@ class HollowKnightSetupActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         scope.launch {
             var message: String? = null
+            var stage = getString(R.string.hk_stage_storage)
             try {
                 val selected = withContext(Dispatchers.IO) {
                     val external = portContext.getExternalFilesDir(null) ?: error("External app storage is unavailable.")
-                    val depot = File(external, "depot")
+                    val depot = SteamDepotTarget.HOLLOW_KNIGHT.hollowKnightDirectory(external)
                     RandomAccessFile(File(portContext.filesDir, "port.lock"), "rw").use { handle ->
                         val lock = try { handle.channel.tryLock() } catch (_: java.nio.channels.OverlappingFileLockException) { null }
                             ?: error("Close Hollow Knight before downloading its game files.")
@@ -189,8 +192,10 @@ class HollowKnightSetupActivity : Activity() {
                             // The full download remains separate from selected local files and existing builds.
                             if (!DepotFetcher.isPresent(depot, SteamDepotTarget.HOLLOW_KNIGHT)) {
                                 check(external.usableSpace >= 7L * 1024 * 1024 * 1024) { "Free at least 7 GB for the Steam download; porting needs additional space." }
+                                stage = getString(R.string.hk_stage_download)
                                 DepotFetcher.download(credentials, depot, File(external, "depot-staging"), SteamDepotTarget.HOLLOW_KNIGHT,
                                     validateSource = { downloaded ->
+                                        stage = getString(R.string.hk_stage_verify)
                                         withContext(Dispatchers.Main) { status.setText(R.string.hk_verifying); progress.isIndeterminate = true }
                                         verifySteamSource(downloaded)
                                     }).collect { event ->
@@ -204,7 +209,9 @@ class HollowKnightSetupActivity : Activity() {
                                 }
                             } else {
                                 // Cached files can have changed since the marker was written.
+                                stage = getString(R.string.hk_stage_access)
                                 SteamSession().use { session -> session.logOn(credentials); SteamOwnership.requireOwned(session, SteamDepotTarget.HOLLOW_KNIGHT.appId) }
+                                stage = getString(R.string.hk_stage_verify)
                                 verifySteamSource(depot)
                             }
                             HollowKnightSource.find(depot)
@@ -214,9 +221,17 @@ class HollowKnightSetupActivity : Activity() {
                 source = selected
                 preferences.edit().putString("source", selected.absolutePath).apply()
                 message = getString(R.string.hk_download_ready)
+                LauncherLog.log("Hollow Knight Linux depot ${SteamDepotTarget.HOLLOW_KNIGHT.depotId}: exact source verified")
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (notOwned: SteamOwnership.NotOwned) { message = getString(R.string.hk_not_owned) }
-            catch (error: Exception) { message = getString(R.string.hk_download_failed, error.message ?: error.javaClass.simpleName) }
+            catch (notOwned: SteamOwnership.NotOwned) {
+                message = getString(R.string.hk_not_owned)
+                LauncherLog.log("Hollow Knight download: Steam ownership access denied for app ${notOwned.appId}")
+            }
+            catch (error: Exception) {
+                val detail = SteamDownloadDiagnostics.describe(error)
+                LauncherLog.log("Hollow Knight download failed during $stage: $detail")
+                message = getString(R.string.hk_download_failed, stage, detail)
+            }
             finally {
                 busy = false
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

@@ -50,6 +50,7 @@ class SteamSession : Closeable {
     }
 
     private val client = SteamClient()
+    private val loginIdentity = SteamLoginIdentity.allocate()
     private val callbacks = CallbackManager(client)
     private val pumpRunning = AtomicBoolean(true)
 
@@ -209,6 +210,7 @@ class SteamSession : Closeable {
             // lives in TokenStore either way) but keeps Steam from
             // expiring our session prematurely.
             val details = LogOnDetails().apply {
+                loginID = loginIdentity
                 username = credentials.accountName
                 accessToken = credentials.refreshToken
                 shouldRememberPassword = true

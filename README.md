@@ -41,8 +41,9 @@ or Valve release.
   and password with Steam Guard confirmation when required. Revision 33 adapts
   sign-in to portrait/narrow windows and opens game selection after authentication.
 - **Game download:** uses the signed-in account's access to each game's Linux
-  depot. The revision-33 candidate adds Hollow Knight app 367520 / depot 367522,
-  with exact Linux 1.5.12620 validation. Local game files remain supported.
+  depot. The revision-34 candidate corrects Hollow Knight to app 367520 / Linux
+  depot 367523, checks Steam's platform metadata and validates exact Linux
+  1.5.12620 files. Local game files remain supported.
 - **Steam library discovery (revision 33 candidate):** scans the authenticated
   library and Linux depot manifests for Unity Mono candidates without downloading
   entire games. Reports native-library requirements and unsupported/incomplete
@@ -185,13 +186,18 @@ for the timing logs and device checks.
 
 ## Getting started
 
-### Game options and compatibility (revision 33 candidate)
+### Game options and compatibility (revision 34 candidate)
 
 **Choose a game** opens after sign-in and lists **Hollow Knight: Silksong**, **Hollow Knight**,
 and **Other Unity game**. Silksong keeps its existing setup. Hollow Knight now
 has an **experimental Steam-download and local-files porting path** for the exact Linux **1.5.12620**
-release, using Unity **6000.0.61f1**. This candidate has not been built into an APK or
-validated on an Android device yet.
+release, using Unity **6000.0.61f1**. Revision 34 fixes the wrong-platform download
+reported on revision 33. The corrected candidate still needs an APK build and
+Android download, port and gameplay testing.
+
+Revision 33 downloaded the macOS depot by mistake. Revision 34 downloads Linux
+files into a new folder so it cannot reuse that payload. The previous download
+remains stored separately, using additional space; existing ports and saves are kept.
 
 Hollow Knight uses separate engine, build, runtime, preferences and save storage.
 Its first adapter requires a **physical controller**, ARM64/Vulkan and about

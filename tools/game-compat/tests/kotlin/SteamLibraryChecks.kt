@@ -73,16 +73,80 @@ fun main() {
     }
     test("Hollow Knight and Silksong download identities cannot be interchanged") {
         check(SteamDepotTarget.SILKSONG.appId == 1030300 && SteamDepotTarget.SILKSONG.depotId == 1030303)
-        check(SteamDepotTarget.HOLLOW_KNIGHT.appId == 367520 && SteamDepotTarget.HOLLOW_KNIGHT.depotId == 367522)
+        check(SteamDepotTarget.HOLLOW_KNIGHT.appId == 367520 && SteamDepotTarget.HOLLOW_KNIGHT.depotId == 367523)
+    }
+    // Steam platform mapping independently corroborated by the author's actual
+    // download commands: Ajadaz/InputSystemBackport/DEVELOPMENT_STORY.md.
+    // Do not generate the fixture's IDs/platforms from SteamDepotTarget itself.
+    val hollowKnight = info(depots = """
+        "367521" { "config" { "oslist" "windows" } "manifests" { "public" { "gid" "101" } } }
+        "367522" { "config" { "oslist" "macos" } "manifests" { "public" { "gid" "102" } } }
+        "367523" { "config" { "oslist" "linux" } "manifests" { "public" { "gid" "103" } } }
+    """)
+    test("selected HK depot matches independent Linux metadata, excluding the old macOS depot") {
+        check(SteamDepotMetadata.requireLinuxManifest(SteamDepotTarget.HOLLOW_KNIGHT, 367520, hollowKnight) == 103L)
+        check(SteamLibraryRules.linuxPlan(hollowKnight, 367520).depots.map { it.id } == listOf(367523))
+    }
+    test("Silksong Linux preflight and legacy unsigned manifests remain supported") {
+        val silksong = info(depots = """"1030303" { "config" { "oslist" "linux" } "manifests" { "public" { "gid" "104" } } }""")
+        check(SteamDepotMetadata.requireLinuxManifest(SteamDepotTarget.SILKSONG, 1030300, silksong) == 104L)
+        val legacy = info(depots = """"367523" { "config" { "oslist" "linux" } "manifests" { "public" "18446744073709551614" } }""")
+        check(SteamDepotMetadata.requireLinuxManifest(SteamDepotTarget.HOLLOW_KNIGHT, 367520, legacy).toULong() == 18446744073709551614uL)
+    }
+    test("authoritative platform disagreement fails before a payload download") {
+        for (platform in listOf("macos", "windows", "", "windowslinux")) {
+            val changed = info(depots = """"367523" { "config" { "oslist" "$platform" } "manifests" { "public" { "gid" "103" } } }""")
+            check(runCatching { SteamDepotMetadata.requireLinuxManifest(SteamDepotTarget.HOLLOW_KNIGHT, 367520, changed) }.isFailure)
+        }
+    }
+    test("missing or cross-app metadata and private-only manifests cannot start a download") {
+        check(runCatching { SteamDepotMetadata.requireLinuxManifest(SteamDepotTarget.HOLLOW_KNIGHT, 1030300, hollowKnight) }.isFailure)
+        check(runCatching { SteamDepotMetadata.requireLinuxManifest(SteamDepotTarget.HOLLOW_KNIGHT, 367520, info(depots = "")) }.isFailure)
+        val privateDepot = info(depots = """"367523" { "config" { "oslist" "linux" } "encryptedmanifests" {} }""")
+        check(runCatching { SteamDepotMetadata.requireLinuxManifest(SteamDepotTarget.HOLLOW_KNIGHT, 367520, privateDepot) }.isFailure)
+        for (manifest in listOf("0", "9223372036854775807", "invalid")) {
+            val invalid = info(depots = """"367523" { "config" { "oslist" "linux" } "manifests" { "public" { "gid" "$manifest" } } }""")
+            check(runCatching { SteamDepotMetadata.requireLinuxManifest(SteamDepotTarget.HOLLOW_KNIGHT, 367520, invalid) }.isFailure)
+        }
+        val redirected = info(depots = """"367523" { "depotfromapp" "1030300" "config" { "oslist" "linux" } "manifests" { "public" { "gid" "103" } } }""")
+        check(runCatching { SteamDepotMetadata.requireLinuxManifest(SteamDepotTarget.HOLLOW_KNIGHT, 367520, redirected) }.isFailure)
+    }
+    test("corrected Linux download cannot reuse or invalidate revision 33's mixed folder") {
+        val tmp = java.nio.file.Files.createTempDirectory("hk-layout").toFile()
+        try {
+            val gameRoot = java.io.File(tmp, "games/hollow-knight").apply { mkdirs() }
+            val old = java.io.File(gameRoot, "depot").apply { mkdirs() }
+            val wrong = java.io.File(old, "hollow_knight.app/Contents/Resources/Data/globalgamemanagers").apply { parentFile.mkdirs(); writeText("macOS") }
+            val corrected = SteamDepotTarget.HOLLOW_KNIGHT.hollowKnightDirectory(gameRoot)
+            check(corrected.name == "depot-367523" && corrected != old)
+            SteamDepotTarget.HOLLOW_KNIGHT.requireHollowKnightDirectory(corrected)
+            check(runCatching { SteamDepotTarget.HOLLOW_KNIGHT.invalidateHollowKnightResume(old) }.isFailure)
+            check(wrong.readText() == "macOS")
+        } finally { tmp.deleteRecursively() }
+    }
+    test("overlapping Steam sessions get distinct non-default login IDs") {
+        val identities = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+        val threads = (1..4).map { Thread { repeat(250) { check(identities.add(SteamLoginIdentity.allocate())) } }.apply { start() } }
+        threads.forEach { it.join() }
+        check(identities.size == 1000 && identities.all { it > 0 })
+    }
+    test("download errors retain useful causes without CDN tokens or account identifiers") {
+        val failure = IllegalStateException("Download failed", java.io.IOException(
+            "timeout https://cdn.example.test/depot/367523?token=secret-cdn refresh_token=secret-refresh " +
+                "password=secret-password accountName='secret account' Authorization: Bearer secret-bearer 76561198000000000"))
+        val detail = SteamDownloadDiagnostics.describe(failure)
+        check("timeout" in detail && "Download failed" in detail)
+        check(listOf("secret-", "secret account", "76561198000000000", "cdn.example").none { it in detail })
+        check(SteamDownloadDiagnostics.sanitize("token=generic-secret") == "token=[removed]")
     }
     test("failed verification drops only HK resume metadata and preserves game files") {
         val tmp = java.nio.file.Files.createTempDirectory("hk-resume").toFile()
         try {
-            val depot = java.io.File(tmp, "games/hollow-knight/depot").apply { mkdirs() }
+            val depot = java.io.File(tmp, "games/hollow-knight/depot-367523").apply { mkdirs() }
             val cache = java.io.File(depot, ".DepotDownloader").apply { mkdirs() }
-            val marker = java.io.File(depot, ".download-complete").apply { writeText("367522") }
-            val manifest = java.io.File(cache, "367522_123.manifest").apply { writeText("metadata") }
-            val digest = java.io.File(cache, "367522_123.manifest.sha").apply { writeText("hash") }
+            val marker = java.io.File(depot, ".download-complete").apply { writeText("367523") }
+            val manifest = java.io.File(cache, "367523_123.manifest").apply { writeText("metadata") }
+            val digest = java.io.File(cache, "367523_123.manifest.sha").apply { writeText("hash") }
             val foreign = java.io.File(cache, "1030303_456.manifest").apply { writeText("other depot") }
             val source = java.io.File(depot, "game-data").apply { writeText("game bytes") }
             SteamDepotTarget.HOLLOW_KNIGHT.invalidateHollowKnightResume(depot)
