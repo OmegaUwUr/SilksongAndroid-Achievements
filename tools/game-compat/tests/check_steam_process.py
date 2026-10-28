@@ -58,6 +58,7 @@ int main(int argc, char **argv) {
     for name, app in (("com.hollowknightsilksong.steamsync", 1030300),
                       ("com.hollowknightsilksong.steamsync:hollow_knight", 367520),
                       ("com.hollowknightsilksong.steamsync:launcher", 0),
+                      ("com.hollowknightsilksong.steamsync:unity_port", 0),
                       ("com.hollowknightsilksong.steamsync:other_game", 0)):
         subprocess.run([name, str(app)], executable=str(binary), check=True)
-    print("PASS: 4 native process cases; HK/Silksong have separate App IDs and sockets; unknown processes make zero Steam socket attempts.")
+    print("PASS: 5 native process cases; HK/Silksong have separate App IDs and sockets; generic and unknown processes make zero Steam socket attempts.")

@@ -20,6 +20,8 @@ namespace PortServices
         Rect safe;
         RectTransform[] buttons;
         bool focused = true, paused, waitForLift;
+        bool legacyAvailable = true;
+        int touchBackend = -1;
         float reconcileAt;
         public static Action<Gamepad> EnsureGameBinding;
         public static Action<Gamepad> RemoveGameBinding;
@@ -91,19 +93,61 @@ namespace PortServices
         {
             if (input == null || pad == null || !focused || paused) return;
             if (safe != SafeArea()) Resize();
-            if (waitForLift) { if (UnityEngine.Input.touchCount == 0) waitForLift = false; return; }
-            input.BeginFrame();
-            for (int i = 0; i < UnityEngine.Input.touchCount; i++)
-            {
-                var touch = UnityEngine.Input.GetTouch(i);
-                if (touch.phase == LegacyPhase.Began) input.Down(touch.fingerId, touch.position.x, touch.position.y);
-                else if (touch.phase == LegacyPhase.Ended || touch.phase == LegacyPhase.Canceled) input.Up(touch.fingerId);
-                else input.Move(touch.fingerId, touch.position.x, touch.position.y);
-            }
-            input.EndFrame();
+            ReadTouches();
             var state = input.State();
             if (!state.Equals(sent)) Apply(state);
             if (Time.realtimeSinceStartup >= reconcileAt) { reconcileAt = Time.realtimeSinceStartup + 1; ReconcileController(); }
+        }
+
+        void ReadTouches()
+        {
+            var screen = Touchscreen.current;
+            var backend = screen != null ? 1 : legacyAvailable ? 0 : 2;
+            if (touchBackend < 0) touchBackend = backend;
+            else if (backend != touchBackend) { Release(); waitForLift = true; touchBackend = backend; }
+            if (screen != null)
+            {
+                bool held = false;
+                foreach (var touch in screen.touches)
+                {
+                    var phase = touch.phase.ReadValue();
+                    if (touch.displayIndex.ReadValue() == 0 && (phase == UnityEngine.InputSystem.TouchPhase.Began ||
+                        phase == UnityEngine.InputSystem.TouchPhase.Moved || phase == UnityEngine.InputSystem.TouchPhase.Stationary)) held = true;
+                }
+                if (waitForLift) { if (!held) waitForLift = false; return; }
+                input.BeginFrame();
+                foreach (var touch in screen.touches)
+                {
+                    if (touch.displayIndex.ReadValue() != 0) continue;
+                    var phase = touch.phase.ReadValue(); var id = touch.touchId.ReadValue(); var point = touch.position.ReadValue();
+                    if (phase == UnityEngine.InputSystem.TouchPhase.Began) input.Down(id, point.x, point.y);
+                    else if (phase == UnityEngine.InputSystem.TouchPhase.Ended || phase == UnityEngine.InputSystem.TouchPhase.Canceled) input.Up(id);
+                    else if (phase == UnityEngine.InputSystem.TouchPhase.Moved || phase == UnityEngine.InputSystem.TouchPhase.Stationary) input.Move(id, point.x, point.y);
+                }
+                input.EndFrame();
+            }
+            else if (legacyAvailable)
+            {
+                try
+                {
+                    if (waitForLift) { if (UnityEngine.Input.touchCount == 0) waitForLift = false; return; }
+                    input.BeginFrame();
+                    for (int i = 0; i < UnityEngine.Input.touchCount; i++)
+                    {
+                        var touch = UnityEngine.Input.GetTouch(i);
+                        if (touch.phase == LegacyPhase.Began) input.Down(touch.fingerId, touch.position.x, touch.position.y);
+                        else if (touch.phase == LegacyPhase.Ended || touch.phase == LegacyPhase.Canceled) input.Up(touch.fingerId);
+                        else input.Move(touch.fingerId, touch.position.x, touch.position.y);
+                    }
+                    input.EndFrame();
+                }
+                catch (InvalidOperationException)
+                {
+                    // Input System-only players disable UnityEngine.Input. Wait for a Touchscreen device.
+                    legacyAvailable = false; Release(); waitForLift = true;
+                    Debug.LogWarning("[PortGamepad] legacy touch disabled; using Input System touchscreen when available.");
+                }
+            }
         }
 
         void ReconcileController()

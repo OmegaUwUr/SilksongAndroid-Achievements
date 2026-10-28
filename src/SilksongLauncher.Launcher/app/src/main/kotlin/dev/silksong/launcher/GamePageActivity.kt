@@ -87,7 +87,7 @@ class GamePageActivity : Activity() {
                 body.addView(libraryButton(getString(R.string.settings_title)) { startActivity(Intent(this, SettingsActivity::class.java)) })
             }
         }
-        if (game == null) body.addView(libraryText(getString(R.string.game_page_no_adapter)))
+        if (game == null) body.addView(libraryText(getString(R.string.generic_port_explain)))
         body.addView(libraryText(intent.getStringExtra("requirements")?.take(10000) ?: if (game == null) getString(R.string.game_page_unknown) else getString(
             if (game == SteamGame.HOLLOW_KNIGHT) R.string.hk_requirements else R.string.game_silksong_description)))
         body.addView(libraryButton(getString(R.string.game_check_files)) { pickFolder() })
@@ -108,13 +108,13 @@ class GamePageActivity : Activity() {
     private fun ready() = when (game) {
         SteamGame.HOLLOW_KNIGHT -> HollowKnightBuild.isReady(SteamGame.HOLLOW_KNIGHT.context(this))
         SteamGame.SILKSONG -> File(filesDir, "pkg/.built").isFile && File(filesDir, "pkg/lib/arm64/libil2cpp.so").length() > 0
-        else -> false
+        else -> appId > 0 && GenericPortBuild.isReady(GenericPortContext.wrap(this, appId))
     }
 
     private fun refresh() {
-        play.isEnabled = !busy && game != null
-        play.alpha = if (game == null) .5f else 1f
-        play.setText(if (game == null) R.string.game_page_unavailable else if (ready()) R.string.game_page_play else R.string.game_page_setup)
+        play.isEnabled = !busy && appId > 0
+        play.alpha = if (appId <= 0) .5f else 1f
+        play.setText(if (ready()) R.string.game_page_play else if (game == null) R.string.generic_port_setup else R.string.game_page_setup)
         val account = TokenStore(this).read()?.accountName
         if (account != null && game != null) steamState?.text = getString(R.string.game_page_profile_status,
             SteamProfile.name(this, account), getString(when (SteamVisibility.get(this, account)) {
@@ -126,7 +126,15 @@ class GamePageActivity : Activity() {
     }
 
     private fun launch() {
-        val known = game ?: return
+        val known = game
+        if (known == null) {
+            if (appId > 0) {
+                GameLibraryActivity.pauseScanForGame()
+                startActivity(Intent(this, GenericPortSetupActivity::class.java).putExtra("app_id", appId)
+                    .putExtra("game_title", gameTitle).putExtra("launch_prepared", ready()))
+            }
+            return
+        }
         GameLibraryActivity.pauseScanForGame()
         if (!ready()) { startActivity(Intent(this, if (known == SteamGame.HOLLOW_KNIGHT) HollowKnightSetupActivity::class.java else SetupActivity::class.java).putExtra("return_to_game_page", true)); return }
         if (known == SteamGame.SILKSONG) startActivity(Intent(this, SetupActivity::class.java).putExtra("launch_from_library", true))

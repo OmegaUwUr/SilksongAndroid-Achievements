@@ -70,7 +70,7 @@ namespace UnityEngine {
  public enum TouchPhase {Began,Moved,Stationary,Ended,Canceled}
  public struct Touch {public int fingerId;public Vector2 position;public TouchPhase phase;}
  public static class Input {
-  public static Touch[] touches=Array.Empty<Touch>();public static int touchCount=>touches.Length;
+  public static Touch[] touches=Array.Empty<Touch>();public static bool legacyUnavailable;public static int touchCount {get {if(legacyUnavailable)throw new InvalidOperationException();return touches.Length;}}
   public static Touch GetTouch(int i)=>touches[i];public static Vector2 mousePosition;
   public static bool mouse;public static bool GetMouseButton(int i)=>mouse;public static bool GetMouseButtonDown(int i)=>mouse;public static bool GetMouseButtonUp(int i)=>mouse;
  }

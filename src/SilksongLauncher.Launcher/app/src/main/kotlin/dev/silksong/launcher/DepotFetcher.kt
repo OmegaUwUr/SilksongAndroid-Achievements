@@ -123,7 +123,7 @@ object DepotFetcher {
      * one being closed here, and closing it properly means hashing the depot
      * against the manifest.
      */
-    private fun dropUnwritten(installDir: File): Int {
+    internal fun dropUnwritten(installDir: File): Int {
         // Collected before anything is deleted: removing entries from under a
         // directory walk that is still reading them is its own bug.
         val holes = ArrayList<File>()
@@ -282,7 +282,7 @@ object DepotFetcher {
     }.flowOn(Dispatchers.IO)
 
     /** Puts JavaSteam's own logging where the launcher's log can show it. */
-    private val logForwarder = object : LogListener {
+    internal val logForwarder = object : LogListener {
         override fun onLog(clazz: Class<*>, message: String?, throwable: Throwable?) =
             forward("", clazz, message, throwable)
 

@@ -51,6 +51,7 @@ bool SteamAPI_ISteamUserStats_StoreStats(void *self) { return accepted!=0; }
     # Compile the actual shared runtime without any game or InControl assembly.
     compile_to(core, [*sorted((ROOT / "tools/port-services/src").glob('*.cs')),
                      ROOT / "tools/silksong-patches/src/touch/TouchControlModel.cs"], [fixtures])
+    compile_to(output / "GenericPortPatches.dll", sorted((ROOT / "tools/generic-port-patches/src").glob('*.cs')), [fixtures, core])
     compile_to(io, [ROOT / "tools/silksong-io/src/SafeIo.cs"], [fixtures])
     sources = [global_usings, *sorted((ROOT / "tools/hollow-knight-patches/src").glob('*.cs')),
                ROOT / "tools/bundle-surgery/HookPortServices.cs", ROOT / "tools/bundle-surgery/RedirectFileReplace.cs", *Path(__file__).parent.glob('*.cs')]

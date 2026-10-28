@@ -17,9 +17,11 @@ game-side code. Original game files and saves are retained.
    available, a fade into the UI, and a green Play/Set up button. Text remains
    available if artwork is missing or the network fails.
 
-Only registered adapters can launch. Other games can be inspected and display their
-requirements; a generic controller cannot supply missing asset conversion, shaders,
-native plugins or game code. Scans pause when setup or gameplay begins.
+Revision 36 adds **Prepare port** for other library entries, including owned source
+downloads and a shared experimental compiler for eligible classic Mono games.
+See [generic Unity preparation](GENERIC_UNITY_PORTS.md) for supported engine versions,
+plugin packs and limits. Generic ports do not inherit HK/Silksong Steam identity or
+Cloud paths. Scans pause when setup or gameplay begins.
 
 ## Registration and isolation
 
@@ -91,6 +93,10 @@ Select and Start through a Unity virtual gamepad. It releases input on focus los
 pause, scene changes, resizing, cancellation and destruction. Idle frames do not
 repeatedly change controller state. HK supplies its InControl binding in a separate
 adapter; the shared runtime does not depend on InControl or HK classes.
+
+Revision 36 also reads Input System touchscreen events. Players with legacy input
+disabled no longer need UnityEngine.Input for the overlay, and a backend change
+releases all held controls before accepting a fresh touch.
 
 A future port needs a registered App ID/process/socket, an isolated save layout,
 an earned-achievement hook verified against its own game code, and its own engine,

@@ -379,6 +379,13 @@ val stageHollowKnightPatches by tasks.registering(Sync::class) {
 }
 tasks.named("preBuild") { dependsOn(stageHollowKnightPatches) }
 
+val stageGenericPortPatches by tasks.registering(Sync::class) {
+    from(rootProject.file("../../tools/generic-port-patches/src")) { into("src") }
+    from(rootProject.file("../../tools/generic-port-patches/entrypoints.json"))
+    into(layout.projectDirectory.dir("src/main/assets/ondevice/generic-port-patches"))
+}
+tasks.named("preBuild") { dependsOn(stageGenericPortPatches) }
+
 val stagePortServices by tasks.registering(Sync::class) {
     from(rootProject.file("../../tools/port-services/src")) { into("src") }
     from(rootProject.file("../../tools/silksong-patches/src/touch/TouchControlModel.cs")) { into("src") }

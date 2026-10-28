@@ -26,7 +26,11 @@ class SilksongApp : Application() {
     // framework instantiates the activity. attachBaseContext is the first
     // point in the process where that is possible.
     override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(if (HollowKnightContext.isGameProcess()) HollowKnightContext.wrap(base) else base)
+        super.attachBaseContext(when {
+            HollowKnightContext.isGameProcess() -> HollowKnightContext.wrap(base)
+            GenericPortContext.isGameProcess() -> GenericPortContext.active(base)
+            else -> base
+        })
         UnityDex.inject(this)
     }
 

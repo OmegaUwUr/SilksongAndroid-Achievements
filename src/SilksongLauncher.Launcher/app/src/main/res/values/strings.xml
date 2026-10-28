@@ -207,4 +207,15 @@ FPS: %2$s</string>
     <string name="steam_public_signed_in">Signed in as %1$s</string>
     <string name="settings_touch_controls">Personalized touch controls</string>
     <string name="settings_touch_controls_subtitle">Adds movement and Silksong action buttons on your next game launch. Tap Edit controls at the title or pause screen to move, resize, hide, or remap buttons and save your layout.</string>
+    <string name="generic_port_explain">Experimental Unity porting: download your owned game, prepare matching Android components, then compile if its files pass compatibility checks. Engine versions, shaders and native plugins must match. A Unity label alone does not establish compatibility.</string>
+    <string name="generic_port_start">Download a Steam source or choose complete local game files, then prepare the port.</string>
+    <string name="generic_port_download">Download &amp; prepare</string>
+    <string name="generic_port_setup">Prepare port</string>
+    <string name="generic_port_choose">Choose local game source</string>
+    <string name="generic_port_prepare">Prepare / check again</string>
+    <string name="generic_port_import">Import Android plugin pack</string>
+    <string name="generic_port_compile">Compile experimental port</string>
+    <string name="generic_port_cancelled">Cancelled. Completed downloads can resume; the previous build is preserved.</string>
+    <string name="generic_port_compiled">Experimental port compiled. Test graphics, sound, controls and saves on this device before sharing.</string>
+    <string name="generic_port_close_running">Close the running generic game before switching ports or rebuilding.</string>
 </resources>

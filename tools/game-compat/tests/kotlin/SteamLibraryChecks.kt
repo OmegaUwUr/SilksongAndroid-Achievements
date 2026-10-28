@@ -11,6 +11,41 @@ fun main() {
     val linux = """"42" { "config" { "oslist" "linux" } "manifests" { "public" { "gid" "100" } } }"""
     val windows = """"43" { "config" { "oslist" "windows" } "manifests" { "public" { "gid" "101" } } }"""
     val common = """"44" { "manifests" { "public" { "gid" "102" } } }"""
+    test("generic download selects one OS, English, 64-bit and common base depots") {
+        val language = """"45" { "config" { "oslist" "linux" "language" "french" } "manifests" { "public" "103" } }"""
+        val english = """"46" { "config" { "oslist" "linux" "language" "english" } "manifests" { "public" "104" } }"""
+        val x86 = """"47" { "config" { "oslist" "linux" "osarch" "32" } "manifests" { "public" "105" } }"""
+        val plan = SteamPortPlan.from(info(depots = windows + linux + common + language + english + x86), 9)
+        check(plan.platform == "linux" && plan.depots.map { it.id } == listOf(42, 44, 46))
+    }
+    test("optional DLC and another app's shared depot do not prevent a base-game download") {
+        val dlc = """"45" { "dlcappid" "99" "manifests" { "public" "103" } }"""
+        val shared = """"46" { "depotfromapp" "999" "manifests" { "public" "104" } }"""
+        check(SteamPortPlan.from(info(depots = linux + dlc + shared), 9).depots.map { it.id } == listOf(42))
+    }
+    test("generic download snapshots change for Steam manifest changes and are order-independent") {
+        val a = SteamPortPlan.from(info(depots = linux + common), 9)
+        val b = SteamPortPlan.from(info(depots = common + linux), 9)
+        val changed = SteamPortPlan.from(info(depots = linux.replace("100", "999") + common), 9)
+        check(a.key == b.key && a.key != changed.key && Regex("[a-f0-9]{64}").matches(a.key))
+    }
+    test("generic planning preserves unsigned Steam manifest IDs") {
+        val plan = SteamPortPlan.from(info(depots = linux.replace("100", "18446744073709551615")), 9)
+        check(plan.depots.single().manifest.toULong() == ULong.MAX_VALUE)
+    }
+    test("missing public manifests prevent generic downloads instead of silently omitting content") {
+        for (depot in listOf(""""42" { "config" { "oslist" "linux" } }""", linux.replace("100", "0")))
+            check(runCatching { SteamPortPlan.from(info(depots = depot), 9) }.isFailure)
+    }
+    test("generic targets cannot bypass either dedicated game or accept a non-game product") {
+        for (id in listOf(0, -1, 1030300, 367520))
+            check(runCatching { SteamPortPlan.from(info(depots = linux), id) }.isFailure)
+        check(runCatching { SteamPortPlan.from(info(type = "tool", depots = linux), 9) }.isFailure)
+    }
+    test("generic download falls back to one Windows source when no Linux release is available") {
+        val plan = SteamPortPlan.from(info(os = "windows", depots = windows + common), 9)
+        check(plan.platform == "windows" && plan.depots.map { it.id } == listOf(43, 44))
+    }
     test("select Linux and shared depots; exclude Windows") {
         val plan = SteamLibraryRules.linuxPlan(info(depots = linux + windows + common), 9)
         check(plan.complete && plan.depots.map { it.id } == listOf(42, 44))
@@ -128,7 +163,7 @@ fun main() {
         val report = PortDependencyAudit.requirements(listOf("Game_Data/Plugins/libfmod.so.13", "Game_Data/Plugins/libsteam_api.so",
             "Game_Data/Plugins/libcustom.so", "Game_Data/Managed/Rewired_Core.dll")).joinToString("\n")
         check("FMOD" in report && "Steamworks" in report && "Rewired" in report && "libcustom.so" in report)
-        check("Silksong's achievement bridge cannot be reused" in report)
+        check("native bridge must not use another game's identity" in report)
         check(!PortDependencyAudit.nativeLibrary("game_data/managed/assembly-csharp.dll"))
         check(!PortDependencyAudit.nativeLibrary("Managed/Assembly-CSharp.dll"))
     }

@@ -72,6 +72,9 @@ internal static class Program
             "patch-catalog-path" when args.Length >= 4 => PatchCatalogPath(args[1], args[2], args[3]),
             "redirect-file-replace" when args.Length >= 3 => RedirectFileReplace.Run(args[1], args[2], args.Skip(3).Contains("--allow-empty")),
             "hook-port-services" when args.Length == 3 => HookPortServices.Run(args[1], args[2]),
+            "inspect-managed-port" when args.Length == 4 => ManagedPortAudit.Run(args[1], args[2], args[3]),
+            "inspect-managed-port" when args.Length == 5 => ManagedPortAudit.Run(args[1], args[2], args[3], args[4]),
+            "list-port-initializers" when args.Length == 4 => ManagedPortAudit.RuntimeInitializers(args[1], args[2], args[3]),
             "retarget-tree" when args.Length >= 3 => RetargetTree(args[1], args[2]),
             "retarget-serialized-android" when args.Length == 3 => RetargetSerializedAndroid(args[1], args[2]),
             "manifest-classic-tree" when args.Length == 3 =>

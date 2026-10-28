@@ -116,6 +116,24 @@ static class PortServicesChecks
                 Check(InControl.InputManager.Devices.Count == 1);
                 HollowKnightPatches.ControllerAdapter.Remove(pad); Check(InControl.InputManager.Devices.Count == 0);
             });
+            Test("Input System-only touchscreen works and backend changes release held actions", () => {
+                Reset(Path.Combine(temporary, "native-touch"));
+                UnityEngine.Input.legacyUnavailable = true;
+                Touchscreen.current = new Touchscreen();
+                GenericTouchGamepad.Bootstrap();
+                // The host fixture does not remove components or invoke Awake automatically.
+                var overlay = UnityEngine.Object.FindObjectsOfType<GenericTouchGamepad>().Last();
+                Call(overlay, "Awake"); Call(overlay, "Update");
+                var input = (TouchInputModel)Field(overlay, "input"); var pad = (Gamepad)Field(overlay, "pad");
+                var bounds = input.Surface.Bounds(input.Layout.controls[1]);
+                var touch = new UnityEngine.InputSystem.TouchControl(); touch.phase.value = UnityEngine.InputSystem.TouchPhase.Began;
+                touch.position.value = new Vector2(bounds.x, bounds.y); touch.touchId.value = 21;
+                Touchscreen.current.touches.Add(touch); Call(overlay, "Update");
+                Check((pad.state.buttons & (1u << (int)GamepadButton.South)) != 0);
+                Touchscreen.current = null; Call(overlay, "Update"); Check(pad.state.buttons == 0);
+                Call(overlay, "Update"); Check(pad.state.buttons == 0);
+                Call(overlay, "OnDestroy"); UnityEngine.Input.legacyUnavailable = false;
+            });
             Test("Cecil hook preserves branch-to-return paths and rejects repeated or changed APIs", () => HookChecks(temporary));
             Console.WriteLine(cases + " shared port-service checks passed (host API fixtures, no Steam account or game files).");
         }

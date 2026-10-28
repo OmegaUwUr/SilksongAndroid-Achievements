@@ -138,7 +138,7 @@ object GameCompatibility {
         return hits.distinctBy { it.canonicalPath }
     }
 
-    private fun platformName(id: Int) = when (id) {
+    internal fun platformName(id: Int) = when (id) {
         24 -> "Linux"; 5, 19 -> "Windows"; 2 -> "macOS"; 13 -> "Android"; else -> "Unknown ($id)"
     }
 
@@ -149,9 +149,9 @@ object GameCompatibility {
             "A Unity version match is not proof that a game can be ported.")
         facts += "Selected game: ${profile.title}"
         facts += "Steam App ID: ${profile.steamAppId ?: "not configured"}"
-        if (!profile.hasPortAdapter) blockers += "A port adapter for ${profile.title} is not implemented. Download, port and play are disabled for this entry."
+        if (!profile.hasPortAdapter) notes += "This game can use Download & prepare on its library page. The common builder inspects actual files and components before allowing compilation."
         if (profile.id == "hollow-knight" && profile.hasPortAdapter)
-            notes += "Experimental adapter: exact Linux 1.5.12620 file hashes are checked during setup. Controller required; Steam sync and touch controls are not enabled."
+            notes += "Experimental adapter: exact Linux 1.5.12620 file hashes are checked during setup. Shared Steam sync, controller and generic touch integration are available."
         val candidates = findDataFolders(root)
         if (candidates.size != 1) {
             blockers += if (candidates.isEmpty()) "No readable Unity data folder was found. Select the installed game's folder containing globalgamemanagers."
@@ -169,7 +169,8 @@ object GameCompatibility {
         if (header == null) blockers += "Cannot verify the Unity version/platform. Files may be incomplete or use an unsupported serialized format."
         else {
             if (header.platform != 24) blockers += "The available porting pipeline requires Linux game files."
-            if (profile.unityVersions.isEmpty()) blockers += "No verified Android engine/toolchain is registered for this game."
+            if (profile.unityVersions.isEmpty() && !UnityDistribution.supports(header.version)) blockers += "No verified Android engine/toolchain is registered for Unity ${header.version}."
+            else if (profile.unityVersions.isEmpty()) notes += "A common Android engine provider is available for this version; run Download & prepare for the full dependency and shader checks."
             else if (header.version !in profile.unityVersions) blockers += "This Unity version does not match this game's registered engine/toolchain."
         }
         val managed = File(data, "Managed")
@@ -186,7 +187,7 @@ object GameCompatibility {
         val levels = data.listFiles().orEmpty().count { it.isFile && it.name.matches(Regex("level[0-9]+")) }
         facts += "Content: ${if (catalog) "binary Addressables catalog" else "no binary Addressables catalog"}; $levels loose level files"
         if (profile.id == "silksong" && profile.hasPortAdapter && !catalog) blockers += "The Silksong adapter requires StreamingAssets/aa/catalog.bin and settings.json."
-        if (!profile.hasPortAdapter) blockers += "Asset packaging, game patches, input and save/Steam integration have not been adapted for this title."
+        if (!profile.hasPortAdapter) notes += "Basic inventory does not enable compilation. Run full preparation to verify common asset conversion, managed/native APIs and input requirements. Generic Steam/Cloud integration is not enabled."
 
         val plugins = mutableListOf<String>()
         var seen = 0

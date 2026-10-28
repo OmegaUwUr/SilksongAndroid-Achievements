@@ -1,20 +1,26 @@
 # Multi-game porting status
 
-Revision 35 is an **experimental source candidate without an APK build** stacked on the
+Revision 36 is an **experimental source candidate without an APK build** stacked on the
 porting-performance and personalized Silksong touch-control candidates.
 
 | Game | Candidate behavior | Input / current limits |
 | --- | --- | --- |
 | Hollow Knight: Silksong | Existing port, Steam achievements, Cloud and controls | Existing supported Linux build; pending regression testing of this stacked candidate |
 | Hollow Knight | Experimental setup, on-device conversion, pack, launch and rebuild path | Exact Linux 1.5.12620 / Unity 6000.0.61f1; physical controller or generic touch; new Steam/Cloud integration needs device tests |
-| Other Unity game | Read-only compatibility inspection | Requires a game-specific adapter before conversion or launch |
+| Other Unity game | Owned source download, dependency preparation and shared experimental compile/launch path | Linux classic Mono, registered exact engine and resolved native dependencies; see the [capability table](GENERIC_UNITY_PORTS.md) |
 
 This is not a universal Unity converter. An engine version match alone cannot
 establish that textures, shaders, native plugins, game code or saves work on Android.
-The owner confirmed the earlier HK port worked. The new revision-35 integrations
+The owner confirmed the earlier HK port worked. The new integrations
 have host checks but no APK/device validation here. See
 [shared Steam services and library flow](SHARED_STEAM_PORTS.md) for the current
 Steam, saves, controller and artwork implementation.
+
+Revision 36 replaces the inspection-only gate for other games with
+[reusable Unity preparation](GENERIC_UNITY_PORTS.md). It downloads eligible owned
+sources, resolves registered Android components, supports bound Android plugin
+packs and compiles games that pass full checks. The two current engine providers
+cover Unity 6000.0.50f1 and 6000.0.61f1; other engine families still need providers.
 
 ## What changed after the inspection-only catalog
 

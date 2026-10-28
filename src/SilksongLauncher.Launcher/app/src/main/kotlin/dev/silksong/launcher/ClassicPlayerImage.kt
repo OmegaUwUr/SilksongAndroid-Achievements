@@ -45,16 +45,20 @@ object ClassicPlayerImage {
     internal fun isFirstSceneResource(relativePath: String): Boolean =
         relativePath.replace('\\', '/').let { it == "unity_app_guid" || FIRST_SCENE_RESOURCES.matches(it) }
 
-    fun build(unity: File, data: File, context: Context, root: File): Flow<PlayerImage.Progress> = flow {
-        PortTarget.HOLLOW_KNIGHT.requireData(data)
+    fun build(unity: File, data: File, context: Context, root: File,
+        target: PortTarget = PortTarget.HOLLOW_KNIGHT): Flow<PlayerImage.Progress> = flow {
+        target.requireData(data)
         val metadata = Il2cppConverter.metadata(root)
-        if (!metadata.isFile) throw IOException("The Hollow Knight conversion has no metadata.")
+        if (!metadata.isFile) throw IOException("The game conversion has no metadata.")
         val engineResources = File(unity, "android/Data/Resources/unity default resources")
         if (!engineResources.isFile) throw IOException("Android engine resources are missing.")
-        emit(PlayerImage.Progress("Converting Hollow Knight scenes", -1f, "Checking source and Vulkan shaders"))
+        emit(PlayerImage.Progress("Converting game scenes", -1f, "Checking source and Vulkan shaders"))
         val surgery = PlayerImage.stageSurgery(root, context.assets)
         val manifest = File(root, "classic-profile-manifest.json")
-        context.assets.open(HollowKnightSource.MANIFEST).use { input ->
+        if (target.generic) {
+            PlayerImage.run(surgery, context, listOf("create-classic-profile-manifest", data.absolutePath,
+                target.id, "owned-source", target.unityVersion, manifest.absolutePath))
+        } else context.assets.open(HollowKnightSource.MANIFEST).use { input ->
             manifest.outputStream().use { input.copyTo(it) }
         }
         val img = imageDir(root)
@@ -62,7 +66,7 @@ object ClassicPlayerImage {
         // The converter checks output hashes before resuming; edits below are rebuilt on retry.
         PlayerImage.run(surgery, context, listOf("retarget-classic-tree", data.absolutePath,
             img.absolutePath, manifest.absolutePath, File(root, "classic-tree-report.json").absolutePath))
-        emit(PlayerImage.Progress("Assembling Hollow Knight player", -1f, "Android metadata and resources"))
+        emit(PlayerImage.Progress("Assembling game player", -1f, "Android metadata and resources"))
         File(img, "Managed").deleteRecursively()
         File(img, "MonoBleedingEdge").deleteRecursively()
         File(img, "Plugins").deleteRecursively()
@@ -81,9 +85,12 @@ object ClassicPlayerImage {
         PlayerImage.setScriptingBackend(File(img, "boot.config"))
         for (required in listOf("globalgamemanagers", "ScriptingAssemblies.json", "RuntimeInitializeOnLoads.json"))
             if (!File(img, required).isFile) throw IOException("Classic player is missing $required")
-        PlayerImage.registerPatches(img, root, PortTarget.HOLLOW_KNIGHT)
+        if (target.generic) PlayerImage.run(surgery, context, listOf("list-port-initializers",
+            PackageCompiler.outputDir(root).absolutePath, unity.absolutePath,
+            File(root, "port-runtime-initializers.json").absolutePath))
+        PlayerImage.registerPatches(img, root, target)
         File(img, "unity_app_guid").writeText(PlayerImage.guidFromMetadata(metadata))
-        emit(PlayerImage.Progress("Hollow Knight player ready", 1f))
+        emit(PlayerImage.Progress("Game player ready", 1f))
     }.flowOn(Dispatchers.IO)
 
     fun install(context: Context, root: File, pkgDir: File) {

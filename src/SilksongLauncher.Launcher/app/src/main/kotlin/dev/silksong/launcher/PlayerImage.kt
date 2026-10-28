@@ -851,17 +851,25 @@ object PlayerImage {
         if (listFile.isFile) {
             val json = org.json.JSONObject(listFile.readText())
             val names = json.getJSONArray("names")
-            val already = (0 until names.length()).any { names.getString(it) == name }
-            if (!already) {
-                names.put(name)
-                json.optJSONArray("types")?.put(16)
+            val types = json.optJSONArray("types")
+            if (target.generic) check(types != null && types.length() == names.length()) { "Scripting assembly names/types are inconsistent." }
+            val additions = if (target.generic) PackageCompiler.outputDir(root).listFiles().orEmpty()
+                .filter { it.isFile && it.extension == "dll" }.map { it.name } else listOf(name)
+            var added = false
+            for (candidate in additions) if ((0 until names.length()).none { names.getString(it) == candidate }) {
+                names.put(candidate)
+                types?.put(16)
+                added = true
+            }
+            if (added) {
                 listFile.writeText(json.toString())
-                LauncherLog.log("registered $name in ScriptingAssemblies.json")
+                LauncherLog.log("registered port assemblies in ScriptingAssemblies.json")
             }
         }
 
         // RuntimeInitializeOnLoads.json: one row per entry point.
-        val entryPoints = PackageCompiler.entryPoints(root) ?: return
+        val entryPoints = if (target.generic) File(root, "port-runtime-initializers.json").readText()
+            else PackageCompiler.entryPoints(root) ?: return
         val loadsFile = File(img, "RuntimeInitializeOnLoads.json")
         if (!loadsFile.isFile) return
         val loads = org.json.JSONObject(loadsFile.readText())
@@ -872,19 +880,21 @@ object PlayerImage {
             val e = wanted.getJSONObject(i)
             val className = e.getString("className")
             val methodName = e.getString("methodName")
+            val assemblyName = e.optString("assemblyName", name.removeSuffix(".dll"))
+            val nameSpace = e.optString("nameSpace", "")
             val exists = (0 until rows.length()).any {
                 val r = rows.getJSONObject(it)
-                r.optString("assemblyName") == name.removeSuffix(".dll") &&
+                r.optString("assemblyName") == assemblyName && r.optString("nameSpace", "") == nameSpace &&
                     r.optString("className") == className &&
                     r.optString("methodName") == methodName
             }
             if (exists) continue
             rows.put(
                 org.json.JSONObject()
-                    .put("assemblyName", name.removeSuffix(".dll"))
+                    .put("assemblyName", assemblyName)
                     // The ported patches sit in the global namespace, as the
                     // game's own classes do; only the newer ones are scoped.
-                    .put("nameSpace", e.optString("nameSpace", ""))
+                    .put("nameSpace", nameSpace)
                     .put("className", className)
                     .put("methodName", methodName)
                     .put("loadTypes", e.getInt("loadTypes"))
