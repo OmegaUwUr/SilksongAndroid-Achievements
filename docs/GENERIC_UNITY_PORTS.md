@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 37)
+# Reusable Unity preparation and experimental compilation (revision 38)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -66,6 +66,12 @@ match the generated profile. Dedicated HK/Silksong adapters retain their Linux a
 game-identity checks. Existing library results are refreshed after the cache-policy
 version changes so earlier DLC-related false negatives are not kept indefinitely.
 
+Revision 38 keeps manifest inspection and payload download on a session-owned HTTP
+transport. Closing an inspection reader no longer shuts down the executor needed
+by the downloader. Session shutdown releases it once; an unexpectedly disposed
+executor stops either download route with a retry message. This fixes a download
+lifecycle error and does not add Unity engine or middleware compatibility.
+
 ## Android plugin packs
 
 The app does not ship arbitrary FMOD/Wwise/CRI/AVPro binaries or desktop DLL
@@ -121,6 +127,7 @@ execute game/native plugin code:
 ```sh
 dotnet test tools/bundle-surgery-tests/BundleSurgery.Tests.csproj
 python3 tools/game-compat/tests/run_steam_library_checks.py
+python3 tools/game-compat/tests/run_steam_transport_checks.py
 python3 tools/game-compat/tests/run_generic_checks.py
 python3 tools/game-compat/tests/check_steam_process.py
 ```

@@ -24,6 +24,7 @@
 package dev.silksong.launcher
 
 import `in`.dragonbra.javasteam.enums.EResult
+import `in`.dragonbra.javasteam.steam.cdn.Client
 import `in`.dragonbra.javasteam.steam.handlers.steamapps.License
 import `in`.dragonbra.javasteam.steam.handlers.steamapps.callback.LicenseListCallback
 import `in`.dragonbra.javasteam.steam.handlers.steamuser.LogOnDetails
@@ -50,6 +51,25 @@ class SteamSession : Closeable {
     }
 
     private val client = SteamClient()
+    private val closed = AtomicBoolean(false)
+    private val contentLock = Any()
+    private val contentClient = lazy { Client(client) }
+
+    // JavaSteam's CDN Client.close() shuts down configuration.httpClient, which
+    // is also used by DepotDownloader and Steam discovery. A manifest reader
+    // borrows this client; only the session may dispose of the shared transport.
+    internal val manifestClient: Client
+        get() = synchronized(contentLock) {
+            requireDownloadTransport()
+            contentClient.value
+        }
+
+    internal fun requireDownloadTransport() {
+        check(!closed.get() && !client.configuration.httpClient.dispatcher.executorService.isShutdown) {
+            "The Steam download connection was closed. Retry the operation to open a new session."
+        }
+    }
+
     private val loginIdentity = SteamLoginIdentity.allocate()
     private val callbacks = CallbackManager(client)
     private val pumpRunning = AtomicBoolean(true)
@@ -237,6 +257,7 @@ class SteamSession : Closeable {
     }
 
     override fun close() {
+        if (!closed.compareAndSet(false, true)) return
         disconnect()
         pumpRunning.set(false)
         pump.interrupt()
@@ -244,6 +265,16 @@ class SteamSession : Closeable {
             pump.join(2_000)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
+        } finally {
+            synchronized(contentLock) {
+                val http = client.configuration.httpClient
+                http.dispatcher.cancelAll()
+                if (contentClient.isInitialized()) contentClient.value.close()
+                else {
+                    http.connectionPool.evictAll()
+                    http.dispatcher.executorService.shutdown()
+                }
+            }
         }
     }
 }

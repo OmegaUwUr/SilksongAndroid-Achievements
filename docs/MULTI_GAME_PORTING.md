@@ -1,6 +1,6 @@
 # Multi-game porting status
 
-Revision 37 is an **experimental source candidate without an APK build** stacked on the
+Revision 38 is an **experimental source candidate without a new APK build here** stacked on the
 porting-performance and personalized Silksong touch-control candidates.
 
 | Game | Candidate behavior | Input / current limits |
@@ -26,6 +26,18 @@ Revision 37 shares base-depot selection between scanning and downloading. Option
 DLC no longer creates an incomplete base-game result. Windows/macOS classic sources
 can enter preparation when their actual serialized files and Vulkan shaders pass;
 dedicated game adapters remain Linux-only. The cache is refreshed for this policy.
+
+Revision 38 fixes the manifest-inspection → payload-download handoff. JavaSteam's
+CDN client closes the HTTP executor shared by the whole Steam session; disposing
+of the inspection reader used to stop that executor before the downloader began.
+The session now owns and releases the CDN/HTTP resources once, after its work is
+finished. Reader disposal, failure and cancellation cannot close the session's
+transport. Both download routes also stop if the executor is already closed,
+rather than entering the upstream downloader's unbounded manifest-retry loop.
+Host regression checks reproduce the original `executor rejected` failure with
+the old ownership and verify the corrected lifecycle using actual JavaSteam and
+OkHttp classes with intercepted responses, without signing in or using a network.
+The owner's revision-37 log shows this transport failure, not a missing game SDK.
 
 ## What changed after the inspection-only catalog
 

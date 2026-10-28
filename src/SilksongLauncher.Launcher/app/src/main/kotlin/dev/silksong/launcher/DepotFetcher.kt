@@ -201,6 +201,7 @@ object DepotFetcher {
                 val finished = CountDownLatch(1)
                 val failure = AtomicReference<Throwable?>(null)
 
+                session.requireDownloadTransport()
                 DepotDownloader(
                     steamClient = session.steamClient,
                     licenses = licenses,
@@ -262,6 +263,7 @@ object DepotFetcher {
                     // done rather than polling.
                     while (!finished.await(1, TimeUnit.SECONDS)) {
                         if (!producer.isActive) throw java.util.concurrent.CancellationException()
+                        session.requireDownloadTransport()
                     }
                 }
 

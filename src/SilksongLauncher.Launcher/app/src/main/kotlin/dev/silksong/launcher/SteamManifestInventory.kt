@@ -1,7 +1,6 @@
 package dev.silksong.launcher
 
 import `in`.dragonbra.javasteam.enums.EResult
-import `in`.dragonbra.javasteam.steam.cdn.Client
 import `in`.dragonbra.javasteam.steam.cdn.Server
 import `in`.dragonbra.javasteam.steam.handlers.steamapps.SteamApps
 import `in`.dragonbra.javasteam.steam.handlers.steamcontent.SteamContent
@@ -12,12 +11,15 @@ import kotlinx.coroutines.withTimeout
 
 /** Read filenames before downloading gigabytes; use only account-authorized HTTPS CDN endpoints. */
 class SteamManifestInventory(private val session: SteamSession) : AutoCloseable {
-    private val cdn = Client(session.steamClient)
+    private val cdn = session.manifestClient
     private val apps = requireNotNull(session.steamClient.getHandler(SteamApps::class.java))
     private val content = requireNotNull(session.steamClient.getHandler(SteamContent::class.java))
     private var servers: List<Server>? = null
+    @Volatile private var closed = false
 
     suspend fun read(appId: Int, depot: SteamLibraryRules.Depot): List<String> = withTimeout(45_000) {
+        check(!closed) { "Manifest inspection is closed." }
+        session.requireDownloadTransport()
         supervisorScope {
             val key = apps.getDepotDecryptionKey(depot.id, appId).await()
             check(key.result == EResult.OK && key.depotID == depot.id && key.depotKey.isNotEmpty()) { "Depot access was not granted." }
@@ -47,5 +49,7 @@ class SteamManifestInventory(private val session: SteamSession) : AutoCloseable 
             error("Steam manifest unavailable. Retry before downloading the game.")
         }
     }
-    override fun close() { cdn.close() }
+    // Dispose of this reader, not the session transport needed by the payload download.
+    // In-flight requests are governed by their coroutine's cancellation/timeout.
+    override fun close() { closed = true; servers = null }
 }

@@ -74,6 +74,7 @@ object GenericSourceDownload {
                     val progress = java.util.concurrent.ConcurrentHashMap<Int, Float>()
                     LogManager.addListener(DepotFetcher.logForwarder)
                     try {
+                        session.requireDownloadTransport()
                         DepotDownloader(steamClient = session.steamClient, licenses = session.licenses(),
                             maxDownloads = 8, maxFileWrites = 16).use { downloader ->
                             downloader.addListener(object : IDownloadListener {
@@ -96,7 +97,12 @@ object GenericSourceDownload {
                                 branch = "public", os = plan.platform, depot = plan.depots.map { it.id },
                                 manifest = plan.depots.map { it.manifest }))
                             downloader.finishAdding()
-                            while (!finished.await(1, TimeUnit.SECONDS)) currentCoroutineContext().ensureActive()
+                            while (!finished.await(1, TimeUnit.SECONDS)) {
+                                currentCoroutineContext().ensureActive()
+                                // The upstream downloader retries generic manifest failures
+                                // indefinitely. A disposed executor cannot recover by retrying.
+                                session.requireDownloadTransport()
+                            }
                         }
                         failure.get()?.let { throw java.io.IOException("Steam source download failed: " + SteamDownloadDiagnostics.describe(it), it) }
                     } finally { LogManager.removeListener(DepotFetcher.logForwarder) }
