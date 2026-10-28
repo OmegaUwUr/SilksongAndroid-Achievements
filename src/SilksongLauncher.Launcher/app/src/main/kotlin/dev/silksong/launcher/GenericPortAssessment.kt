@@ -67,7 +67,7 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             val members = strings(managed, "missingMembers")
             if (members.isNotEmpty()) blockers += "Android managed API mismatches: ${members.take(30).joinToString()}. This source needs a managed adapter before IL2CPP conversion."
             val desktop = strings(managed, "desktopApis")
-            if (desktop.isNotEmpty()) blockers += "Desktop APIs need replacement: ${desktop.take(30).joinToString()}"
+            if (desktop.isNotEmpty()) blockers += "Desktop API references need an Android code-path review or replacement: ${desktop.take(30).joinToString()}. Declared references do not prove these methods execute on Android."
             val diagnostics = strings(managed, "diagnostics")
             if (diagnostics.isNotEmpty()) blockers += "Managed metadata could not be verified: ${diagnostics.take(20).joinToString()}"
             val plugins = try { AndroidPluginPack.verified(context, initial.version!!, initial.data!!) }
@@ -84,38 +84,16 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             }
             val imports = managed.getJSONArray("nativeImports")
             require(imports.length() <= 100000)
-            val native = linkedMapOf<String, MutableSet<String>>()
+            val native = mutableListOf<NativePortRequirements.Import>()
             for (index in 0 until imports.length()) {
                 val row = imports.getJSONObject(index)
-                native.getOrPut(row.getString("library")) { mutableSetOf() }.add(row.getString("entryPoint"))
-            }
-            for ((library, symbols) in native) {
-                if (library == "__Internal") {
-                    blockers += "__Internal: ${symbols.size} native imports need a static Android integration or managed adapter; an external plugin pack cannot provide them."
-                    continue
-                }
-                if (library.contains("steam_api", true) || library.contains("steamworks", true)) {
-                    blockers += "Steamworks ($library): a per-game API adapter is required. The Hollow Knight/Silksong shim cannot impersonate this game's App ID."
-                    continue
-                }
-                val filename = library.substringAfterLast('/').let {
-                    (if (it.startsWith("lib")) it else "lib$it").let { n -> if (n.endsWith(".so")) n else "$n.so" }
-                }
-                val info = plugins[filename]?.second
-                if (info == null) blockers += "$library: matching Android ARM64 plugin required (${symbols.size} declared native imports). Import a licensed pack for this game and Unity version."
-                else {
-                    val absent = symbols - info.exports
-                    if (absent.isNotEmpty()) blockers += "$filename is missing declared exports: ${absent.take(30).joinToString()}"
-                    else facts += "$filename: ${symbols.size} declared native exports verified."
-                }
+                native += NativePortRequirements.Import(row.getString("assembly"), row.getString("library"), row.getString("entryPoint"))
             }
             // Plugins can be loaded dynamically without a P/Invoke declaration. Never silently drop an unknown plugin.
             val pluginFiles = File(initial.data, "Plugins").walkTopDown().filter { it.isFile && PortDependencyAudit.nativeLibrary(it.name) }.toList()
-            for (file in pluginFiles) {
-                val stem = file.name.removePrefix("lib").substringBefore(".so").removeSuffix(".dll").removeSuffix(".dylib")
-                if (native.keys.none { it.removePrefix("lib").substringBefore(".so").removeSuffix(".dll").removeSuffix(".dylib") == stem } &&
-                    "lib$stem.so" !in plugins) blockers += "${file.name}: unclassified native plugin. A reviewed Android replacement or adapter is required."
-            }
+            val requirements = NativePortRequirements.inspect(native, pluginFiles.map { it.name }, plugins.mapValues { it.value.second.exports })
+            blockers += requirements.blockers
+            facts += requirements.facts
             if (assets != null) {
                 require(assets.getInt("schemaVersion") == 1 && Regex("[a-f0-9]{64}").matches(assets.getString("sourceTreeSha256")))
                 val census = assets.getJSONObject("census")
@@ -125,8 +103,8 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
                 val assetProblems = assets.getJSONArray("diagnostics")
                 if (assetProblems.length() > 0) blockers += "Classic assets failed layout validation. See the compatibility report in game storage."
             } else if (!initial.verified) facts += "Scene and shader conversion has not been validated yet."
-            facts += "Native declarations were inspected, including unused wrapper methods. Passing these checks does not establish gameplay compatibility."
-            return initial.copy(facts = facts, blockers = blockers.distinct(), verified = assets != null || initial.verified,
+            facts += "Native declarations include unused wrapper methods. Runtime reachability is unverified; requirements stay blocked until a reviewed Android path or replacement exists. Passing metadata/export checks does not establish gameplay compatibility."
+            return initial.copy(facts = facts.distinct(), blockers = blockers.distinct(), verified = assets != null || initial.verified,
                 sourceTreeSha256 = assets?.getString("sourceTreeSha256") ?: initial.sourceTreeSha256)
         }
     }

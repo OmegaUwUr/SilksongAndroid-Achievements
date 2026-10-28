@@ -1,6 +1,6 @@
 # Multi-game porting status
 
-Revision 38 is an **experimental source candidate without a new APK build here** stacked on the
+Revision 39 is an **experimental source candidate without a new APK build here** stacked on the
 porting-performance and personalized Silksong touch-control candidates.
 
 | Game | Candidate behavior | Input / current limits |
@@ -38,6 +38,16 @@ Host regression checks reproduce the original `executor rejected` failure with
 the old ownership and verify the corrected lifecycle using actual JavaSteam and
 OkHttp classes with intercepted responses, without signing in or using a network.
 The owner's revision-37 log shows this transport failure, not a missing game SDK.
+
+Revision 39 corrects the owner's Cult of the Lamb dependency report: Windows OS
+libraries and desktop input backends require adapters, not Android plugin packs.
+Native requirements preserve assembly provenance, group known Windows/store
+families and distinguish declared methods from proven runtime use. Explicit
+desktop library names, versioned SONAMEs and unbound dynamic plugins remain
+blocked until reviewed binding/provider work exists. The Unity 2022 engine,
+Addressables, audio/store/input and Burst work is described in the
+[Cult assessment](GENERIC_UNITY_PORTS.md#cult-of-the-lamb-assessment); this revision
+does not enable compiling or playing that game.
 
 ## What changed after the inspection-only catalog
 

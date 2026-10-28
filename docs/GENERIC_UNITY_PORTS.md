@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 38)
+# Reusable Unity preparation and experimental compilation (revision 39)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -71,6 +71,42 @@ transport. Closing an inspection reader no longer shuts down the executor needed
 by the downloader. Session shutdown releases it once; an unexpectedly disposed
 executor stops either download route with a retry message. This fixes a download
 lifecycle error and does not add Unity engine or middleware compatibility.
+
+Revision 39 separates native plugin replacements from platform/backend adapters.
+It retains declaring assembly names, groups Windows DLL aliases case-insensitively
+and keeps Android filenames/exports case-sensitive. Kernel32/User32 and other OS
+APIs, desktop Rewired/XInput, Steam/encrypted tickets, Galaxy and Burst stay blocked
+even if a pack contains similarly named libraries. Explicit desktop filenames and
+versioned SONAMEs need a binding adapter rather than an invented `.so` suffix.
+Unknown dynamically loaded files cannot be cleared by a matching pack name alone.
+No unused assembly, native declaration or desktop branch is automatically removed.
+
+## Cult of the Lamb assessment
+
+The owner's Windows source report identifies Unity **2022.3.62f2**, bundles and
+native wrappers. This is a potential Unity source, not a source the current common
+builder can compile. There is no single missing-library download that enables it.
+
+| Area | Work still required |
+| --- | --- |
+| Unity 2022.3.62f2 | An exact engine/toolchain provider with verified components, IL2CPP/profile compatibility and Android Java player integration. The [official release](https://unity.com/releases/editor/whats-new/2022.3.62f2) exists; it has not been integrated here. |
+| AssetBundles/Addressables | Catalog/dependency/path handling plus Android conversion of bundle assets and shaders; the current classic-scene route deliberately refuses unchanged desktop bundles. Vulkan shader availability has not yet been checked. |
+| Windows OS and input | Android paths for Registry/OS calls and Rewired/DirectInput/Windows Gaming Input/XInput. Windows system DLLs cannot be supplied through a plugin pack. |
+| Audio | Matching Android FMOD core/Studio and any Resonance Audio integration, with compatible managed initialization and native bindings. |
+| Store APIs | A verified game-specific Steam API adapter; inspect whether Galaxy wrappers are used by this Steam build before adapting or removing a backend. Encrypted-ticket calls also require real API support. |
+| Burst | Compatible Android ARM64 generated code rebuilt from source or supplied by a reviewed provider. |
+
+P/Invoke counts include unused wrapper methods. The report does not prove that all
+1,121 Galaxy declarations execute, or that the Asus Registry calls execute on
+Android. It also cannot safely prove those branches are unused. Do not delete
+these DLLs, replace them with success stubs or rename desktop libraries to get
+past preparation. Any exclusion/rewrite needs a source-bound reviewed adapter and
+tests for the actual initialization, input, audio, saves and gameplay paths.
+
+Unity documents [platform-specific AssetBundle content](https://docs.unity.com/en-us/engine/6000.0/manual/assets-and-media/assets-managing-runtime/assetbundles-section/asset-bundles-intro)
+and [platform-specific native plug-ins](https://docs.unity.com/en-us/engine/6000.3/manual/programming-environment/plug-ins/plug-in-inspector).
+Neither a matching engine version nor a complete export list proves that desktop
+content will run on Android. No Cult of the Lamb port or gameplay test was performed.
 
 ## Android plugin packs
 

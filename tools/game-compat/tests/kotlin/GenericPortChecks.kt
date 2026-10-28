@@ -8,6 +8,7 @@ import java.nio.ByteOrder
 fun main(args: Array<String>) {
     var cases = 0
     fun test(name: String, body: () -> Unit) { body(); cases++; println("PASS: $name") }
+    nativeRequirementChecks(::test)
     val fixture = File(args[0])
     test("Android ARM64 ELF identifies functions, dependencies, API and page alignment") {
         val info = AndroidElf.inspect(File(fixture, "valid.so"))
@@ -87,6 +88,16 @@ fun main(args: Array<String>) {
             header.writeBytes(serialized("2022.3.1f1"))
             check(GenericPortAssessment.source(data).blockers.any { "2022.3.1f1" in it && "provider" in it })
             header.writeBytes(serialized())
+        }
+        test("the reported Cult engine and Addressables source still require providers") {
+            header.writeBytes(serialized("2022.3.62f2", 19))
+            val aa = File(data, "StreamingAssets/aa").apply { mkdirs() }
+            try {
+                val result = GenericPortAssessment.source(data)
+                check(result.blockers.any { "2022.3.62f2" in it && "provider" in it })
+                check(result.blockers.any { "AssetBundles/Addressables" in it })
+                check(!result.canBuild && !UnityDistribution.supports("2022.3.62f2"))
+            } finally { aa.delete(); header.writeBytes(serialized()) }
         }
         test("desktop IL2CPP is rejected before compilation") {
             val metadata = write("il2cpp_data/Metadata/global-metadata.dat", byteArrayOf(1))
