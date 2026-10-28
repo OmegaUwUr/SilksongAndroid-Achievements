@@ -379,6 +379,13 @@ val stageHollowKnightPatches by tasks.registering(Sync::class) {
 }
 tasks.named("preBuild") { dependsOn(stageHollowKnightPatches) }
 
+val stagePortServices by tasks.registering(Sync::class) {
+    from(rootProject.file("../../tools/port-services/src")) { into("src") }
+    from(rootProject.file("../../tools/silksong-patches/src/touch/TouchControlModel.cs")) { into("src") }
+    into(layout.projectDirectory.dir("src/main/assets/ondevice/port-services"))
+}
+tasks.named("preBuild") { dependsOn(stagePortServices) }
+
 val stageHollowKnightLicense by tasks.registering(Copy::class) {
     from(rootProject.file("../../third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt"))
     into(layout.projectDirectory.dir("src/main/assets/licenses"))

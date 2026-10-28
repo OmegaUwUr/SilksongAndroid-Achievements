@@ -63,6 +63,7 @@ class LauncherActivity : Activity() {
     // (so a casual "user opened the launcher to read the log" doesn't
     // fire a push).
     private var returningFromGame: Boolean = false
+    private var returnToGamePage = false
 
     // Reentrancy guard for cloud operations — manual + auto can both
     // schedule pulls/pushes and we don't want overlapping sessions on
@@ -83,6 +84,7 @@ class LauncherActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        returnToGamePage = savedInstanceState?.getBoolean("return_game_page") ?: intent.getBooleanExtra("launch_from_library", false)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_launcher)
 
@@ -164,6 +166,10 @@ class LauncherActivity : Activity() {
             intent.removeExtra("manual_achievement_check")
             onLaunchClicked(manualAchievementCheck = true)
         }
+        if (intent.getBooleanExtra("launch_from_library", false)) {
+            intent.removeExtra("launch_from_library")
+            onLaunchClicked()
+        }
         // Auto-push fires after the user returns from playing the
         // game. We use a flag (set in launchGame) instead of just
         // "always on resume" so dismissing dialogs / opening
@@ -171,7 +177,13 @@ class LauncherActivity : Activity() {
         if (returningFromGame) {
             returningFromGame = false
             maybeAutoPush()
+            if (returnToGamePage) uiScope.launch { cloudJob?.join(); finish() }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("return_game_page", returnToGamePage)
+        super.onSaveInstanceState(outState)
     }
 
     // ── Login ──────────────────────────────────────────────────────────

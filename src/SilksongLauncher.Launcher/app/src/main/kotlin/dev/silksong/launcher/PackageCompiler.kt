@@ -179,7 +179,8 @@ object PackageCompiler {
             // Everything: the class library, the Android engine, and the
             // depot's own assemblies. The last of those is what a prebuilt
             // DLL could never have had.
-            for (r in patchReferences(unity, depot)) w.println("-reference:\"${r.absolutePath}\"")
+            for (r in patchReferences(unity, depot, outputDir(root)).filter { it.name != target.patchAssembly })
+                w.println("-reference:\"${r.absolutePath}\"")
             for (f in cs) w.println("\"$f\"")
         }
 
@@ -337,12 +338,13 @@ object PackageCompiler {
      * the Input System we rebuilt beats the depot's, so the patches compile
      * against the same assembly the game will actually run with.
      */
-    private fun patchReferences(unity: File, depot: File): List<File> {
+    private fun patchReferences(unity: File, depot: File, overrides: File? = null): List<File> {
         val out = ArrayList<File>()
         val seen = HashSet<String>()
         val dirs = listOfNotNull(
             File(unity, "editor/Editor/Data/MonoBleedingEdge/lib/mono/unityaot-linux"),
             File(unity, "android/Variations/il2cpp/Managed"),
+            overrides,
             PlayerImage.depotData(depot)?.let { File(it, "Managed") },
         )
         for (dir in dirs) {
@@ -363,6 +365,43 @@ object PackageCompiler {
         dest.mkdirs()
         for (name in entries) copyAssets(assets, "$path/$name", File(dest, name))
     }
+
+    const val SERVICES_ASSEMBLY = "PortServices.dll"
+
+    /** No Assembly-CSharp references: the rewritten game may safely call this reusable runtime. */
+    fun compilePortServices(unity: File, depot: File, context: android.content.Context, root: File,
+        assets: android.content.res.AssetManager): Flow<Progress> = channelFlow {
+        val csc = stageRoslyn(root) { done, total ->
+            trySend(Progress("Fetching Roslyn", done.toFloat() / total, ToolchainFetcher.mb(done, total)))
+        }
+        val src = File(root, "port-services-source").apply { deleteRecursively(); mkdirs() }
+        copyAssets(assets, "ondevice/port-services", src)
+        val sources = File(src, "src").walkTopDown().filter { it.isFile && it.extension == "cs" }.toList()
+        check(sources.isNotEmpty()) { "Shared port-service sources are missing." }
+        val input = File(outputDir(root), ASSEMBLY)
+        val ui = File(PlayerImage.depotData(depot) ?: error("Game data is missing"), "Managed/UnityEngine.UI.dll")
+        check(input.isFile && ui.isFile) { "The matching Input System and Unity UI are required for port services." }
+        val references = (ioReferences(unity, depot) + input + ui).distinctBy { it.name }
+        check(references.none { it.name.startsWith("Assembly-CSharp") })
+        val output = File(root, "port-services-build/$SERVICES_ASSEMBLY").apply { parentFile?.mkdirs() }
+        if (output.exists() && !output.delete()) throw IOException("Could not clear the interrupted port-service build.")
+        val rsp = File(root, "port-services.rsp")
+        rsp.printWriter().use { writer ->
+            writer.println("-target:library\n-optimize+\n-nostdlib+\n-noconfig\n-langversion:9.0\n-deterministic+\n-define:UNITY_ANDROID;ENABLE_INPUT_SYSTEM")
+            writer.println("-out:\"${output.absolutePath}\"")
+            references.forEach { writer.println("-reference:\"${it.absolutePath}\"") }
+            sources.forEach { writer.println("\"${it.absolutePath}\"") }
+        }
+        send(Progress("Compiling shared Steam and controller services", -1f, ""))
+        val result = MonoRuntime.exec(context, csc, listOf("@${rsp.absolutePath}"), cwd = root) {
+            if (it.contains("error CS")) trySend(Progress("Compiling port services", -1f, it.take(160)))
+        }
+        if (!result.ok || output.length() == 0L) throw IOException("Port services did not compile: " +
+            result.output.lineSequence().firstOrNull { it.contains("error CS") }.orEmpty().take(300))
+        val destination = File(outputDir(root), SERVICES_ASSEMBLY)
+        if (!output.renameTo(destination)) throw IOException("Could not publish shared port services.")
+        send(Progress("Port services ready", 1f, ""))
+    }.flowOn(Dispatchers.IO)
 
     /**
      * The defines Unity would use for an Android player build.

@@ -6,7 +6,7 @@
     <string name="game_port_available">Porting available · Linux files required</string>
     <string name="game_inspection_only">File inspection only · port not implemented</string>
     <string name="game_silksong_description">Use the existing Silksong setup, Steam achievements, Cloud saves and controls.</string>
-    <string name="game_hollow_knight_description">Experimental adapter for the complete Linux 1.5.12620 release. Uses a separate engine and saves. A physical controller is required; Steam sync and touch controls are not enabled yet.</string>
+    <string name="game_hollow_knight_description">Experimental adapter for the complete Linux 1.5.12620 release. Uses a separate engine and saves. Adds per-game Steam integration and a generic touch gamepad in the current candidate; rebuild and device testing are required.</string>
     <string name="game_other_description">Inspect another Unity game. Sharing an engine does not guarantee Android compatibility; each title needs its own engine, assets, libraries, controls and save support.</string>
     <string name="game_check_files">Check game files</string>
     <string name="game_open_silksong">Open Silksong setup / launcher</string>

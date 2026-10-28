@@ -2,6 +2,37 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.35 (candidate)
+
+- Adds per-game Steam service registration, isolated HK achievement IPC/schema/cache,
+  earned-unlock hooks, account-bound retry queues, playing status and local playtime
+  tracking. Steam's own totals remain read-only. Disconnected sessions can retry;
+  stopping a service no longer kills the shared launcher.
+- Adds manual HK Cloud save transfers and opt-in before/after-play sync. Validates
+  the game's reported save location, locks transfers against the running game,
+  preserves local backups, confirms conflicts and rejects stale account/file plans.
+  First uploads require a confirmed Steam Cloud layout. Checks final Steam commits.
+- Separates shared Steam/touch runtime compilation from game-specific patch DLLs
+  to avoid assembly cycles. Applies the existing Android-safe File.Replace helper
+  to HK where required and checks platform hook signatures before conversion.
+- Adds a generic Input System touch gamepad with a separate HK InControl binding,
+  physical-controller coexistence and lifecycle/input-release handling.
+- Changes first launch to sign-in, then an automatically scanned artwork library,
+  then hero/logo game pages with a green Play/Set up button. Uses recycled adaptive
+  cover grids, bounded artwork caches, public Steam assets and text fallbacks.
+- Fixes scanner exclusions of Windows/macOS-only games and recognizes Mac app
+  bundles. Tries manifests before requesting optional CDN authorization. Unverified
+  games remain visible; potential candidates still require individual adapters.
+
+Validation: all launcher Kotlin type-checks against Android API 35 and actual
+JavaSteam dependencies; 31 Steam/metadata/layout/save checks, 10 shared C# runtime
+and hook checks, 24 existing touch checks and 4 native routing cases pass. C# checks
+use explicit Unity/InControl and Steam-response fixtures. Resources compile with
+aapt2; resource references, manifest registrations, shell syntax and whitespace pass.
+The owner confirmed the earlier HK port worked. These additions still need an APK,
+an HK rebuild and live Steam/save/controller/UI device tests. The workflow remains
+manual. See docs/SHARED_STEAM_PORTS.md.
+
 ## 1.0.3-achievements.34 (candidate)
 
 - Corrects Hollow Knight's Steam depot from 367522 (macOS) to 367523 (Linux).

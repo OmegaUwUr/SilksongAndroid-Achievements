@@ -164,6 +164,19 @@ object Il2cppConverter {
         LauncherLog.log("il2cpp input: ${assemblies.size} assemblies")
 
         if (target == PortTarget.SILKSONG) redirectSaveCalls(context, root)
+        if (target == PortTarget.HOLLOW_KNIGHT) {
+            val surgery = PlayerImage.stageSurgery(root, context.assets)
+            PlayerImage.run(surgery, context, listOf("redirect-file-replace",
+                File(asmDir(root), "Assembly-CSharp.dll").absolutePath,
+                File(asmDir(root), PackageCompiler.IO_ASSEMBLY).absolutePath, "--allow-empty")) {
+                LauncherLog.log("Hollow Knight save fix: ${it.trim()}")
+            }
+            PlayerImage.run(surgery, context, listOf("hook-port-services",
+                File(asmDir(root), "Assembly-CSharp.dll").absolutePath,
+                File(asmDir(root), PackageCompiler.SERVICES_ASSEMBLY).absolutePath)) {
+                LauncherLog.log("Port services: ${it.trim()}")
+            }
+        }
 
         prepareTool(deploy)
 

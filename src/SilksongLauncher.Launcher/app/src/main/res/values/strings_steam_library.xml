@@ -4,7 +4,7 @@
     <string name="library_owned">In your Steam library · access is verified before download</string>
     <string name="library_not_listed">Not listed in this Steam library · sign in with an account that owns it to download</string>
     <string name="library_candidates_title">Unity games in your Steam library</string>
-    <string name="library_scan_explain">Scan your signed-in library and Linux depot file lists for Unity games. This downloads metadata, not full games. Potential ports still need an Android engine, compatible plugins and game-specific testing. A library listing does not prove port compatibility.</string>
+    <string name="library_scan_explain">Scan your signed-in library and Linux, Windows and macOS depot file lists for Unity games. This downloads metadata, not full games. Potential ports still need an Android engine, compatible plugins and game-specific testing. A library listing does not prove port compatibility.</string>
     <string name="library_scan_prompt">Sign in, then scan to discover potential ports. Large libraries may take several minutes.</string>
     <string name="library_scan">Scan Steam library</string>
     <string name="library_stop">Stop scan</string>

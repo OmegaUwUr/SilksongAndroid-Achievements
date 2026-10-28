@@ -44,9 +44,10 @@ or Valve release.
   depot. The revision-34 candidate corrects Hollow Knight to app 367520 / Linux
   depot 367523, checks Steam's platform metadata and validates exact Linux
   1.5.12620 files. Local game files remain supported.
-- **Steam library discovery (revision 33 candidate):** scans the authenticated
-  library and Linux depot manifests for Unity Mono candidates without downloading
-  entire games. Reports native-library requirements and unsupported/incomplete
+- **Steam library discovery (revision 35 candidate):** scans the authenticated
+  library and Linux, Windows or macOS depot manifests for Unity candidates without
+  downloading entire games. Owned games appear in the artwork library before the
+  scan completes; a game page shows its actual adapter/inspection status. Reports native-library requirements and unsupported/incomplete
   results. Other games remain inspection-only until their adapters are implemented.
 - **Steam Cloud:** manual download/upload, optional automatic download before
   play and upload on return to the launcher, and conflict choices when the
@@ -186,24 +187,31 @@ for the timing logs and device checks.
 
 ## Getting started
 
-### Game options and compatibility (revision 34 candidate)
+### Game options and compatibility (revision 35 candidate)
 
-**Choose a game** opens after sign-in and lists **Hollow Knight: Silksong**, **Hollow Knight**,
-and **Other Unity game**. Silksong keeps its existing setup. Hollow Knight now
-has an **experimental Steam-download and local-files porting path** for the exact Linux **1.5.12620**
-release, using Unity **6000.0.61f1**. Revision 34 fixes the wrong-platform download
-reported on revision 33. The corrected candidate still needs an APK build and
-Android download, port and gameplay testing.
+First launch opens **Steam sign-in**, then an automatically scanned **Library**.
+Portrait covers adapt to phone/tablet widths. Tap a cover for its hero artwork,
+transparent Steam logo, green **Play/Set up** button, Steam status and available
+features. Other games show compatibility evidence and inspection options.
+
+The owner confirmed the earlier Hollow Knight port worked. Revision 35 adds a
+shared Steam runtime, HK achievements (including reconciliation of available local
+unlock flags), playing status, playtime tracking, manual/optional automatic Cloud
+saves and a generic touch gamepad. These additions are a source candidate: build
+a new APK and **rebuild the Hollow Knight port** before testing them. The exact
+Linux **1.5.12620** / Unity **6000.0.61f1** source requirement remains.
 
 Revision 33 downloaded the macOS depot by mistake. Revision 34 downloads Linux
 files into a new folder so it cannot reuse that payload. The previous download
 remains stored separately, using additional space; existing ports and saves are kept.
 
 Hollow Knight uses separate engine, build, runtime, preferences and save storage.
-Its first adapter requires a **physical controller**, ARM64/Vulkan and about
-**17 GB free during porting**. Steam achievements, Cloud sync and touch controls
-are not enabled for Hollow Knight. The original Linux source remains unchanged.
-Other Unity games remain **inspection-only**; they need individual adapters.
+The adapter requires ARM64/Vulkan and about **17 GB free during porting**.
+Physical controllers and the new generic touch gamepad are available. Cloud sync
+is opt-in and protects newer destinations with conflict prompts and local backups.
+The original Linux source remains unchanged. Other Unity games remain
+**inspection-only**; they need individual adapters. See the
+[shared Steam/launcher guide](docs/SHARED_STEAM_PORTS.md) for behavior and device gates.
 
 The inspector reports Unity/platform, Mono/IL2CPP, assemblies, content layout and
 native plugin architectures. A matching Unity version does not prove compatibility.

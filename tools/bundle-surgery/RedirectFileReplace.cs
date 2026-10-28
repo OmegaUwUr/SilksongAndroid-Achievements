@@ -31,7 +31,7 @@ internal static class RedirectFileReplace
     const string HelperType = "SafeIo";
     const string HelperMethod = "Replace";
 
-    public static int Run(string assemblyPath, string helperPath)
+    public static int Run(string assemblyPath, string helperPath, bool allowEmpty = false)
     {
         if (!File.Exists(assemblyPath))
         {
@@ -117,6 +117,10 @@ internal static class RedirectFileReplace
 
             if (rewritten == 0)
             {
+                if (allowEmpty) {
+                    Console.WriteLine("  No File.Replace calls require redirection in this game build.");
+                    return 0;
+                }
                 // See the header: a no-op rewrite is the failure mode that
                 // hides itself, so it is an error rather than a shrug.
                 Console.Error.WriteLine("  ✗ no File.Replace call sites found — the game's save path has "

@@ -14,7 +14,7 @@ import java.io.RandomAccessFile
 import java.nio.channels.OverlappingFileLockException
 import kotlin.coroutines.coroutineContext
 
-/** Experimental adapter for verified local or Steam-downloaded files; game Steam sync is still separate work. */
+/** Adapter for verified sources, with isolated runtime, shared Steam services and safe saves. */
 object HollowKnightBuild {
     private val target = PortTarget.HOLLOW_KNIGHT
     private const val GB = 1024L * 1024L * 1024L
@@ -76,6 +76,12 @@ object HollowKnightBuild {
                 UnityDex.build(context, unity)
 
                 if (!PackageCompiler.isCurrent(unity, data, root)) PackageCompiler.compile(unity, data, context, root).collect {
+                    send(PlayerImage.Progress(it.step, it.fraction, it.detail))
+                }
+                PackageCompiler.compileIo(unity, data, context, root, context.assets).collect {
+                    send(PlayerImage.Progress(it.step, it.fraction, it.detail))
+                }
+                PackageCompiler.compilePortServices(unity, data, context, root, context.assets).collect {
                     send(PlayerImage.Progress(it.step, it.fraction, it.detail))
                 }
                 PackageCompiler.compilePatches(unity, data, context, root, context.assets, target).collect {

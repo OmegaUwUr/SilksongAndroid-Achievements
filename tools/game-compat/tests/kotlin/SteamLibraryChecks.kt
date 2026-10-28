@@ -18,6 +18,67 @@ fun main() {
     test("common depot alone cannot turn a Windows game into a Linux candidate") {
         check(SteamLibraryRules.linuxPlan(info("windows", depots = windows + common), 9).depots.isEmpty())
     }
+    test("Windows-only Unity games can be discovered without claiming a Linux adapter") {
+        val plan = SteamLibraryRules.inspectionPlan(info("windows,macos", depots = windows + common), 1313140)
+        check(plan.platform == "windows" && plan.depots.map { it.id } == listOf(43, 44))
+        val result = SteamLibraryRules.inspect(listOf("Cult Of The Lamb_Data/globalgamemanagers", "Cult Of The Lamb_Data/Managed/Assembly-CSharp.dll"), true, plan.platform)
+        check(result.unity && result.potential && result.details.any { "game-specific Android adapter" in it })
+    }
+    test("Mac-only app bundles and Linux preference remain separate platform inventories") {
+        val mac = """"45" { "config" { "oslist" "macos" } "manifests" { "public" { "gid" "105" } } }"""
+        check(SteamLibraryRules.inspectionPlan(info("windows,linux,macos", depots = windows + linux + mac), 9).platform == "linux")
+        val plan = SteamLibraryRules.inspectionPlan(info("macos", depots = mac), 9)
+        check(plan.platform == "macos" && plan.depots.single().id == 45)
+        check(SteamLibraryRules.inspect(listOf("Game.app/Contents/Resources/Data/globalgamemanagers", "Game.app/Contents/Resources/Data/Managed/Assembly-CSharp.dll"), true, "macos").potential)
+    }
+    test("artwork metadata accepts official relative image paths and rejects arbitrary URLs") {
+        val metadata = requireNotNull(KeyValue.loadFromString(""""appinfo" { "common" { "library_assets" { "library_hero" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" "library_logo" "../../private.png" } } }"""))
+        check(SteamArtPaths.metadata(metadata).getValue("hero").single() == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/library_hero.jpg")
+        check(SteamArtPaths.metadata(metadata).getValue("logo").isEmpty())
+        for (path in listOf("https://invalid.test/logo.png", "../logo.png", "/logo.png", "logo.png?token=secret")) check(!SteamArtPaths.safe(path))
+    }
+    test("library portrait tiles stay bounded across phones, tablets and large text") {
+        for (width in listOf(208f, 288f, 328f, 568f, 808f, 1248f, 2368f)) for (font in listOf(1f, 1.3f, 2f)) {
+            val columns = LibraryLayout.columns(width, font)
+            val tile = (width - 12 * (columns - 1)) / columns
+            check(columns >= 1 && tile in 100f..220f)
+        }
+    }
+    test("HK IPC rejects the previous account and legacy unbound commands") {
+        val account = "a".repeat(64)
+        check(SteamBridgeProtocol.command("ACCOUNT\t$account\tSET\tEARNED", 367520, account) == "SET\tEARNED")
+        check(SteamBridgeProtocol.command("ACCOUNT\t${"b".repeat(64)}\tSTORE", 367520, account) == null)
+        check(SteamBridgeProtocol.command("SET\tEARNED", 367520, account) == null)
+        check(SteamBridgeProtocol.command("PING", 1030300, account) == "PING")
+    }
+    test("first Cloud upload derives the published HK path and rejects missing or cross-game layouts") {
+        fun cloud(path: String) = requireNotNull(KeyValue.loadFromString(""""appinfo" { "ufs" { "savefiles" { "0" { "root" "WinAppDataLocalLow" "path" "$path" "pattern" "user*.dat" } } } }"""))
+        check(SteamCloudLayout.hollowKnight(cloud("Team Cherry/Hollow Knight"), 123, 76561198000000000uL) == "%WinAppDataLocalLow%Team Cherry/Hollow Knight/")
+        check(SteamCloudLayout.hollowKnight(cloud("Team Cherry/Hollow Knight/{Steam3AccountID}"), 123, 76561198000000000uL).endsWith("/123/"))
+        check(runCatching { SteamCloudLayout.hollowKnight(cloud("Team Cherry/Hollow Knight Silksong"), 123, 1uL) }.isFailure)
+        check(runCatching { SteamCloudLayout.hollowKnight(info(depots = ""), 123, 1uL) }.isFailure)
+    }
+    test("save layout prefers the game's report and refuses ambiguity, unsupported roots and links") {
+        val root = java.nio.file.Files.createTempDirectory("hk-saves-").toFile()
+        try {
+            val first = java.io.File(root, "user1.dat").apply { writeText("local save") }
+            check(GameSavePaths.resolve(root).canonicalFile == root.canonicalFile)
+            val nested = java.io.File(root, "default").apply { mkdirs() }
+            java.io.File(nested, "user2.dat").writeText("other layout")
+            check(runCatching { GameSavePaths.resolve(root) }.isFailure)
+            val record = java.io.File(root, ".steam-save-layout").apply { writeText("default") }
+            check(GameSavePaths.resolve(root).canonicalFile == nested.canonicalFile)
+            record.writeText("unsupported"); check(runCatching { GameSavePaths.resolve(root) }.isFailure)
+            record.delete(); nested.deleteRecursively(); java.nio.file.Files.createSymbolicLink(nested.toPath(), root.toPath())
+            record.writeText("default"); check(runCatching { GameSavePaths.resolve(root) }.isFailure)
+            check(first.readText() == "local save")
+            check(GameSavePaths.isHollowKnightSave("user1.dat.bak1") && !GameSavePaths.isHollowKnightSave("../user1.dat"))
+        } finally {
+            val nested = java.io.File(root, "default")
+            if (java.nio.file.Files.isSymbolicLink(nested.toPath())) nested.delete()
+            root.deleteRecursively()
+        }
+    }
     test("software/DLC entries are not treated as games") {
         check(SteamLibraryRules.linuxPlan(info(type = "dlc", depots = linux), 9).depots.isEmpty())
     }

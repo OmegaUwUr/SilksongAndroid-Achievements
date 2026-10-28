@@ -10,8 +10,26 @@ class HollowKnightContext private constructor(base: Context) : ContextWrapper(ba
     companion object {
         private const val DIRECTORY = "games/hollow-knight"
 
-        @JvmStatic fun wrap(base: Context): Context =
-            if (base is HollowKnightContext) base else HollowKnightContext(base)
+        @JvmStatic fun wrap(base: Context): Context {
+            var current = base
+            val seen = mutableSetOf<Context>()
+            while (seen.add(current)) {
+                if (current is HollowKnightContext) return base
+                current = (current as? ContextWrapper)?.baseContext ?: break
+            }
+            return HollowKnightContext(base)
+        }
+
+        /** Account credentials are shared; game preferences and saves are not. */
+        fun shared(base: Context): Context {
+            var current = base
+            val seen = mutableSetOf<Context>()
+            while (current is ContextWrapper && seen.add(current)) {
+                if (current is HollowKnightContext) return shared(current.baseContext)
+                current = current.baseContext
+            }
+            return base
+        }
 
         fun isGameProcess(): Boolean = runCatching {
             if (android.os.Build.VERSION.SDK_INT >= 28)

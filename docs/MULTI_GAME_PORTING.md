@@ -1,17 +1,20 @@
 # Multi-game porting status
 
-Revision 34 is an **experimental source candidate without an APK build** stacked on the
+Revision 35 is an **experimental source candidate without an APK build** stacked on the
 porting-performance and personalized Silksong touch-control candidates.
 
 | Game | Candidate behavior | Input / current limits |
 | --- | --- | --- |
 | Hollow Knight: Silksong | Existing port, Steam achievements, Cloud and controls | Existing supported Linux build; pending regression testing of this stacked candidate |
-| Hollow Knight | Experimental setup, on-device conversion, pack, launch and rebuild path | Exact Linux 1.5.12620 / Unity 6000.0.61f1; physical controller; no HK Steam sync, Cloud or touch overlay yet |
+| Hollow Knight | Experimental setup, on-device conversion, pack, launch and rebuild path | Exact Linux 1.5.12620 / Unity 6000.0.61f1; physical controller or generic touch; new Steam/Cloud integration needs device tests |
 | Other Unity game | Read-only compatibility inspection | Requires a game-specific adapter before conversion or launch |
 
 This is not a universal Unity converter. An engine version match alone cannot
 establish that textures, shaders, native plugins, game code or saves work on Android.
-No real Hollow Knight game files or Android device are available in this workspace.
+The owner confirmed the earlier HK port worked. The new revision-35 integrations
+have host checks but no APK/device validation here. See
+[shared Steam services and library flow](SHARED_STEAM_PORTS.md) for the current
+Steam, saves, controller and artwork implementation.
 
 ## What changed after the inspection-only catalog
 
@@ -26,8 +29,9 @@ jakobkhansen/SilksongAndroid. Integration work was developed with ChatGPT (OpenA
 Revision 34 shares account sign-in and the downloader implementation while selecting
 Hollow Knight App ID 367520 / Linux depot 367523 explicitly. Downloads go under
 `games/hollow-knight/depot-367523`; local sources remain supported. Ownership is checked
-for the selected game, not at sign-in. Hollow Knight does not use Silksong's
-achievement session, presence or Cloud synchronization.
+for the selected game, not at sign-in. Hollow Knight uses its own App ID, service state, native socket and save layout;
+the service/Cloud transport implementation is shared. Its new integration is
+described in [the revision-35 guide](SHARED_STEAM_PORTS.md).
 
 The owner's revision-33 failure log showed depot 367522 completing and later retries
 reusing it. That depot contains macOS files; the Linux depot is 367523, also recorded
@@ -88,10 +92,10 @@ publication, with rollback on failure and recovery on the next build after a kil
 between renames. Saves live outside those package directories. An app update
 invalidates readiness and requires rebuilding the experimental port.
 
-The native Steam shim fails closed for named processes, including `:hollow_knight`.
-Its socket transport cannot submit HK achievements to Silksong App ID 1030300.
-HK activities never start Silksong Cloud or presence services. Achievement and Cloud
-integration for HK must be implemented against App ID 367520 and separately validated later.
+The native Steam shim registers HK's process only for App ID 367520 and its own
+account-bound socket. Unknown named processes remain disabled. HK cannot submit
+achievements to Silksong's App ID or select its save layout. Real Steam confirmation
+and Cloud round trips remain revision-35 device gates.
 
 Porting needs roughly 17 GB free on shared phone storage. When internal and external
 storage are separate, the checks require 7 GB internal and 10 GB external. Actual
@@ -100,11 +104,12 @@ storage exhaustion. Source files and any existing package consume additional spa
 already in use. Free space after testing can be improved by a later explicit cache
 cleanup feature; no save directories are deleted by this implementation.
 
-## Steam library discovery and dependencies (revision 33)
+## Steam library discovery and dependencies (revision 35)
 
 The app icon opens game choice. Successful login returns there and starts discovery.
 A saved account can use **Scan Steam library**. The account's own Player.GetOwnedGames
-response supplies titles; PICS access tokens/product info select Linux/public depots.
+response supplies titles; PICS access tokens/product info select public depots for one platform: Linux is
+preferred, with Windows/macOS discovery when no Linux release is present.
 No Web API key, public Steam profile, third-party library service or external upload
 is involved. The scan downloads HTTPS Steam manifests and decrypts filenames with
 the account-authorized depot key; it does not download chunks of game payloads.
@@ -142,13 +147,13 @@ include known plugin families and unknown native files and explicitly require fu
 P/Invoke/dynamic-loading review. New executable dependencies must be pinned, licensed,
 and validated on Android before an adapter can enable porting.
 
-Revision-34 host checks compile all launcher Kotlin against real Android API 35 and
+Revision-35 host checks compile all launcher Kotlin against real Android API 35 and
 JavaSteam dependencies, with generated resource IDs (no service/pipeline stubs).
-The 24 Steam checks use synthetic KeyValue/depot layouts and tiny source-detector
+The 31 Steam checks use synthetic KeyValue/depot layouts and tiny source-detector
 stubs only for enum linking. They cover independent platform fixtures, both games'
 manifest parsing, old-download isolation, concurrent login IDs and safe diagnostics.
-The owner supplied a revision-33 device failure log, but the revision-34 live download
-and resume still need retesting. Private/large libraries, cancellation on a phone,
+The owner supplied a revision-33 device failure log and later confirmed the HK port
+worked. The new revision-35 integration still needs live Steam, save and UI retesting. Private/large libraries, cancellation on a phone,
 portrait/landscape with the keyboard and large fonts, HK source/version mismatch,
 and gameplay/save/controller regression remain device gates.
 
@@ -200,7 +205,7 @@ Completed host checks:
   checks pass. The imported manifest/license and existing type database match the
   pinned upstream. No source check establishes gameplay compatibility.
 
-The APK workflow remains manual and revision 34 has not been built or deployed here.
+The APK workflow remains manual and revision 35 has not been built or deployed here.
 The revision-33 device download failed; it does not establish porting or gameplay
 compatibility. Keep this change a draft until the following integration gates pass:
 

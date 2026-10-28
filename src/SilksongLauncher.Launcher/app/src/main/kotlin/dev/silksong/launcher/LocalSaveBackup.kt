@@ -16,8 +16,7 @@ internal object LocalSaveBackup {
             ?.maxByOrNull { it.name }
     }
 
-    @Synchronized fun beforeDownload(context: Context) {
-        val saves = SaveDir.of(context)
+    @Synchronized fun beforeDownload(context: Context, saves: File = SaveDir.of(context)) {
         val files = saves.listFiles()?.filter { it.isFile }?.sortedBy { it.name }
             ?: if (!saves.exists()) emptyList() else error("Cannot read local saves; Cloud download stopped")
         if (files.isEmpty()) return

@@ -31,9 +31,16 @@ int audited_socket(int domain, int type, int protocol);
 int audited_socket(int domain, int type, int protocol) { socket_attempts++; return -1; }
 int main(int argc, char **argv) {
     assert(argc == 2);
-    bool allowed = argv[1][0] == '1';
+    uint32_t expected = (uint32_t)strtoul(argv[1], NULL, 10);
+    bool allowed = expected != 0;
     assert(silksong_bridge_allowed() == allowed);
-    assert(SteamAPI_ISteamUtils_GetAppID(NULL) == (allowed ? 1030300 : 0));
+    assert(SteamAPI_ISteamUtils_GetAppID(NULL) == expected);
+    if (allowed) {
+        assert(strcmp(g_socket_name, expected == 367520 ? "hollow-knight-achievements-v1" : "silksong-achievements-v1") == 0);
+        assert(!SteamAPI_ISteamApps_BIsSubscribedApp(NULL, expected == 367520 ? 1030300 : 367520));
+        assert(PortSteam_BindAccount("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert(!PortSteam_BindAccount("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"));
+    }
     if (!allowed) {
         assert(!SteamAPI_Init());
         assert(!SteamAPI_IsSteamRunning());
@@ -48,9 +55,9 @@ int main(int argc, char **argv) {
 """)
     binary = root / "check"
     subprocess.run([os.environ.get("CC", "gcc"), "-std=c11", "-D_GNU_SOURCE", "-pthread", "-I", str(root), str(source), "-o", str(binary)], check=True)
-    for name, allowed in (("com.hollowknightsilksong.steamsync", True),
-                          ("com.hollowknightsilksong.steamsync:hollow_knight", False),
-                          ("com.hollowknightsilksong.steamsync:launcher", False),
-                          ("com.hollowknightsilksong.steamsync:other_game", False)):
-        subprocess.run([name, "1" if allowed else "0"], executable=str(binary), check=True)
-    print("PASS: 4 native process cases; named game processes make zero Steam socket attempts.")
+    for name, app in (("com.hollowknightsilksong.steamsync", 1030300),
+                      ("com.hollowknightsilksong.steamsync:hollow_knight", 367520),
+                      ("com.hollowknightsilksong.steamsync:launcher", 0),
+                      ("com.hollowknightsilksong.steamsync:other_game", 0)):
+        subprocess.run([name, str(app)], executable=str(binary), check=True)
+    print("PASS: 4 native process cases; HK/Silksong have separate App IDs and sockets; unknown processes make zero Steam socket attempts.")

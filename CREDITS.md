@@ -241,3 +241,19 @@ this repository with **ChatGPT (OpenAI)**. The Steam protocol/CDN implementation
 continues to use **Longi94 / JavaSteam contributors** and **Joshua Tam / GameNative's
 achievement-support fork**, credited above. No game content or additional proprietary
 FMOD/Wwise/CRI/AVPro middleware is redistributed by this change.
+
+## Shared Steam services and artwork library (revision 35)
+
+The per-game Steam service refactoring, account-bound HK bridge, shared runtime,
+Cloud save checks, generic touch controller, artwork navigation and scanner fixes
+were developed for this repository with **ChatGPT (OpenAI)**. This project was made
+possible through ChatGPT assistance and the human authors' work credited above.
+
+The generic controller reuses this repository's touch input model. Its HK binding
+reconciliation follows the public Input System/InControl approach in **Darkaxt and
+HollowKnightAndroid contributors'** MIT implementation credited above; the shared
+runtime keeps that game-specific binding separate. The existing **jakobkhansen /
+SilksongAndroid** save helper and Cloud foundation are reused. **Mono.Cecil** supplies
+the signature-checked hooks, and **JavaSteam / its achievement-support fork** supplies
+the authenticated Steam protocol. Official library artwork is requested from Steam's
+public CDN at runtime; game content and proprietary middleware are not added to git.

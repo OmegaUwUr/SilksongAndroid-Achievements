@@ -62,7 +62,17 @@
             android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.launcher.GamePageActivity"
+            android:exported="false" android:process=":launcher"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <service android:name="dev.silksong.launcher.HollowKnightAchievementService"
+            android:exported="false" android:process=":launcher" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Per-game Steam achievement synchronization" />
+        </service>
         <activity android:name="dev.silksong.launcher.GameLibraryActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true" android:process=":launcher"
             android:label="@string/launcher_app_name"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"

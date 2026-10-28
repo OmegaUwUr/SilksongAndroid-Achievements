@@ -31,6 +31,7 @@ class HollowKnightSetupActivity : Activity() {
     private val preferences by lazy { portContext.getSharedPreferences("setup", MODE_PRIVATE) }
     private var source: File? = null
     private var busy = false
+    private var returningFromGame = false
     private lateinit var status: TextView
     private lateinit var primary: Button
     private lateinit var rebuild: Button
@@ -68,7 +69,18 @@ class HollowKnightSetupActivity : Activity() {
         refresh()
     }
 
-    override fun onResume() { super.onResume(); if (::status.isInitialized && !busy) refresh() }
+    override fun onResume() {
+        super.onResume()
+        if (::status.isInitialized && !busy) refresh()
+        if (returningFromGame) {
+            returningFromGame = false
+            if (GameSteam.preferences(this, SteamGame.HOLLOW_KNIGHT).getBoolean("auto-cloud", false)) scope.launch {
+                try { GameSteam.sync(this@HollowKnightSetupActivity, SteamGame.HOLLOW_KNIGHT, true) { status.text = it } }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (error: Exception) { refresh(SteamDownloadDiagnostics.describe(error)) }
+            }
+        }
+    }
     override fun onDestroy() { scope.cancel(); super.onDestroy() }
 
     private fun refresh(message: String? = null) {
@@ -132,6 +144,7 @@ class HollowKnightSetupActivity : Activity() {
 
     private fun startPort() {
         if (busy) return
+        GameLibraryActivity.pauseScanForGame()
         val chosen = source ?: return
         busy = true
         primary.isEnabled = false; rebuild.isEnabled = false; choose.isEnabled = false; download.isEnabled = false; back.isEnabled = false
@@ -251,8 +264,14 @@ class HollowKnightSetupActivity : Activity() {
 
     private fun play() {
         if (!HollowKnightBuild.isReady(portContext)) { refresh(); return }
-        try { startActivity(Intent().setClassName(packageName, "dev.silksong.shell.HollowKnightActivity")) }
-        catch (error: Exception) { refresh(getString(R.string.hk_failed, error.message ?: "Launch failed")) }
+        if (busy) return
+        busy = true; primary.isEnabled = false
+        scope.launch {
+            try { returningFromGame = GameSteam.launchHollowKnight(this@HollowKnightSetupActivity) { status.text = it } }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { status.text = getString(R.string.hk_failed, SteamDownloadDiagnostics.describe(error)) }
+            finally { busy = false; primary.isEnabled = true }
+        }
     }
 
     @Deprecated("Matches the existing launcher activity flow")

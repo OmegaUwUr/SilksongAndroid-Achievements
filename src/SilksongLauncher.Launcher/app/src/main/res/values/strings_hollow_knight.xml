@@ -2,7 +2,7 @@
 <resources>
     <string name="hk_title">Hollow Knight</string>
     <string name="hk_experimental">Experimental port · device testing required</string>
-    <string name="hk_requirements">Download from your own Steam account or choose your complete Linux 1.5.12620 files. This adapter needs an ARM64 device with Vulkan and about 17 GB free during porting.\n\nA physical controller is required for this first adapter. Hollow Knight Steam achievements, Cloud sync and touch controls are not enabled yet. Its game files, saves and engine stay separate from Silksong.\n\nKeep this screen open while porting. Supporting tools are downloaded from their publishers.</string>
+    <string name="hk_requirements">Download from your own Steam account or choose your complete Linux 1.5.12620 files. This adapter needs an ARM64 device with Vulkan and about 17 GB free during porting.\n\nPhysical controllers and a generic touch gamepad are available. This candidate adds Steam achievements, playing status, playtime tracking and optional save sync. Rebuild the port after updating to install the new game-side integration. Device validation of these additions is still required. Its game files, saves and engine stay separate from Silksong.\n\nKeep this screen open while porting. Supporting tools are downloaded from their publishers.</string>
     <string name="hk_choose">Choose Hollow Knight files</string>
     <string name="hk_rebuild">Rebuild Hollow Knight from selected files</string>
     <string name="hk_start">Port Hollow Knight (experimental)</string>

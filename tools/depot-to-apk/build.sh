@@ -243,7 +243,17 @@ step_5_apk_shell() {
             <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
         </activity>
 
+        <activity android:name="dev.silksong.launcher.GamePageActivity"
+            android:exported="false" android:process=":launcher"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <service android:name="dev.silksong.launcher.HollowKnightAchievementService"
+            android:exported="false" android:process=":launcher" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Per-game Steam achievement synchronization" />
+        </service>
         <activity android:name="dev.silksong.launcher.GameLibraryActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true" android:process=":launcher"
             android:label="@string/launcher_app_name"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
@@ -416,6 +426,10 @@ EOF
             || fail "Packaged manifest is missing AchievementViewerActivity"
         grep -Fq 'dev.silksong.launcher.GameLibraryActivity' "$sh/manifest-tree.txt" \
             || fail "Packaged manifest is missing GameLibraryActivity"
+        grep -Fq 'dev.silksong.launcher.GamePageActivity' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing GamePageActivity"
+        grep -Fq 'dev.silksong.launcher.HollowKnightAchievementService' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing HollowKnightAchievementService"
         grep -Fq 'dev.silksong.shell.HollowKnightActivity' "$sh/manifest-tree.txt" \
             || fail "Packaged manifest is missing HollowKnightActivity"
     fi

@@ -1065,9 +1065,12 @@ class SetupActivity : Activity() {
     }
 
     private fun startLauncher() {
+        if (intent.getBooleanExtra("return_to_game_page", false) && !intent.getBooleanExtra("launch_from_library", false)) {
+            finish(); return
+        }
         LauncherLog.log("Setup complete, opening $LAUNCHER_ACTIVITY_CLASS")
         try {
-            startActivity(Intent().setClassName(packageName, LAUNCHER_ACTIVITY_CLASS))
+            startActivity(Intent().setClassName(packageName, LAUNCHER_ACTIVITY_CLASS).putExtra("launch_from_library", intent.getBooleanExtra("launch_from_library", false)))
             // Setup is done and there is nothing to come back to: leaving it
             // on the stack would put it behind the back button forever.
             finish()
