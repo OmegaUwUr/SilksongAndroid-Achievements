@@ -96,12 +96,8 @@ object DepotFetcher {
      * rule the toolchain and dotnet fetchers already use, and for the same
      * reason -- "some of it is on disk" is not the question anyone is asking.
      */
-    fun isPresent(installDir: File): Boolean =
-        completeMarker(installDir).isFile && isPresentOnDisk(installDir)
-
-    /** The tree looks right, regardless of whether a run ever finished. */
-    private fun isPresentOnDisk(installDir: File): Boolean =
-        PlayerImage.depotData(installDir) != null
+    fun isPresent(installDir: File, target: SteamDepotTarget = SteamDepotTarget.SILKSONG): Boolean =
+        runCatching { completeMarker(installDir).readText().trim() == target.depotId.toString() && target.hasSource(installDir) }.getOrDefault(false)
 
     private fun completeMarker(installDir: File) = File(installDir, ".download-complete")
 
@@ -151,12 +147,20 @@ object DepotFetcher {
         credentials: TokenStore.Credentials,
         installDir: File,
         stagingDir: File,
+        target: SteamDepotTarget = SteamDepotTarget.SILKSONG,
+        validateSource: suspend (File) -> Unit = {},
     ): Flow<Event> = channelFlow {
         // Held because the nested use-blocks below shadow this scope, and the
         // wait loop still needs to know whether the collector is still there.
         val producer = this
+        if (target == SteamDepotTarget.HOLLOW_KNIGHT) {
+            check(installDir.canonicalPath.replace('\\', '/').endsWith("/games/hollow-knight/depot")) {
+                "Hollow Knight must use its own download directory."
+            }
+        }
         installDir.mkdirs()
         stagingDir.mkdirs()
+        completeMarker(installDir).delete()
 
         // Before anything is asked of Steam: a previous attempt that was
         // cancelled has left holes the resume cannot see. See dropUnwritten.
@@ -168,10 +172,11 @@ object DepotFetcher {
         // discarded. It is the only view into what the downloader is doing.
         LogManager.addListener(logForwarder)
 
-        LauncherLog.log("Downloading depot $DEPOT_ID to ${installDir.absolutePath}")
+        LauncherLog.log("Downloading ${target.title}, depot ${target.depotId}")
         try {
             SteamSession().use { session ->
                 session.logOn(credentials)
+                SteamOwnership.requireOwned(session, target.appId)
 
                 // The downloader needs to know what the account may download,
                 // and Steam sends that on its own callback shortly after
@@ -225,14 +230,14 @@ object DepotFetcher {
 
                     downloader.add(
                         AppItem(
-                            appId = APP_ID,
+                            appId = target.appId,
                             installDirectory = installDir.absolutePath,
                             branch = BRANCH,
                             // Without this the downloader picks the depots for
                             // the platform it is running on, which here is
                             // Android and is not a platform this game ships.
                             os = "linux",
-                            depot = listOf(DEPOT_ID),
+                            depot = listOf(target.depotId),
                         )
                     )
                     downloader.finishAdding()
@@ -246,12 +251,13 @@ object DepotFetcher {
                 }
 
                 failure.get()?.let { throw RuntimeException("depot download failed: $it", it) }
-                if (!isPresentOnDisk(installDir))
-                    throw RuntimeException("depot downloaded but $DATA_DIR is missing")
+                validateSource(installDir)
+                if (!target.hasSource(installDir))
+                    throw RuntimeException("Steam downloaded ${target.title}, but this release does not match its supported Linux source. No port was started.")
 
                 // Only now, and only here: everything above has to have run
                 // without throwing for the depot to be worth trusting later.
-                completeMarker(installDir).writeText(DEPOT_ID.toString())
+                completeMarker(installDir).writeText(target.depotId.toString())
                 LauncherLog.log("Depot download complete")
                 send(Event.Done)
             }

@@ -14,7 +14,7 @@ import java.io.RandomAccessFile
 import java.nio.channels.OverlappingFileLockException
 import kotlin.coroutines.coroutineContext
 
-/** Experimental, local-files-only adapter. Steam/Cloud remain exclusively on the Silksong path. */
+/** Experimental adapter for verified local or Steam-downloaded files; game Steam sync is still separate work. */
 object HollowKnightBuild {
     private val target = PortTarget.HOLLOW_KNIGHT
     private const val GB = 1024L * 1024L * 1024L

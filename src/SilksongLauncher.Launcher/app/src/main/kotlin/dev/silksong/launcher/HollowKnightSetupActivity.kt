@@ -22,8 +22,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.RandomAccessFile
 
-/** Explicit experimental route; it never invokes Silksong's login, cloud or launch service. */
+/** Account login is shared; game downloads, conversion, engine and saves are isolated. */
 class HollowKnightSetupActivity : Activity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val portContext by lazy { HollowKnightContext.wrap(applicationContext) }
@@ -34,6 +35,7 @@ class HollowKnightSetupActivity : Activity() {
     private lateinit var primary: Button
     private lateinit var rebuild: Button
     private lateinit var choose: Button
+    private lateinit var download: Button
     private lateinit var back: Button
     private lateinit var progress: ProgressBar
 
@@ -58,6 +60,7 @@ class HollowKnightSetupActivity : Activity() {
         primary = Button(this).apply { setOnClickListener { if (HollowKnightBuild.isReady(portContext)) play() else startPort() } }.also(column::addView)
         rebuild = Button(this).apply { setText(R.string.hk_rebuild); setOnClickListener { startPort() } }.also(column::addView)
         choose = Button(this).apply { setText(R.string.hk_choose); setOnClickListener { chooseSource() } }.also(column::addView)
+        download = Button(this).apply { setText(R.string.hk_download); setOnClickListener { downloadFromSteam() } }.also(column::addView)
         back = Button(this).apply { setText(R.string.game_check_another); setOnClickListener { finish() } }.also(column::addView)
         setContentView(ScrollView(this).apply { setBackgroundColor(Color.rgb(24, 21, 28)); addView(column) })
         refresh()
@@ -73,7 +76,7 @@ class HollowKnightSetupActivity : Activity() {
         primary.isEnabled = ready || source?.isDirectory == true
         rebuild.visibility = if (ready) View.VISIBLE else View.GONE
         rebuild.isEnabled = source?.isDirectory == true
-        choose.isEnabled = true; back.isEnabled = true
+        choose.isEnabled = true; download.isEnabled = true; back.isEnabled = true
         progress.visibility = View.GONE
         status.text = message ?: when {
             ready -> getString(R.string.hk_ready)
@@ -102,6 +105,16 @@ class HollowKnightSetupActivity : Activity() {
     @Deprecated("Matches the existing launcher activity flow")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 43 && resultCode == RESULT_OK) {
+            val name = data?.getStringExtra(LoginActivity.EXTRA_ACCOUNT)
+            val token = data?.getStringExtra(LoginActivity.EXTRA_TOKEN)
+            if (!name.isNullOrEmpty() && !token.isNullOrEmpty()) {
+                TokenStore(this).write(TokenStore.Credentials(name, token))
+                startActivity(Intent(this, GameLibraryActivity::class.java).putExtra("scan_steam_library", true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+                finish()
+            }
+            return
+        }
         if (requestCode != 42 || resultCode != RESULT_OK) return
         val root = data?.data?.let(DepotLocation::pathFor)
         if (root == null) { refresh(getString(R.string.game_local_folder_required)); return }
@@ -119,7 +132,7 @@ class HollowKnightSetupActivity : Activity() {
         if (busy) return
         val chosen = source ?: return
         busy = true
-        primary.isEnabled = false; rebuild.isEnabled = false; choose.isEnabled = false; back.isEnabled = false
+        primary.isEnabled = false; rebuild.isEnabled = false; choose.isEnabled = false; download.isEnabled = false; back.isEnabled = false
         progress.visibility = View.VISIBLE
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         scope.launch {
@@ -141,6 +154,83 @@ class HollowKnightSetupActivity : Activity() {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 if (!isDestroyed) refresh(message)
             }
+        }
+    }
+
+    private fun downloadFromSteam() {
+        if (busy) return
+        val credentials = TokenStore(this).read()
+        if (credentials == null) {
+            startActivityForResult(Intent(this, LoginActivity::class.java), 43)
+            return
+        }
+        android.app.AlertDialog.Builder(this).setTitle(R.string.hk_download)
+            .setMessage(R.string.hk_download_explain)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.hk_download) { _, _ -> fetchSteam(credentials) }.show()
+    }
+
+    private fun fetchSteam(credentials: TokenStore.Credentials) {
+        if (busy) return
+        busy = true
+        primary.isEnabled = false; rebuild.isEnabled = false; choose.isEnabled = false; download.isEnabled = false; back.isEnabled = false
+        progress.visibility = View.VISIBLE; progress.isIndeterminate = true
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        scope.launch {
+            var message: String? = null
+            try {
+                val selected = withContext(Dispatchers.IO) {
+                    val external = portContext.getExternalFilesDir(null) ?: error("External app storage is unavailable.")
+                    val depot = File(external, "depot")
+                    RandomAccessFile(File(portContext.filesDir, "port.lock"), "rw").use { handle ->
+                        val lock = try { handle.channel.tryLock() } catch (_: java.nio.channels.OverlappingFileLockException) { null }
+                            ?: error("Close Hollow Knight before downloading its game files.")
+                        lock.use {
+                            // The full download remains separate from selected local files and existing builds.
+                            if (!DepotFetcher.isPresent(depot, SteamDepotTarget.HOLLOW_KNIGHT)) {
+                                check(external.usableSpace >= 7L * 1024 * 1024 * 1024) { "Free at least 7 GB for the Steam download; porting needs additional space." }
+                                DepotFetcher.download(credentials, depot, File(external, "depot-staging"), SteamDepotTarget.HOLLOW_KNIGHT,
+                                    validateSource = { downloaded ->
+                                        withContext(Dispatchers.Main) { status.setText(R.string.hk_verifying); progress.isIndeterminate = true }
+                                        verifySteamSource(downloaded)
+                                    }).collect { event ->
+                                    withContext(Dispatchers.Main) {
+                                        when (event) {
+                                            is DepotFetcher.Event.Progress -> { progress.isIndeterminate = false; progress.progress = (event.fraction.coerceIn(0f, 1f) * 1000).toInt(); status.setText(R.string.hk_downloading) }
+                                            is DepotFetcher.Event.Status -> status.setText(R.string.hk_downloading)
+                                            DepotFetcher.Event.Done -> Unit
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Cached files can have changed since the marker was written.
+                                SteamSession().use { session -> session.logOn(credentials); SteamOwnership.requireOwned(session, SteamDepotTarget.HOLLOW_KNIGHT.appId) }
+                                verifySteamSource(depot)
+                            }
+                            HollowKnightSource.find(depot)
+                        }
+                    }
+                }
+                source = selected
+                preferences.edit().putString("source", selected.absolutePath).apply()
+                message = getString(R.string.hk_download_ready)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (notOwned: SteamOwnership.NotOwned) { message = getString(R.string.hk_not_owned) }
+            catch (error: Exception) { message = getString(R.string.hk_download_failed, error.message ?: error.javaClass.simpleName) }
+            finally {
+                busy = false
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                if (!isDestroyed) refresh(message)
+            }
+        }
+    }
+
+    private suspend fun verifySteamSource(depot: File) {
+        try { HollowKnightSource.verify(HollowKnightSource.find(depot), assets) { _, _ -> } }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            SteamDepotTarget.HOLLOW_KNIGHT.invalidateHollowKnightResume(depot)
+            throw error
         }
     }
 

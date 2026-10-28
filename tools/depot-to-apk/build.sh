@@ -210,20 +210,16 @@ step_5_apk_shell() {
         <meta-data android:name="android.game_mode_config"
                    android:resource="@xml/game_mode_config" />
         <activity android:name="dev.silksong.launcher.SetupActivity"
-            android:exported="true" android:process=":launcher"
+            android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <activity android:name="dev.silksong.launcher.LauncherActivity"
             android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <activity android:name="dev.silksong.launcher.LoginActivity"
             android:exported="false" android:process=":launcher"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <activity android:name="dev.silksong.launcher.SteamAccountActivity"
@@ -248,9 +244,15 @@ step_5_apk_shell() {
         </activity>
 
         <activity android:name="dev.silksong.launcher.GameLibraryActivity"
-            android:exported="false" android:process=":launcher"
-            android:label="@string/game_library_title"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+            android:exported="true" android:process=":launcher"
+            android:label="@string/launcher_app_name"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
         <activity android:name="dev.silksong.launcher.AchievementViewerActivity"
             android:exported="false" android:process=":launcher"
             android:label="@string/achievements_title"

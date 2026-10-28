@@ -29,6 +29,8 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.ProgressBar
 import android.widget.TextView
 import kotlinx.coroutines.CoroutineScope
@@ -83,6 +85,14 @@ class LoginActivity : Activity() {
         editGuard = findViewById(R.id.edit_guard)
         btnGuard = findViewById(R.id.btn_guard)
 
+        // Reflow the existing views on rotation/resizing; keep the live authentication
+        // session and typed Guard code instead of starting another QR transaction.
+        val scroll = findViewById<ScrollView>(R.id.login_scroll)
+        scroll.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            if (right - left != oldRight - oldLeft) fitLayout(right - left)
+        }
+        scroll.post { fitLayout(scroll.width) }
+
         btnCancel.setOnClickListener { cancelAndFinish() }
         btnSignIn.setOnClickListener { startCredentials() }
         btnGuard.setOnClickListener { submitGuard() }
@@ -95,6 +105,24 @@ class LoginActivity : Activity() {
         }
 
         startQr()
+    }
+
+    private fun fitLayout(widthPx: Int) {
+        val density = resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        val wide = widthPx / density >= 600
+        findViewById<LinearLayout>(R.id.login_columns).orientation =
+            if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+        findViewById<View>(R.id.login_form).layoutParams = LinearLayout.LayoutParams(
+            if (wide) 0 else LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT, if (wide) 1f else 0f)
+        val qrSize = minOf(dp(240), (widthPx - dp(32)).coerceAtLeast(dp(100)))
+        findViewById<View>(R.id.login_qr_frame).layoutParams = LinearLayout.LayoutParams(qrSize, qrSize)
+        findViewById<View>(R.id.login_qr_panel).layoutParams = LinearLayout.LayoutParams(
+            qrSize, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = if (wide) dp(20) else 0
+                topMargin = if (wide) 0 else dp(20)
+            }
     }
 
     override fun onDestroy() {
@@ -198,6 +226,7 @@ class LoginActivity : Activity() {
                     rowGuard.visibility = View.VISIBLE
                     editGuard.text.clear()
                     editGuard.requestFocus()
+                    editGuard.post { editGuard.requestRectangleOnScreen(android.graphics.Rect(0, 0, editGuard.width, editGuard.height)) }
                     status.text = when {
                         event.previousWasWrong -> getString(R.string.login_guard_retry)
                         event.kind == CredentialsAuth.CodeKind.Device ->
@@ -232,7 +261,7 @@ class LoginActivity : Activity() {
 
     private suspend fun succeed(accountName: String, refreshToken: String) {
         progress.visibility = View.VISIBLE
-        status.setText(R.string.ownership_checking)
+        status.setText(R.string.login_status_signing_in)
         btnSignIn.isEnabled = false
         try {
             val authenticated = session ?: error("Steam session unavailable")
@@ -242,22 +271,18 @@ class LoginActivity : Activity() {
                 authenticated.close()
                 SteamSession().use { verification ->
                     verification.logOn(TokenStore.Credentials(accountName, refreshToken))
-                    SteamOwnership.requireOwned(verification)
+                    // Sign-in belongs to the account. Ownership is checked for the
+                    // selected app before downloading or using its Steam services.
                     val friends = verification.steamClient.getHandler(`in`.dragonbra.javasteam.steam.handlers.steamfriends.SteamFriends::class.java)
                     SteamProfile.save(this@LoginActivity, accountName, friends?.getPersonaName())
                 }
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-        catch (notOwned: SteamOwnership.NotOwned) {
+        catch (error: Exception) {
             progress.visibility = View.GONE
-            status.setText(R.string.ownership_not_owned)
-            SteamOwnership.showNotOwned(this) { cancelAndFinish() }
-            return
-        } catch (error: Exception) {
-            progress.visibility = View.GONE
-            status.setText(R.string.ownership_unavailable)
+            status.setText(R.string.login_verify_failed)
             btnSignIn.isEnabled = true
-            LauncherLog.log("Steam ownership check failed", error)
+            LauncherLog.log("Steam account verification failed", error)
             return
         }
 

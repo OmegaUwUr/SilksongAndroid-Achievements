@@ -38,9 +38,15 @@ or Valve release.
 ### Steam and achievements
 
 - **Steam sign-in:** QR approval through the Steam mobile app, or account name
-  and password with Steam Guard confirmation when required.
-- **Game download:** uses the signed-in account's access to Silksong's Linux
-  depot. Supplying compatible game files manually is also supported.
+  and password with Steam Guard confirmation when required. Revision 33 adapts
+  sign-in to portrait/narrow windows and opens game selection after authentication.
+- **Game download:** uses the signed-in account's access to each game's Linux
+  depot. The revision-33 candidate adds Hollow Knight app 367520 / depot 367522,
+  with exact Linux 1.5.12620 validation. Local game files remain supported.
+- **Steam library discovery (revision 33 candidate):** scans the authenticated
+  library and Linux depot manifests for Unity Mono candidates without downloading
+  entire games. Reports native-library requirements and unsupported/incomplete
+  results. Other games remain inspection-only until their adapters are implemented.
 - **Steam Cloud:** manual download/upload, optional automatic download before
   play and upload on return to the launcher, and conflict choices when the
   destination has newer data. Both automatic options default to off.
@@ -179,11 +185,11 @@ for the timing logs and device checks.
 
 ## Getting started
 
-### Game options and compatibility (revision 32 candidate)
+### Game options and compatibility (revision 33 candidate)
 
-**Games & compatibility** lists **Hollow Knight: Silksong**, **Hollow Knight**,
+**Choose a game** opens after sign-in and lists **Hollow Knight: Silksong**, **Hollow Knight**,
 and **Other Unity game**. Silksong keeps its existing setup. Hollow Knight now
-has an **experimental local-files porting path** for the exact Linux **1.5.12620**
+has an **experimental Steam-download and local-files porting path** for the exact Linux **1.5.12620**
 release, using Unity **6000.0.61f1**. This candidate has not been built into an APK or
 validated on an Android device yet.
 
@@ -467,11 +473,13 @@ local game files and saves.
 
 ### Steam ownership requirement
 
-QR and password sign-in now request a Steam app ownership ticket for Silksong
-(App ID 1030300) before accepting the login. The authenticated achievement service
-also verifies the license before becoming ready for launch, covering saved logins.
-Manual file selection does not bypass the launch requirement: Play prompts for
-Steam sign-in if needed. A successful ticket response for the correct App ID with
+QR and password sign-in authenticate the account and open game selection. Downloading
+requests a non-empty ownership ticket for the selected game: Silksong (1030300) or
+Hollow Knight (367520), with a matching App ID in the response. A Hollow Knight-only
+owner no longer needs Silksong to sign in. The Silksong achievement service still
+verifies its own license before becoming ready for launch, covering saved logins.
+Manual Silksong file selection does not bypass that launch requirement: its Play
+button prompts for Steam sign-in if needed. A successful ticket response for the correct App ID with
 non-empty ticket data is required; local files or a public Steam profile are not
 used as proof. This verifies Steam-authorized license access, not purchase receipts.
 
@@ -479,5 +487,6 @@ When Steam denies the ownership-ticket request with AccessDenied, the app explai
 is required and offers the official Silksong Steam store page. This denial alone does not prove that the account never purchased the game. Connection errors,
 timeouts, and other unconfirmed responses block verification with a retry message
 instead of claiming the account does not own the game. After buying the game,
-sign in again. Ticket contents are not stored or logged. Offline launch without
-verification is no longer supported by this flow.
+sign in again. Ticket contents are not stored or logged. Offline Silksong launch without
+verification is no longer supported by that flow. Hollow Knight has a separate
+experimental local-file launcher and does not enable Steam achievement/Cloud services.

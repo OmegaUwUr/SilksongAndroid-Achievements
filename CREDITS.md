@@ -232,3 +232,12 @@ process guard and integration work were developed for this repository with
 **ChatGPT (OpenAI)**. This project was made possible through ChatGPT assistance
 and the human authors' code credited here. Source integration is experimental;
 it is not evidence of Android gameplay validation.
+
+## Steam library flow (revision 33)
+
+Portrait sign-in, account-first game selection, the Hollow Knight Steam download
+route, authenticated manifest discovery and dependency reports were developed for
+this repository with **ChatGPT (OpenAI)**. The Steam protocol/CDN implementation
+continues to use **Longi94 / JavaSteam contributors** and **Joshua Tam / GameNative's
+achievement-support fork**, credited above. No game content or additional proprietary
+FMOD/Wwise/CRI/AVPro middleware is redistributed by this change.

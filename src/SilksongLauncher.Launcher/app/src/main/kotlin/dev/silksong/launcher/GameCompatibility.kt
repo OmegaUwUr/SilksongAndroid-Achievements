@@ -205,6 +205,7 @@ object GameCompatibility {
         }
         facts += "Native plugin candidates (${plugins.size}): ${plugins.take(128).sorted().joinToString(", ").ifEmpty { "none in the scanned Plugins tree" }}"
         notes += "Plugin filenames are an inventory, not proof of Android compatibility; libraries outside Plugins and managed P/Invokes require review."
+        notes += PortDependencyAudit.requirements(assemblyNames.map { "Managed/$it" } + plugins.map { it.substringBefore(" [") })
         if (plugins.size > 128) notes += "Only the first 128 plugin names are included."
         return Report(profile.title, facts, blockers.distinct(), notes)
     }

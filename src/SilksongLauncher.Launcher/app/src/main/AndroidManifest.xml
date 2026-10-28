@@ -18,20 +18,18 @@
 
         <activity
             android:name="dev.silksong.launcher.LauncherActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/launcher_app_name"
             android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+
         </activity>
 
         <activity
             android:name="dev.silksong.launcher.LoginActivity"
             android:exported="false"
             android:label="@string/login_title"
+            android:windowSoftInputMode="adjustResize"
             android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
@@ -60,10 +58,20 @@
             <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
         </activity>
 
-        <activity android:name="dev.silksong.launcher.GameLibraryActivity"
+        <activity android:name="dev.silksong.launcher.SetupActivity"
             android:exported="false" android:process=":launcher"
-            android:label="@string/game_library_title"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.launcher.GameLibraryActivity"
+            android:exported="true" android:process=":launcher"
+            android:label="@string/launcher_app_name"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name="dev.silksong.launcher.AchievementViewerActivity"

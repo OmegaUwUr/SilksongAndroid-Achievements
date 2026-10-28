@@ -2,6 +2,32 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.33 (candidate)
+
+- Makes Choose a game the app entry point and the destination after Steam login.
+  Sign-in verifies the account without requiring Silksong; download ownership checks
+  use the selected game App ID. Existing Silksong Steam-service checks remain.
+- Reflows Steam sign-in into a scrolling form on narrow/portrait windows and two
+  columns on wide windows. Supports keyboard resizing, 48 dp controls, Guard-field
+  scrolling and rotation without restarting authentication.
+- Adds Hollow Knight Steam Linux depot 367522 download/resume under its own storage,
+  using app 367520 ownership verification and exact 1.5.12620 hashes before marking
+  the download ready. A newer/different public release is rejected before porting.
+- Adds authenticated Steam library discovery with batched product-info requests and
+  HTTPS depot-manifest inspection. Scans metadata, not full game payloads. Reports
+  potential Linux Mono candidates, unsupported IL2CPP/mixed builds and incomplete
+  scans. Supports stopping scans and clears results on account change.
+- Adds per-game dependency reports for native plugins, FMOD, Wwise, Rewired, Burst,
+  SQLite, CRI, AVPro, Input System and Steamworks. Other games still require adapters;
+  arbitrary middleware binaries are not bundled or treated as compatible.
+
+Validation: all launcher Kotlin sources type-check against Android API 35 and the
+configured JavaSteam achievement fork (real dependencies; generated R constants).
+17 synthetic Steam metadata/dependency/retry checks, 24 Python source-inspection checks,
+12 Kotlin porting regression groups plus compatibility guards, and 4 native process
+isolation cases pass. Resources and both manifest routes were checked. No APK,
+live-account library scan/download, portrait device test or gameplay test was run.
+
 ## 1.0.3-achievements.32 (experimental candidate)
 
 Adds a source implementation of the Hollow Knight porting path for the exact

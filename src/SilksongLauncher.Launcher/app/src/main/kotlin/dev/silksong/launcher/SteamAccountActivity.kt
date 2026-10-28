@@ -161,7 +161,7 @@ class SteamAccountActivity : Activity() {
         val token = data?.getStringExtra(LoginActivity.EXTRA_TOKEN)
         if (account.isNullOrEmpty() || token.isNullOrEmpty()) return
         TokenStore(this).write(TokenStore.Credentials(account, token))
-        AchievementService.refreshVisibility(this)
-        render()
+        startActivity(Intent(this, GameLibraryActivity::class.java).putExtra("scan_steam_library", true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+        finish()
     }
 }

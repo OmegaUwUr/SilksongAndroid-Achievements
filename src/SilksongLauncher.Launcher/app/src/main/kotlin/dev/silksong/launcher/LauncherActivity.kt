@@ -217,6 +217,7 @@ class LauncherActivity : Activity() {
         creds = newCreds
         LauncherLog.log("Steam credentials saved")
         refreshLoginUi()
+        startActivity(Intent(this, GameLibraryActivity::class.java).putExtra("scan_steam_library", true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
     }
 
     private fun refreshLoginUi() {

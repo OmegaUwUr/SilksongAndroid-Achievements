@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="game_library_title">Games &amp; compatibility</string>
+    <string name="game_library_title">Choose a game</string>
     <string name="game_library_back">Back</string>
-    <string name="game_library_intro">Choose a game to see its porting status or inspect your own installed game files. File inspection does not download, compile or change your game.</string>
+    <string name="game_library_intro">Sign in to Steam, then choose the game you want to port. Silksong and Hollow Knight have separate setup options. You can also inspect local files or discover potential Unity ports in your Steam library.</string>
     <string name="game_port_available">Porting available · Linux files required</string>
     <string name="game_inspection_only">File inspection only · port not implemented</string>
     <string name="game_silksong_description">Use the existing Silksong setup, Steam achievements, Cloud saves and controls.</string>
