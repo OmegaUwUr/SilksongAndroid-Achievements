@@ -41,7 +41,8 @@ internal sealed record ClassicPlayerInventory(
     string SourceTreeSha256,
     IReadOnlyList<ClassicFileEntry> Files,
     IReadOnlyList<ClassicDiagnostic> Diagnostics,
-    ClassicSourceIdentity? Identity = null);
+    ClassicSourceIdentity? Identity = null,
+    int SourceTarget = 24);
 
 internal sealed record ClassicSourceIdentity(
     string? CompanyName,
@@ -100,8 +101,9 @@ internal static partial class ClassicPlayerTree
             new(inventory, manifest, manifestFiles);
     }
 
-    internal static ClassicPlayerInventory Discover(string sourceRoot)
+    internal static ClassicPlayerInventory Discover(string sourceRoot, int sourceTarget = 24)
     {
+        _ = SourcePlatform(sourceTarget);
         var root = Path.GetFullPath(sourceRoot);
         var files = new List<ClassicFileEntry>();
         var diagnostics = new List<ClassicDiagnostic>();
@@ -111,14 +113,14 @@ internal static partial class ClassicPlayerTree
             diagnostics.Add(new ClassicDiagnostic(
                 "SOURCE_ROOT_MISSING",
                 $"Classic data root does not exist: {root}"));
-            return CreateInventory(root, files, diagnostics);
+            return CreateInventory(root, files, diagnostics, sourceTarget: sourceTarget);
         }
         if (IsReparsePoint(root))
         {
             diagnostics.Add(new ClassicDiagnostic(
                 "REPARSE_POINT",
                 $"Classic data root cannot be a reparse point: {root}"));
-            return CreateInventory(root, files, diagnostics);
+            return CreateInventory(root, files, diagnostics, sourceTarget: sourceTarget);
         }
 
         foreach (var path in EnumerateContainedFiles(root, diagnostics))
@@ -133,7 +135,7 @@ internal static partial class ClassicPlayerTree
                 null));
             if (kind == ClassicFileKind.Serialized)
             {
-                ValidateLinuxTarget(path, relativePath, diagnostics);
+                ValidateSourceTarget(path, relativePath, diagnostics, sourceTarget);
             }
         }
 
@@ -179,12 +181,13 @@ internal static partial class ClassicPlayerTree
             identity = ReadSourceIdentity(root, globalManagersPath, diagnostics);
         }
 
-        return CreateInventory(root, files, diagnostics, identity);
+        return CreateInventory(root, files, diagnostics, identity, sourceTarget);
     }
 
     internal static ClassicValidationResult Validate(
         ClassicPlayerInventory inventory,
-        ClassicProfileManifest manifest)
+        ClassicProfileManifest manifest,
+        bool portable = false)
     {
         var diagnostics = inventory.Diagnostics.ToList();
         var normalizedManifestFiles = new Dictionary<string, ClassicManifestFile>(
@@ -202,7 +205,15 @@ internal static partial class ClassicPlayerTree
                 "UNSUPPORTED_REPORT_SCHEMA",
                 $"Converter report schema {manifest.ConverterReportSchema} is not supported"));
         }
-        if (!string.Equals(manifest.Platform, "linux", StringComparison.OrdinalIgnoreCase))
+        if (portable)
+        {
+            if (!IsGenericProfile(manifest.ProfileId) ||
+                !string.Equals(manifest.Platform, SourcePlatform(inventory.SourceTarget), StringComparison.Ordinal) ||
+                inventory.Identity?.UnityVersion != manifest.UnityVersion)
+                diagnostics.Add(new ClassicDiagnostic("PORTABLE_SOURCE_MISMATCH",
+                    "Generic profile, source platform or exact Unity version does not match the inspected tree."));
+        }
+        else if (inventory.SourceTarget != 24 || !string.Equals(manifest.Platform, "linux", StringComparison.OrdinalIgnoreCase))
         {
             diagnostics.Add(new ClassicDiagnostic(
                 "NON_LINUX_MANIFEST",
@@ -348,7 +359,8 @@ internal static partial class ClassicPlayerTree
         string root,
         List<ClassicFileEntry> files,
         List<ClassicDiagnostic> diagnostics,
-        ClassicSourceIdentity? identity = null)
+        ClassicSourceIdentity? identity = null,
+        int sourceTarget = 24)
     {
         var canonical = new StringBuilder();
         foreach (var file in files)
@@ -362,7 +374,7 @@ internal static partial class ClassicPlayerTree
         var treeHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString())))
             .ToLowerInvariant();
-        return new ClassicPlayerInventory(root, treeHash, files, diagnostics, identity);
+        return new ClassicPlayerInventory(root, treeHash, files, diagnostics, identity, sourceTarget);
     }
 
     private static ClassicSourceIdentity? ReadSourceIdentity(
@@ -455,6 +467,7 @@ internal static partial class ClassicPlayerTree
             {
                 LinuxBuildTarget => "LinuxPlayer",
                 19 => "WindowsPlayer",
+                2 => "MacPlayer",
                 var target => $"BuildTarget:{target}",
             };
             return new ClassicSourceIdentity(
@@ -613,20 +626,30 @@ internal static partial class ClassicPlayerTree
 
     private static bool IsSha256(string value) => Sha256Text().IsMatch(value);
 
-    private static void ValidateLinuxTarget(
+    internal static string SourcePlatform(int target) => target switch {
+        24 => "linux", 19 => "windows", 2 => "macos",
+        _ => throw new InvalidDataException("Only Linux, Windows 64-bit and macOS source targets are supported."),
+    };
+
+    internal static bool IsGenericProfile(string profileId) => profileId.StartsWith("steam-", StringComparison.Ordinal) &&
+        int.TryParse(profileId[6..], NumberStyles.None, CultureInfo.InvariantCulture, out var id) &&
+        id > 0 && id is not (1030300 or 367520) && profileId == "steam-" + id.ToString(CultureInfo.InvariantCulture);
+
+    private static void ValidateSourceTarget(
         string path,
         string relativePath,
-        List<ClassicDiagnostic> diagnostics)
+        List<ClassicDiagnostic> diagnostics,
+        int sourceTarget)
     {
         var manager = new AssetsManager();
         try
         {
             var file = manager.LoadAssetsFile(path);
-            if (file.file.Metadata.TargetPlatform != LinuxBuildTarget)
+            if (file.file.Metadata.TargetPlatform != sourceTarget)
             {
                 diagnostics.Add(new ClassicDiagnostic(
-                    "NON_LINUX_SERIALIZED_FILE",
-                    $"Serialized file is not Linux target {LinuxBuildTarget}: {relativePath}",
+                    sourceTarget == 24 ? "NON_LINUX_SERIALIZED_FILE" : "MIXED_SOURCE_PLATFORM",
+                    $"Serialized file does not match source target {sourceTarget}: {relativePath}",
                     relativePath));
             }
         }

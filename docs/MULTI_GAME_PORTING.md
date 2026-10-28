@@ -1,13 +1,13 @@
 # Multi-game porting status
 
-Revision 36 is an **experimental source candidate without an APK build** stacked on the
+Revision 37 is an **experimental source candidate without an APK build** stacked on the
 porting-performance and personalized Silksong touch-control candidates.
 
 | Game | Candidate behavior | Input / current limits |
 | --- | --- | --- |
 | Hollow Knight: Silksong | Existing port, Steam achievements, Cloud and controls | Existing supported Linux build; pending regression testing of this stacked candidate |
 | Hollow Knight | Experimental setup, on-device conversion, pack, launch and rebuild path | Exact Linux 1.5.12620 / Unity 6000.0.61f1; physical controller or generic touch; new Steam/Cloud integration needs device tests |
-| Other Unity game | Owned source download, dependency preparation and shared experimental compile/launch path | Linux classic Mono, registered exact engine and resolved native dependencies; see the [capability table](GENERIC_UNITY_PORTS.md) |
+| Other Unity game | Owned source download, dependency preparation and shared experimental compile/launch path | Classic desktop Mono with Vulkan shaders, registered exact engine and resolved native dependencies; see the [capability table](GENERIC_UNITY_PORTS.md) |
 
 This is not a universal Unity converter. An engine version match alone cannot
 establish that textures, shaders, native plugins, game code or saves work on Android.
@@ -21,6 +21,11 @@ Revision 36 replaces the inspection-only gate for other games with
 sources, resolves registered Android components, supports bound Android plugin
 packs and compiles games that pass full checks. The two current engine providers
 cover Unity 6000.0.50f1 and 6000.0.61f1; other engine families still need providers.
+
+Revision 37 shares base-depot selection between scanning and downloading. Optional
+DLC no longer creates an incomplete base-game result. Windows/macOS classic sources
+can enter preparation when their actual serialized files and Vulkan shaders pass;
+dedicated game adapters remain Linux-only. The cache is refreshed for this policy.
 
 ## What changed after the inspection-only catalog
 
@@ -120,13 +125,15 @@ No Web API key, public Steam profile, third-party library service or external up
 is involved. The scan downloads HTTPS Steam manifests and decrypts filenames with
 the account-authorized depot key; it does not download chunks of game payloads.
 Credentials stay in the existing Android Keystore-backed TokenStore. Library results
-are held only in activity memory and cleared on account change; scan errors do not
-log protocol messages or tokens.
+use a bounded account-scoped cache, invalidated when the discovery policy changes;
+visible results are cleared on account change. Scan errors do not log protocol
+messages or tokens.
 
-Product metadata is requested in batches of 50. Each game inspects at most 16
-Linux/common depots, retries up to three eligible HTTPS CDN servers, and bounds each
-depot attempt to 45 seconds. Missing access, private-only manifests, shared-app/DLC
-depots, more than 16 depots or over 200,000 filename entries produce an incomplete
+Product metadata is requested in batches of 50. Each game inspects at most 32
+English/64-bit/common base depots for one platform, retries up to three eligible HTTPS
+CDN servers, and bounds each depot attempt to 45 seconds. Optional DLC is excluded.
+Missing access, private-only base manifests, unresolved shared-app base content,
+more than 32 selected depots or over 200,000 filename entries produce an incomplete
 result. Stop cancels the scan, closes its session and keeps explicitly partial results.
 Large libraries can take several minutes; no full-game downloads begin automatically.
 

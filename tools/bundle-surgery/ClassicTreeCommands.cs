@@ -11,11 +11,11 @@ internal static class ClassicTreeCommands
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 
-    internal static int Manifest(string sourceRoot, string reportPath)
+    internal static int Manifest(string sourceRoot, string reportPath, int sourceTarget = 24)
     {
         try
         {
-            var inventory = ClassicPlayerTree.Discover(sourceRoot);
+            var inventory = ClassicPlayerTree.Discover(sourceRoot, sourceTarget);
             ClassicTreeConverter.WriteInventoryReport(inventory, reportPath);
             return inventory.Diagnostics.Count == 0 ? 0 : 3;
         }
@@ -30,9 +30,12 @@ internal static class ClassicTreeCommands
         string sourceRoot,
         string outputRoot,
         string manifestPath,
-        string reportPath)
+        string reportPath,
+        int sourceTarget = 24,
+        bool portable = false)
     {
-        var inventory = ClassicPlayerTree.Discover(sourceRoot);
+        if (!portable && sourceTarget != 24) throw new InvalidDataException("The dedicated converter requires Linux sources.");
+        var inventory = ClassicPlayerTree.Discover(sourceRoot, sourceTarget);
         var pathDiagnostics = ValidateCommandPaths(
             sourceRoot,
             outputRoot,
@@ -82,7 +85,7 @@ internal static class ClassicTreeCommands
             return 3;
         }
 
-        var validation = ClassicPlayerTree.Validate(inventory, manifest);
+        var validation = ClassicPlayerTree.Validate(inventory, manifest, portable);
         var allDiagnostics = validation.Diagnostics.Concat(pathDiagnostics).ToArray();
         if (validation.Layout is null || pathDiagnostics.Count > 0)
         {
@@ -134,7 +137,9 @@ internal static class ClassicTreeCommands
         string profileId,
         string gameVersion,
         string unityVersion,
-        string manifestPath)
+        string manifestPath,
+        int sourceTarget = 24,
+        bool portable = false)
     {
         try
         {
@@ -146,7 +151,9 @@ internal static class ClassicTreeCommands
                     "Profile ID, game version, and Unity version are required");
             }
 
-            var inventory = ClassicPlayerTree.Discover(sourceRoot);
+            if ((!portable && sourceTarget != 24) || (portable && !ClassicPlayerTree.IsGenericProfile(profileId)))
+                throw new InvalidDataException("Use the dedicated adapter for this profile; generic source targets cannot override it.");
+            var inventory = ClassicPlayerTree.Discover(sourceRoot, sourceTarget);
             if (inventory.Diagnostics.Count > 0)
             {
                 foreach (var diagnostic in inventory.Diagnostics)
@@ -190,7 +197,7 @@ internal static class ClassicTreeCommands
                 profileId,
                 gameVersion,
                 unityVersion,
-                "linux",
+                portable ? ClassicPlayerTree.SourcePlatform(sourceTarget) : "linux",
                 files,
                 1,
                 string.Empty);
@@ -198,7 +205,7 @@ internal static class ClassicTreeCommands
             {
                 ManifestSha256 = ClassicPlayerTree.ComputeManifestSha256(draft),
             };
-            var validation = ClassicPlayerTree.Validate(inventory, manifest);
+            var validation = ClassicPlayerTree.Validate(inventory, manifest, portable);
             if (validation.Layout is null)
             {
                 throw new InvalidDataException(
@@ -220,7 +227,7 @@ internal static class ClassicTreeCommands
                     File.ReadAllText(partPath),
                     JsonOptions) ?? throw new InvalidDataException(
                         "Generated profile manifest could not be reopened");
-                if (ClassicPlayerTree.Validate(inventory, reopened).Layout is null)
+                if (ClassicPlayerTree.Validate(inventory, reopened, portable).Layout is null)
                 {
                     throw new InvalidDataException(
                         "Reopened profile manifest failed exact validation");

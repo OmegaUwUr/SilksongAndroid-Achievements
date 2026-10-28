@@ -52,6 +52,9 @@ internal static class Program
             Console.Error.WriteLine("commands:");
             Console.Error.WriteLine("  manifest-classic-tree <source-root> <report.json>");
             Console.Error.WriteLine("  retarget-classic-tree <source-root> <output-root> <profile-manifest.json> <report.json>");
+            Console.Error.WriteLine("  manifest-portable-tree <source-root> <source-target: 24|19|2> <report.json>");
+            Console.Error.WriteLine("  create-portable-profile-manifest <source-root> <steam-ID> <game-version> <unity-version> <source-target> <manifest.json>");
+            Console.Error.WriteLine("  retarget-portable-tree <source-root> <output-root> <manifest.json> <source-target> <report.json>");
             Console.Error.WriteLine("  extract-vulkan-android <in.bundle> <out.bundle>  — extract Vulkan SPIR-V slice + retarget to Android (the main pipeline command)");
             Console.Error.WriteLine("  set-unity-version <file> <version>               — rewrite the Unity version stamped in a SerializedFile (e.g. strip an internal branch suffix)");
             Console.Error.WriteLine("  set-graphics-apis <globalgamemanagers> <ids>     — set BuildSettings.m_GraphicsAPIs (21=Vulkan, 11=GLES3, 17=OpenGLCore)");
@@ -79,10 +82,16 @@ internal static class Program
             "retarget-serialized-android" when args.Length == 3 => RetargetSerializedAndroid(args[1], args[2]),
             "manifest-classic-tree" when args.Length == 3 =>
                 ClassicTreeCommands.Manifest(args[1], args[2]),
+            "manifest-portable-tree" when args.Length == 4 && int.TryParse(args[2], out var inspectTarget) =>
+                ClassicTreeCommands.Manifest(args[1], args[3], inspectTarget),
             "create-classic-profile-manifest" when args.Length == 6 =>
                 ClassicTreeCommands.CreateProfileManifest(args[1], args[2], args[3], args[4], args[5]),
+            "create-portable-profile-manifest" when args.Length == 7 && int.TryParse(args[5], out var createTarget) =>
+                ClassicTreeCommands.CreateProfileManifest(args[1], args[2], args[3], args[4], args[6], createTarget, true),
             "retarget-classic-tree" when args.Length == 5 =>
                 ClassicTreeCommands.Retarget(args[1], args[2], args[3], args[4]),
+            "retarget-portable-tree" when args.Length == 6 && int.TryParse(args[4], out var convertTarget) =>
+                ClassicTreeCommands.Retarget(args[1], args[2], args[3], args[5], convertTarget, true),
             "extract-vulkan-android" when args.Length >= 3 => ExtractVulkanAndroid(args[1], args[2]),
             "shader-report" when args.Length >= 2 => ShaderReport(args[1]),
             _ => Usage(),

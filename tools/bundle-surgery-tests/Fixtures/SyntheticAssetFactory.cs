@@ -47,11 +47,12 @@ internal static class SyntheticAssetFactory
     internal static SyntheticSerializedFile WithShaderAndBuildSettings(
         int[] shaderPlatforms,
         int[] graphicsApis,
-        string buildVersion)
+        string buildVersion,
+        uint targetPlatform = LinuxBuildTarget)
     {
         var blobValue = 0;
         return WithShaderPlatformChunksAndTarget(
-            LinuxBuildTarget,
+            targetPlatform,
             shaderPlatforms
                 .Select(platform => (
                     Platform: platform,

@@ -3,17 +3,12 @@ package dev.silksong.launcher
 import `in`.dragonbra.javasteam.enums.EResult
 import `in`.dragonbra.javasteam.protobufs.steamclient.SteammessagesPlayerSteamclient.CPlayer_GetOwnedGames_Request
 import `in`.dragonbra.javasteam.rpc.service.Player
-import `in`.dragonbra.javasteam.steam.cdn.Client
-import `in`.dragonbra.javasteam.steam.cdn.Server
 import `in`.dragonbra.javasteam.steam.handlers.steamapps.PICSRequest
 import `in`.dragonbra.javasteam.steam.handlers.steamapps.SteamApps
-import `in`.dragonbra.javasteam.steam.handlers.steamcontent.SteamContent
 import `in`.dragonbra.javasteam.steam.handlers.steamunifiedmessages.SteamUnifiedMessages
 import `in`.dragonbra.javasteam.steam.handlers.steamuser.SteamUser
-import `in`.dragonbra.javasteam.util.SteamKitWebRequestException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -51,11 +46,9 @@ object SteamLibraryScanner {
                 .sortedBy { it.title.lowercase(java.util.Locale.ROOT) }
             emit(Event.Library(games))
             val apps = requireNotNull(session.steamClient.getHandler(SteamApps::class.java))
-            val content = requireNotNull(session.steamClient.getHandler(SteamContent::class.java))
             var checked = 0
             var incomplete = 0
-            Client(session.steamClient).use { cdn ->
-                var servers: List<Server>? = null
+            SteamManifestInventory(session).use { inventory ->
                 for (batch in games.chunked(50)) {
                     currentCoroutineContext().ensureActive()
                     var batchComplete = false
@@ -73,62 +66,28 @@ object SteamLibraryScanner {
                         var complete = batchComplete
                         var platform = "unknown"
                         val paths = mutableSetOf<String>()
+                        var planIssues: List<String> = emptyList()
                         val info = products[game.appId]
                         if (info == null || info.isMissingToken || info.keyValues.children.isEmpty()) complete = false
                         else {
                             emit(Event.Artwork(game.appId, SteamArtPaths.metadata(info.keyValues)))
                             val plan = SteamLibraryRules.inspectionPlan(info.keyValues, game.appId)
                             platform = plan.platform
+                            planIssues = plan.issues
                             complete = complete && plan.complete
                             for (depot in plan.depots) {
                                 currentCoroutineContext().ensureActive()
                                 try {
-                                    withTimeout(45_000) {
-                                        supervisorScope {
-                                            val key = apps.getDepotDecryptionKey(depot.id, game.appId).await()
-                                            check(key.result == EResult.OK && key.depotID == depot.id && key.depotKey.isNotEmpty())
-                                            val code = content.getManifestRequestCode(depot.id, game.appId, depot.manifest,
-                                                branch = "public", parentScope = this).await()
-                                            check(code != 0L)
-                                            if (servers == null) servers = content.getServersForSteamPipe(maxNumServers = 12, parentScope = this).await()
-                                            val eligible = servers.orEmpty().filter {
-                                                !it.useAsProxy &&
-                                                    (it.type == "CDN" || it.type == "SteamCache") &&
-                                                    (it.allowedAppIds.isEmpty() || game.appId in it.allowedAppIds)
-                                            }.sortedBy { it.weightedLoad }.take(3)
-                                            var found = false
-                                            for (advertised in eligible) {
-                                                try {
-                                                    // Steam often advertises HTTP servers that also accept TLS.
-                                                    // Always use TLS here; unsupported endpoints remain incomplete.
-                                                    val server = if (advertised.protocol == Server.ConnectionProtocol.HTTPS) advertised
-                                                        else Server.fromHostAndPort(requireNotNull(advertised.vHost ?: advertised.host), 443)
-                                                    val manifest = try {
-                                                        cdn.downloadManifest(depot.id, depot.manifest, code.toULong(), server, key.depotKey)
-                                                    } catch (forbidden: SteamKitWebRequestException) {
-                                                        if (forbidden.statusCode != 403) throw forbidden
-                                                        val auth = content.getCDNAuthToken(game.appId, depot.id,
-                                                            requireNotNull(server.host), parentScope = this).await()
-                                                        check(auth.result == EResult.OK)
-                                                        cdn.downloadManifest(depot.id, depot.manifest, code.toULong(), server,
-                                                            key.depotKey, cdnAuthToken = auth.token)
-                                                    }
-                                                    check(manifest.depotID == depot.id && manifest.manifestGID == depot.manifest && !manifest.filenamesEncrypted)
-                                                    check(paths.size + manifest.files.size <= 200_000) { "Manifest inventory is too large." }
-                                                    paths.addAll(manifest.files.map { it.fileName })
-                                                    found = true; break
-                                                } catch (cancelled: CancellationException) { throw cancelled }
-                                                catch (_: Exception) { /* try another authorized HTTPS CDN */ }
-                                            }
-                                            check(found) { "Steam manifest unavailable." }
-                                        }
-                                    }
+                                    val names = inventory.read(game.appId, depot)
+                                    check(paths.size + names.size <= 200_000) { "Manifest inventory is too large." }
+                                    paths.addAll(names)
                                 } catch (cancelled: CancellationException) { currentCoroutineContext().ensureActive(); complete = false }
                                 catch (_: Exception) { complete = false }
                             }
                         }
                         if (!complete) incomplete++
-                        val evidence = SteamLibraryRules.inspect(paths, complete, platform)
+                        val inspected = SteamLibraryRules.inspect(paths, complete, platform)
+                        val evidence = inspected.copy(details = inspected.details + planIssues)
                         if (evidence.unity) emit(Event.Found(Candidate(game, evidence)))
                         checked++
                     }

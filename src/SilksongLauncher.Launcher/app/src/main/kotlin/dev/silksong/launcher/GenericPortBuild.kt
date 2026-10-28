@@ -64,10 +64,11 @@ object GenericPortBuild {
         fun json(file: File): JSONObject { require(file.length() in 1L..(32 * 1024 * 1024L)); return JSONObject(file.readText()) }
         val nativeCheck = GenericPortAssessment.finish(initial, context, json(managedPath), null)
         if (nativeCheck.blockers.isNotEmpty()) return nativeCheck
-        val target = PortTarget.classic(context.appId, initial.version)
+        val target = PortTarget.classic(context.appId, initial.version, initial.sourcePlatform!!)
         progress(PlayerImage.Progress("Inspecting scenes and Vulkan shaders", -1f))
         val assetPath = File(root, "classic-inventory.json")
-        PlayerImage.run(surgery, context, listOf("manifest-classic-tree", initial.data.absolutePath, assetPath.absolutePath))
+        PlayerImage.run(surgery, context, listOf("manifest-portable-tree", initial.data.absolutePath,
+            target.sourcePlatform.toString(), assetPath.absolutePath))
         val preliminary = GenericPortAssessment.finish(initial, context, json(managedPath), json(assetPath))
         if (preliminary.blockers.isNotEmpty()) return preliminary
         if (!UnityFetcher.isPresent(unity, target)) UnityFetcher.fetch(unity, target = target).collect {
@@ -89,7 +90,7 @@ object GenericPortBuild {
             val assessment = assess(context, source) { send(it) }
             check(assessment.canBuild) { assessment.asText() }
             val data = assessment.data!!
-            val target = PortTarget.classic(context.appId, assessment.version!!)
+            val target = PortTarget.classic(context.appId, assessment.version!!, assessment.sourcePlatform!!)
             target.requireData(data)
             val bytes = data.walkTopDown().filter { it.isFile }.sumOf { it.length() }
             val external = context.getExternalFilesDir(null) ?: error("Game storage unavailable.")

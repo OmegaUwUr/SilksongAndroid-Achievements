@@ -56,16 +56,19 @@ object ClassicPlayerImage {
         val surgery = PlayerImage.stageSurgery(root, context.assets)
         val manifest = File(root, "classic-profile-manifest.json")
         if (target.generic) {
-            PlayerImage.run(surgery, context, listOf("create-classic-profile-manifest", data.absolutePath,
-                target.id, "owned-source", target.unityVersion, manifest.absolutePath))
+            PlayerImage.run(surgery, context, listOf("create-portable-profile-manifest", data.absolutePath,
+                target.id, "owned-source", target.unityVersion, target.sourcePlatform.toString(), manifest.absolutePath))
         } else context.assets.open(HollowKnightSource.MANIFEST).use { input ->
             manifest.outputStream().use { input.copyTo(it) }
         }
         val img = imageDir(root)
         // Convert directly into the image. Avoid another full copy of the 5 GB tree.
         // The converter checks output hashes before resuming; edits below are rebuilt on retry.
-        PlayerImage.run(surgery, context, listOf("retarget-classic-tree", data.absolutePath,
-            img.absolutePath, manifest.absolutePath, File(root, "classic-tree-report.json").absolutePath))
+        val report = File(root, "classic-tree-report.json").absolutePath
+        val command = if (target.generic) listOf("retarget-portable-tree", data.absolutePath,
+            img.absolutePath, manifest.absolutePath, target.sourcePlatform.toString(), report)
+            else listOf("retarget-classic-tree", data.absolutePath, img.absolutePath, manifest.absolutePath, report)
+        PlayerImage.run(surgery, context, command)
         emit(PlayerImage.Progress("Assembling game player", -1f, "Android metadata and resources"))
         File(img, "Managed").deleteRecursively()
         File(img, "MonoBleedingEdge").deleteRecursively()

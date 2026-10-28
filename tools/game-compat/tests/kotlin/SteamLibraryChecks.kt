@@ -18,10 +18,11 @@ fun main() {
         val plan = SteamPortPlan.from(info(depots = windows + linux + common + language + english + x86), 9)
         check(plan.platform == "linux" && plan.depots.map { it.id } == listOf(42, 44, 46))
     }
-    test("optional DLC and another app's shared depot do not prevent a base-game download") {
+    test("optional DLC does not prevent a base-game download but unresolved shared base content does") {
         val dlc = """"45" { "dlcappid" "99" "manifests" { "public" "103" } }"""
         val shared = """"46" { "depotfromapp" "999" "manifests" { "public" "104" } }"""
-        check(SteamPortPlan.from(info(depots = linux + dlc + shared), 9).depots.map { it.id } == listOf(42))
+        check(SteamPortPlan.from(info(depots = linux + dlc), 9).depots.map { it.id } == listOf(42))
+        check(runCatching { SteamPortPlan.from(info(depots = linux + shared), 9) }.isFailure)
     }
     test("generic download snapshots change for Steam manifest changes and are order-independent") {
         val a = SteamPortPlan.from(info(depots = linux + common), 9)
@@ -46,6 +47,26 @@ fun main() {
         val plan = SteamPortPlan.from(info(os = "windows", depots = windows + common), 9)
         check(plan.platform == "windows" && plan.depots.map { it.id } == listOf(43, 44))
     }
+    test("scanner and downloader use the same filtered base source without DLC false negatives") {
+        val dlc = """"45" { "dlcappid" "999" "encryptedmanifests" {} }"""
+        val french = """"46" { "config" { "language" "french" } "manifests" { "public" "1000" } }"""
+        val x86 = """"47" { "config" { "osarch" "32" } "manifests" { "public" "1001" } }"""
+        val source = info(depots = linux + common + dlc + french + x86)
+        val inspected = SteamLibraryRules.inspectionPlan(source, 9)
+        val downloaded = SteamPortPlan.from(source, 9)
+        check(inspected.complete && inspected.depots == downloaded.depots && inspected.platform == downloaded.platform)
+        check(SteamLibraryRules.inspect(listOf("Game_Data/globalgamemanagers", "Game_Data/Managed/Assembly-CSharp.dll"), inspected.complete).potential)
+    }
+    test("a Linux-only DLC cannot select the Windows base game's platform") {
+        val linuxDlc = """"45" { "dlcappid" "999" "config" { "oslist" "linux" } "manifests" { "public" "1000" } }"""
+        val plan = SteamLibraryRules.inspectionPlan(info(os = "windows", depots = windows + linuxDlc), 9)
+        check(plan.platform == "windows" && plan.complete && plan.depots.map { it.id } == listOf(43))
+    }
+    test("duplicate source depot IDs cannot authorize a generic download") {
+        val source = info(depots = linux + linux.replace("100", "200"))
+        check(!SteamLibraryRules.inspectionPlan(source, 9).complete)
+        check(runCatching { SteamPortPlan.from(source, 9) }.isFailure)
+    }
     test("select Linux and shared depots; exclude Windows") {
         val plan = SteamLibraryRules.linuxPlan(info(depots = linux + windows + common), 9)
         check(plan.complete && plan.depots.map { it.id } == listOf(42, 44))
@@ -57,7 +78,7 @@ fun main() {
         val plan = SteamLibraryRules.inspectionPlan(info("windows,macos", depots = windows + common), 1313140)
         check(plan.platform == "windows" && plan.depots.map { it.id } == listOf(43, 44))
         val result = SteamLibraryRules.inspect(listOf("Cult Of The Lamb_Data/globalgamemanagers", "Cult Of The Lamb_Data/Managed/Assembly-CSharp.dll"), true, plan.platform)
-        check(result.unity && result.potential && result.details.any { "game-specific Android adapter" in it })
+        check(result.unity && result.potential && result.details.any { "Vulkan shaders" in it })
     }
     test("Mac-only app bundles and Linux preference remain separate platform inventories") {
         val mac = """"45" { "config" { "oslist" "macos" } "manifests" { "public" { "gid" "105" } } }"""
@@ -129,8 +150,8 @@ fun main() {
         check(plan.depots.single().manifest.toULong() == 18446744073709551614uL)
     }
     test("large depot trees explicitly report truncation") {
-        val plan = SteamLibraryRules.linuxPlan(info(depots = (1..17).joinToString(" ") { linux.replace("42", "$it") }), 9)
-        check(!plan.complete && plan.depots.size == 16)
+        val plan = SteamLibraryRules.linuxPlan(info(depots = (1..33).joinToString(" ") { linux.replace("42", "$it") }), 9)
+        check(!plan.complete && plan.depots.size == 32)
     }
     val mono = listOf("Game_Data/globalgamemanagers", "Game_Data/Managed/Assembly-CSharp.dll")
     test("complete Linux Mono layout is potential, never a playable adapter") {

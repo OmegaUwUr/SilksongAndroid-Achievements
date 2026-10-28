@@ -24,7 +24,7 @@ object PlayerImage { fun depotData(root: File): File? = error("Not used by metad
 object HollowKnightSource { fun find(root: File): File = error("Not used by metadata tests") }
 ''')
     out = tmp / "checks.jar"
-    sources = [SRC / (name + ".kt") for name in ("SteamLibraryRules", "SteamPortPlan", "PortDependencyAudit", "GameProfile", "SteamDepotTarget", "SteamDepotMetadata", "SteamLoginIdentity", "SteamDownloadDiagnostics", "SteamArtPaths", "LibraryLayout", "SteamBridgeProtocol", "GameSavePaths", "SteamCloudLayout")]
+    sources = [SRC / (name + ".kt") for name in ("SteamLibraryRules", "SteamBaseDepots", "SteamPortPlan", "PortDependencyAudit", "GameProfile", "SteamDepotTarget", "SteamDepotMetadata", "SteamLoginIdentity", "SteamDownloadDiagnostics", "SteamArtPaths", "LibraryLayout", "SteamBridgeProtocol", "GameSavePaths", "SteamCloudLayout")]
     subprocess.run(["java", "-cp", cp, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect",
                     "-jvm-target", "17", "-classpath", cp, "-d", str(out), *map(str, sources), str(stubs),
                     str(Path(__file__).parent / "kotlin/SteamLibraryChecks.kt")], check=True)

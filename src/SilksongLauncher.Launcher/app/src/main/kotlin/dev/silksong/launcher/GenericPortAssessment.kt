@@ -7,8 +7,9 @@ import java.util.Locale
 
 /** Capability decisions from source bytes and Android components, independent of a game's title. */
 data class GenericPortAssessment(val data: File?, val version: String?, val facts: List<String>, val blockers: List<String>,
-    val verified: Boolean = false, val sourceTreeSha256: String? = null) {
-    val canBuild get() = verified && sourceTreeSha256 != null && data != null && version != null && blockers.isEmpty()
+    val verified: Boolean = false, val sourceTreeSha256: String? = null, val sourcePlatform: Int? = null) {
+    val canBuild get() = verified && sourceTreeSha256 != null && data != null && version != null &&
+        sourcePlatform in PortTarget.desktopPlatforms && blockers.isEmpty()
     fun asText(): String = (listOf("Experimental Unity port assessment", "") + facts + "" +
         if (canBuild) listOf("Ready to compile an experimental port. Gameplay still needs device testing.",
             "Generic touch uses Unity Input System gamepad bindings. Legacy Input/Rewired may need an adapter.",
@@ -27,7 +28,8 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             val blockers = mutableListOf<String>()
             if (header == null) blockers += "Readable Unity serialized files are required."
             else {
-                if (header.platform != 24) blockers += "This source is ${GameCompatibility.platformName(header.platform)}. The common converter currently accepts Linux files with Vulkan shaders. A Windows/Metal shader converter is not available."
+                if (header.platform !in PortTarget.desktopPlatforms) blockers += "Source target ${header.platform} needs an asset converter provider."
+                else facts += "Source platform: ${GameCompatibility.platformName(header.platform)}. Every serialized file must match; usable Vulkan shaders are required. Direct3D/Metal shader conversion is not available."
                 if (!UnityDistribution.supports(header.version)) blockers += "Unity ${header.version} needs an engine/toolchain provider. Available verified component sets: ${UnityDistribution.versions().joinToString()}. Another engine version cannot safely substitute for it."
                 else facts += "Exact Android engine and IL2CPP components: downloadable automatically from Unity."
             }
@@ -48,7 +50,7 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             if (File(data, "Plugins").walkTopDown().any { it.isFile && it.extension.lowercase(Locale.ROOT) in listOf("jar", "aar", "winmd") })
                 blockers += "Java/AAR or Windows Runtime plugin files need a managed/Java provider. A native .so pack cannot install them."
             facts += "Game assemblies and content: supplied by the owned source; desktop engine modules are replaced."
-            return GenericPortAssessment(data, header?.version, facts, blockers)
+            return GenericPortAssessment(data, header?.version, facts, blockers, sourcePlatform = header?.platform)
         }
 
         fun finish(initial: GenericPortAssessment, context: GenericPortContext, managed: JSONObject,

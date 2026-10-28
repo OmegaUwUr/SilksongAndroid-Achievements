@@ -8,6 +8,7 @@ import java.io.File
 
 /** Account-scoped metadata cache. Never used as ownership authorization or executable compatibility. */
 object SteamLibraryStore {
+    private const val VERSION = 2 // Re-scan results produced by the older DLC/whole-platform policy.
     data class Snapshot(val games: List<SteamLibraryScanner.Game>, val candidates: List<SteamLibraryScanner.Candidate>, val complete: Boolean)
     private fun file(context: Context, account: String) = AtomicFile(File(File(context.filesDir, "steam-library").apply { mkdirs() }, "${accountKey(account)}.json"))
 
@@ -15,7 +16,7 @@ object SteamLibraryStore {
         val target = file(context, account)
         check(target.baseFile.length() <= 12_582_912)
         val root = JSONObject(String(target.readFully(), Charsets.UTF_8))
-        check(root.getString("account") == accountKey(account) && root.getInt("version") == 1)
+        check(root.getString("account") == accountKey(account) && root.getInt("version") == VERSION)
         val rows = root.getJSONArray("games"); check(rows.length() <= 20000)
         val games = (0 until rows.length()).map { i -> rows.getJSONObject(i).let { SteamLibraryScanner.Game(it.getInt("id"), it.getString("title").take(200), it.optInt("minutes")) } }
             .filter { it.appId > 0 }.distinctBy { it.appId }
@@ -33,7 +34,7 @@ object SteamLibraryStore {
         val candidates = JSONArray(); snapshot.candidates.take(1000).forEach {
             candidates.put(JSONObject().put("id", it.game.appId).put("potential", it.evidence.potential).put("details", it.evidence.details.joinToString("\n\n").take(10000)))
         }
-        val bytes = JSONObject().put("version", 1).put("account", accountKey(account)).put("complete", snapshot.complete)
+        val bytes = JSONObject().put("version", VERSION).put("account", accountKey(account)).put("complete", snapshot.complete)
             .put("games", games).put("candidates", candidates).toString().toByteArray()
         if (bytes.size > 12_582_912) return
         val target = file(context, account); val output = target.startWrite()

@@ -59,10 +59,28 @@ fun main(args: Array<String>) {
             for (id in listOf(0, 1030300, 367520)) check(runCatching { PortTarget.classic(id, "6000.0.50f1") }.isFailure)
             check(runCatching { PortTarget.classic(987, "2022.3.1f1") }.isFailure)
         }
-        test("Windows source is downloadable evidence, not an authorized Linux conversion") {
-            header.writeBytes(serialized(platform = 19))
-            check(GenericPortAssessment.source(data).blockers.any { "Windows" in it })
-            check(runCatching { PortTarget.classic(987, "6000.0.50f1").requireData(data) }.isFailure)
+        test("desktop sources require their own validated target and full shader preparation") {
+            for (platform in listOf(19, 2)) {
+                header.writeBytes(serialized(platform = platform))
+                val report = GenericPortAssessment.source(data)
+                check(report.blockers.isEmpty() && report.sourcePlatform == platform && !report.canBuild)
+                PortTarget.classic(987, "6000.0.50f1", platform).requireData(data)
+                check(runCatching { PortTarget.classic(987, "6000.0.50f1").requireData(data) }.isFailure)
+                check(runCatching { PortTarget.HOLLOW_KNIGHT.requireData(data) }.isFailure)
+            }
+            header.writeBytes(serialized())
+        }
+        test("a macOS app bundle is discovered without traversing arbitrary resource trees") {
+            val bundle = File(root, "MacExample.app/Contents/Resources/Data").apply { mkdirs() }
+            File(bundle, "globalgamemanagers").writeBytes(serialized(platform = 2))
+            check(GameCompatibility.findDataFolders(File(root, "MacExample.app")).single() == bundle)
+            check(GameCompatibility.findDataFolders(root).size == 2)
+            File(root, "MacExample.app").deleteRecursively()
+        }
+        test("Android and unsupported desktop serialized targets still need a provider") {
+            header.writeBytes(serialized(platform = 13))
+            check(GenericPortAssessment.source(data).blockers.any { "converter provider" in it })
+            check(runCatching { PortTarget.classic(987, "6000.0.50f1", 13) }.isFailure)
             header.writeBytes(serialized())
         }
         test("unregistered engines name the actual missing component provider") {

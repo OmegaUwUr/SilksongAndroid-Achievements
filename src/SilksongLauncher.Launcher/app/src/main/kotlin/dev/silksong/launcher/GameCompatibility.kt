@@ -121,7 +121,7 @@ object GameCompatibility {
         var level = listOf(root)
         var visited = 0
         val hits = mutableListOf<File>()
-        repeat(4) {
+        repeat(5) {
             val next = mutableListOf<File>()
             for (dir in level) {
                 if (++visited > 128) throw IOException("Too many folders. Choose one game's installation folder.")
@@ -130,7 +130,8 @@ object GameCompatibility {
                 val children = dir.listFiles() ?: throw IOException("The selected folder cannot be read.")
                 if (children.size > 256) throw IOException("Too many entries. Choose one game's data folder.")
                 for (child in children.sortedBy { it.name }) {
-                    if (child.isDirectory && child.name !in listOf("Managed", "StreamingAssets", "Plugins", "Resources")) next += child
+                    val macResources = dir.name == "Contents" && child.name == "Resources"
+                    if (child.isDirectory && (macResources || child.name !in listOf("Managed", "StreamingAssets", "Plugins", "Resources"))) next += child
                 }
             }
             level = next
@@ -168,7 +169,9 @@ object GameCompatibility {
         facts += "Serialized platform: ${header?.let { platformName(it.platform) } ?: "unknown"}"
         if (header == null) blockers += "Cannot verify the Unity version/platform. Files may be incomplete or use an unsupported serialized format."
         else {
-            if (header.platform != 24) blockers += "The available porting pipeline requires Linux game files."
+            if (profile.hasPortAdapter && header.platform != 24) blockers += "This dedicated adapter requires Linux game files."
+            else if (!profile.hasPortAdapter && header.platform !in PortTarget.desktopPlatforms)
+                blockers += "This source platform needs a converter provider."
             if (profile.unityVersions.isEmpty() && !UnityDistribution.supports(header.version)) blockers += "No verified Android engine/toolchain is registered for Unity ${header.version}."
             else if (profile.unityVersions.isEmpty()) notes += "A common Android engine provider is available for this version; run Download & prepare for the full dependency and shader checks."
             else if (header.version !in profile.unityVersions) blockers += "This Unity version does not match this game's registered engine/toolchain."

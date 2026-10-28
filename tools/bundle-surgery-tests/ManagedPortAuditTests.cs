@@ -7,6 +7,42 @@ namespace BundleSurgery.Tests;
 public sealed class ManagedPortAuditTests
 {
     [Fact]
+    public void Desktop_core_libraries_are_reported_before_they_can_enter_IL2CPP()
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game()) game.Write(Path.Combine(fixture.Data, "Managed/Assembly-CSharp.dll"));
+        using (var desktop = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("System.Private.CoreLib", new Version(8, 0)), "System.Private.CoreLib", ModuleKind.Dll)) {
+            desktop.MainModule.Types.Add(new TypeDefinition("System", "Object", TypeAttributes.Public));
+            desktop.Write(Path.Combine(fixture.Data, "Managed/System.Private.CoreLib.dll"));
+        }
+        Assert.Contains(ManagedPortAudit.Inspect(fixture.Data, fixture.Unity).Diagnostics, value => value.Contains("System.Private.CoreLib"));
+    }
+
+    [Fact]
+    public void Netstandard_facade_may_forward_to_the_provided_Android_core()
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game()) game.Write(Path.Combine(fixture.Data, "Managed/Assembly-CSharp.dll"));
+        using (var facade = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("netstandard", new Version(2, 1)), "netstandard", ModuleKind.Dll)) {
+            var scope = new AssemblyNameReference("mscorlib", new Version(4, 0, 0, 0)); facade.MainModule.AssemblyReferences.Add(scope);
+            facade.MainModule.ExportedTypes.Add(new ExportedType("System", "Object", facade.MainModule, scope) { IsForwarder = true });
+            facade.Write(Path.Combine(fixture.Data, "Managed/netstandard.dll"));
+        }
+        Assert.Empty(ManagedPortAudit.Inspect(fixture.Data, fixture.Unity).Diagnostics);
+    }
+
+    [Fact]
+    public void Netstandard_name_does_not_exempt_a_second_framework_implementation()
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game()) game.Write(Path.Combine(fixture.Data, "Managed/Assembly-CSharp.dll"));
+        using (var implementation = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("netstandard", new Version(2, 1)), "netstandard", ModuleKind.Dll)) {
+            implementation.MainModule.Types.Add(new TypeDefinition("System", "Object", TypeAttributes.Public));
+            implementation.Write(Path.Combine(fixture.Data, "Managed/netstandard.dll"));
+        }
+        Assert.Contains(ManagedPortAudit.Inspect(fixture.Data, fixture.Unity).Diagnostics, value => value.Contains("netstandard"));
+    }
+    [Fact]
     public void Package_runtime_hooks_are_discovered_with_their_assembly_and_load_phase()
     {
         using var fixture = new MetadataFixture();

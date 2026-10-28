@@ -64,6 +64,10 @@ internal static class ManagedPortAudit
             {
                 using var assembly = AssemblyDefinition.ReadAssembly(path, new ReaderParameters {
                     ReadingMode = ReadingMode.Deferred, ReadSymbols = false, AssemblyResolver = resolver });
+                if (unity is not null && IsFramework(name) && !PortableFacade(assembly, replacements))
+                    diagnostics.Add(name + ": desktop framework implementation has no Android profile replacement. It cannot be mixed into the IL2CPP class library.");
+                if (assembly.MainModule.Types.Any(t => t.FullName is "System.Object" or "System.String" or "System.ValueType"))
+                    diagnostics.Add(name + ": an additional core class library would conflict with the selected Android profile.");
                 foreach (var reference in assembly.MainModule.AssemblyReferences)
                 {
                     if (reference.Name is "System.Windows.Forms" or "PresentationFramework" or "WindowsBase" or "System.Drawing")
@@ -140,6 +144,14 @@ internal static class ManagedPortAudit
     {
         foreach (var type in types) { yield return type; foreach (var nested in Types(type.NestedTypes)) yield return nested; }
     }
+
+    private static bool IsFramework(string name) => name is "mscorlib" or "netstandard" or "System" or "Microsoft.CSharp" or "Mono.Security" or "I18N" ||
+        name.StartsWith("System.", StringComparison.Ordinal) || name.StartsWith("I18N.", StringComparison.Ordinal);
+
+    // A facade only forwards types to the selected Android profile. It supplies no second implementation.
+    private static bool PortableFacade(AssemblyDefinition assembly, ISet<string> provided) =>
+        assembly.MainModule.Types.All(t => t.Name == "<Module>" && !t.HasMethods && !t.HasFields) &&
+        !assembly.MainModule.HasModuleReferences && assembly.MainModule.AssemblyReferences.All(r => provided.Contains(r.Name));
 
     private sealed class InspectedResolver : IAssemblyResolver
     {

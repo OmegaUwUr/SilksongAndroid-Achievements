@@ -44,12 +44,13 @@ or Valve release.
   depot. The revision-34 candidate corrects Hollow Knight to app 367520 / Linux
   depot 367523, checks Steam's platform metadata and validates exact Linux
   1.5.12620 files. Local game files remain supported.
-- **Steam library discovery and preparation (revision 36 candidate):** scans the authenticated
+- **Steam library discovery and preparation (revision 37 candidate):** scans the authenticated
   library and Linux, Windows or macOS depot manifests for Unity candidates without
   downloading entire games. Owned games appear in the artwork library before the
   scan completes. Other entries offer **Prepare port**: owned source downloads,
   actual dependency inspection, matching Unity component downloads and a shared
-  experimental compiler for eligible Linux classic Mono games. See
+  experimental compiler for eligible desktop classic Mono games with Vulkan shaders.
+  Optional DLC no longer hides valid base-game candidates. See
   [supported components and limits](docs/GENERIC_UNITY_PORTS.md).
 - **Steam Cloud:** manual download/upload, optional automatic download before
   play and upload on return to the launcher, and conflict choices when the
@@ -189,7 +190,7 @@ for the timing logs and device checks.
 
 ## Getting started
 
-### Game options and compatibility (revision 36 candidate)
+### Game options and compatibility (revision 37 candidate)
 
 First launch opens **Steam sign-in**, then an automatically scanned **Library**.
 Portrait covers adapt to phone/tablet widths. Tap a cover for its hero artwork,

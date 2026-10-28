@@ -150,7 +150,7 @@ object Il2cppConverter {
         // written by an older version -- and the failure without it is the
         // one this check exists because of: four minutes of work, then il2cpp
         // dying on two class libraries at once with nothing readable to say.
-        PlayerImage.wrongBuildProblem(depot)?.let { throw IOException(it) }
+        if (!target.generic) PlayerImage.wrongBuildProblem(depot)?.let { throw IOException(it) }
         if (!bcl.isDirectory) throw IOException("the unityaot class library is missing: $bcl")
         if (!engine.isDirectory) throw IOException("the Android player's Managed folder is missing: $engine")
         if (!File(deploy, "il2cpp.dll").isFile) throw IOException("il2cpp.dll is missing: $deploy")
