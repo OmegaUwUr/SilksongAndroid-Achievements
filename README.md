@@ -63,9 +63,11 @@ or Valve release.
   unused declarations remain subject to review. Mono wrappers are checked against the
   selected managed profile, and packs cannot replace Android system libraries. Cult
   of the Lamb and Slime Rancher still need engine/content/platform adapters.
-- **Local bundle conversion (revision 43 candidate):** checks and retargets bounded
+- **Local bundle conversion (revision 45 candidate):** checks and retargets bounded
   UnityFS content, including Unity 2019 serialized layouts. Inspects content even
   when other requirements remain blocked and checks CRC/catalog loading paths.
+  Uses bounded serialized headers to avoid mistaking opaque GI files for assets;
+  renamed real assets and truncated content retain their validation checks.
   **Export porting files for review** provides original code/startup metadata for
   adapter work. [Slime Rancher status and source collection](docs/SLIME_RANCHER_PORT.md)
   explains what is still missing; this does not enable the game to compile.

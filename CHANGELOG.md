@@ -2,6 +2,26 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.45 (candidate)
+
+- Replaces the permissive serialized-file probe that can misclassify opaque GI
+  data such as `.ecm` files. Detects bounded headers and real Unity version stamps
+  for loose files and unflagged UnityFS entries, without an extension-based bypass.
+  Preserves opaque bytes during conversion and still inspects renamed real assets.
+- Checks metadata/file/data bounds before parsing serialized content. Truncated
+  assets and broken known player-asset names remain blocked. Bundle probes stay
+  inside their own entry and preserve the reader position.
+- Reports unreadable serialized files once, marks the individual inspection as
+  failed and continues counting shaders in the remaining content.
+
+Validation: 104 C# cases pass, including 19 new classification, preservation,
+corruption and entry-boundary cases. The actual production and xUnit sources were
+compiled with Roslyn because this host's .NET CLI cannot read process-start
+metadata. No game/Android/native code was executed. The owner's actual `.ecm` file
+was not available; a device rescan is needed to confirm this failure's exact cause.
+Slime Rancher's Unity 2019 runtime/profile and Steam/RAIL/Discord adapter blockers
+remain. APK assembly stays manual. See docs/SLIME_RANCHER_PORT.md.
+
 ## 1.0.3-achievements.44 (candidate)
 
 - Persists account-scoped library results and scan checkpoints independently of

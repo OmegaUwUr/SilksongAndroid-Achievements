@@ -252,22 +252,29 @@ internal static class ClassicTreeConverter
 
         var files = new List<ClassicFileReport>();
         var diagnostics = inventory.Diagnostics.ToList();
+        var unreadable = inventory.Diagnostics.Where(row => row.Code == "UNREADABLE_SERIALIZED_FILE")
+            .Select(row => row.RelativePath).ToHashSet(StringComparer.Ordinal);
         foreach (var input in inventory.Files)
         {
             TransformReport? inspected = null;
+            var status = unreadable.Contains(input.RelativePath) ? "INSPECTION_FAILED" : "INVENTORIED";
             try
             {
-                if (input.Kind == ClassicFileKind.Serialized)
+                if (input.Kind == ClassicFileKind.Serialized && !unreadable.Contains(input.RelativePath))
                     inspected = SerializedFileTransformer.Inspect(ResolveContained(sourceRoot, input.RelativePath));
                 if (input.Kind == ClassicFileKind.Bundle)
                     inspected = UnityFsContent.Inspect(ResolveContained(sourceRoot, input.RelativePath), inventory.SourceTarget, inventory.Identity?.UnityVersion);
             }
-            catch (Exception error) { diagnostics.Add(new ClassicDiagnostic("CONTENT_INSPECTION_FAILED", error.Message, input.RelativePath)); }
+            catch (Exception error)
+            {
+                status = "INSPECTION_FAILED";
+                diagnostics.Add(new ClassicDiagnostic("CONTENT_INSPECTION_FAILED", error.Message, input.RelativePath));
+            }
             files.Add(new ClassicFileReport(
                 input.RelativePath,
                 input.Kind.ToString(),
                 input.OwnerRelativePath,
-                "INVENTORIED",
+                status,
                 input.Size,
                 input.Sha256,
                 null,

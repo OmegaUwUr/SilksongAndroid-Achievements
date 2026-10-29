@@ -568,7 +568,10 @@ internal static partial class ClassicPlayerTree
         {
             return ClassicFileKind.ReplacementRequired;
         }
-        if (SerializedFileDetection.IsSerializedFile(path)) return ClassicFileKind.Serialized;
+        if (SerializedFileDetection.IsSerializedFile(path) ||
+            name.Equals("globalgamemanagers", StringComparison.OrdinalIgnoreCase) ||
+            Path.GetExtension(name).Equals(".assets", StringComparison.OrdinalIgnoreCase) ||
+            NumericClassicName().IsMatch(name)) return ClassicFileKind.Serialized;
 
         if (relativePath.StartsWith("Managed/", StringComparison.OrdinalIgnoreCase) &&
             Path.GetExtension(path).Equals(".dll", StringComparison.OrdinalIgnoreCase))
@@ -655,6 +658,7 @@ internal static partial class ClassicPlayerTree
         var manager = new AssetsManager();
         try
         {
+            SerializedFileDetection.RequireValidHeader(path);
             var file = manager.LoadAssetsFile(path);
             if (file.file.Metadata.TargetPlatform != sourceTarget)
             {

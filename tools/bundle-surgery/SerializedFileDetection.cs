@@ -1,94 +1,80 @@
 using System.Buffers.Binary;
 using System.Text;
-using AssetsTools.NET;
+using System.Text.RegularExpressions;
 
-internal static class SerializedFileDetection
+internal static partial class SerializedFileDetection
 {
     private const int LegacyHeaderSize = 20;
     private const int LargeHeaderSize = 48;
-    private const int LargeFilesVersion = 22;
-    private const int MaximumFormatVersion = 99;
     private const int MaximumUnityVersionLength = 255;
 
     internal static bool IsSerializedFile(string path)
     {
-        if (AssetsFile.IsAssetsFile(path))
-        {
-            return true;
-        }
-
-        // AssetsTools.NET 3.0.0 rejects otherwise-valid Unity version stamps
-        // containing '-'. Unity 6000 internal builds use stamps such as
-        // 6000.0.50f1-uum-100966-branch1, so validate that narrow case against
-        // the complete serialized-file header instead of treating it as a
-        // bundle or arbitrary data.
         using var stream = File.OpenRead(path);
-        if (stream.Length < LargeHeaderSize)
-        {
-            return false;
-        }
-
-        Span<byte> header = stackalloc byte[LargeHeaderSize];
-        if (stream.Read(header) != header.Length ||
-            header[..5].SequenceEqual("Unity"u8))
-        {
-            return false;
-        }
-
-        var format = BinaryPrimitives.ReadUInt32BigEndian(header[8..12]);
-        if (format == 0 || format > MaximumFormatVersion || header[16] > 1)
-        {
-            return false;
-        }
-
-        int headerSize;
-        ulong metadataSize;
-        ulong declaredFileSize;
-        ulong dataOffset;
-        if (format >= LargeFilesVersion)
-        {
-            headerSize = LargeHeaderSize;
-            metadataSize = BinaryPrimitives.ReadUInt32BigEndian(header[20..24]);
-            declaredFileSize = BinaryPrimitives.ReadUInt64BigEndian(header[24..32]);
-            dataOffset = BinaryPrimitives.ReadUInt64BigEndian(header[32..40]);
-        }
-        else
-        {
-            headerSize = LegacyHeaderSize;
-            metadataSize = BinaryPrimitives.ReadUInt32BigEndian(header[0..4]);
-            declaredFileSize = BinaryPrimitives.ReadUInt32BigEndian(header[4..8]);
-            dataOffset = BinaryPrimitives.ReadUInt32BigEndian(header[12..16]);
-        }
-
-        if (metadataSize == 0 ||
-            declaredFileSize != checked((ulong)stream.Length) ||
-            dataOffset < checked((ulong)headerSize) ||
-            dataOffset > declaredFileSize)
-        {
-            return false;
-        }
-
-        stream.Position = headerSize;
-        var unityVersion = new StringBuilder();
-        while (unityVersion.Length <= MaximumUnityVersionLength)
-        {
-            var next = stream.ReadByte();
-            if (next < 0)
-            {
-                return false;
-            }
-            if (next == 0)
-            {
-                var version = unityVersion.ToString();
-                return version.Contains('-', StringComparison.Ordinal) &&
-                    version.All(IsUnityVersionCharacter);
-            }
-            unityVersion.Append(checked((char)next));
-        }
-
-        return false;
+        return IsSerializedFile(stream, 0, stream.Length);
     }
 
-    private static bool IsUnityVersionCharacter(char value) =>
-        char.IsAsciiLetterOrDigit(value) || value is '.' or '-';
+    internal static bool IsSerializedFile(Stream stream, long offset, long length)
+    {
+        var probe = Probe(stream, offset, length);
+        // A proper version stamp also identifies damaged/truncated assets. Keep
+        // those in the serialized validation path rather than copying them as data.
+        return probe is not null && (probe.VersionLength > 0 || probe.ValidBounds);
+    }
+
+    internal static void RequireValidHeader(string path)
+    {
+        using var stream = File.OpenRead(path);
+        RequireValidHeader(stream, 0, stream.Length);
+    }
+
+    internal static void RequireValidHeader(Stream stream, long offset, long length)
+    {
+        var probe = Probe(stream, offset, length);
+        if (probe is null || !probe.ValidBounds || probe.VersionLength <= 0 ||
+            (ulong)(probe.VersionLength + 1 + sizeof(uint)) > probe.MetadataSize)
+            throw new InvalidDataException("Invalid or truncated serialized header: expected bounded metadata, exact file size, a data offset and a Unity version stamp.");
+    }
+
+    private sealed record HeaderProbe(bool ValidBounds, ulong MetadataSize, int VersionLength);
+
+    private static HeaderProbe? Probe(Stream stream, long offset, long length)
+    {
+        if (!stream.CanSeek || offset < 0 || length < LegacyHeaderSize ||
+            offset > stream.Length || length > stream.Length - offset) return null;
+        var position = stream.Position;
+        try
+        {
+            // All reads stay within this file/entry, including an unflagged entry
+            // immediately followed by a serialized file in an unpacked UnityFS.
+            stream.Position = offset;
+            Span<byte> prefix = stackalloc byte[LargeHeaderSize + MaximumUnityVersionLength + 1];
+            var count = checked((int)Math.Min(length, prefix.Length));
+            stream.ReadExactly(prefix[..count]);
+            prefix = prefix[..count];
+            if (prefix[..5].SequenceEqual("Unity"u8)) return null;
+            var format = BinaryPrimitives.ReadUInt32BigEndian(prefix[8..12]);
+            if (format is < 9 or > 99) return null;
+            var headerSize = format >= 22 ? LargeHeaderSize : LegacyHeaderSize;
+            if (count < headerSize) return null;
+            var metadata = BinaryPrimitives.ReadUInt32BigEndian(format >= 22 ? prefix[20..24] : prefix[..4]);
+            var declaredSize = format >= 22 ? BinaryPrimitives.ReadUInt64BigEndian(prefix[24..32]) : BinaryPrimitives.ReadUInt32BigEndian(prefix[4..8]);
+            var dataOffset = format >= 22 ? BinaryPrimitives.ReadUInt64BigEndian(prefix[32..40]) : BinaryPrimitives.ReadUInt32BigEndian(prefix[12..16]);
+            var validBounds = prefix[16] <= 1 &&
+                metadata > 0 && declaredSize == (ulong)length && dataOffset >= (ulong)headerSize &&
+                dataOffset <= declaredSize && metadata <= dataOffset - (ulong)headerSize;
+            var versionBytes = prefix[headerSize..];
+            var terminator = versionBytes.IndexOf((byte)0);
+            var versionLength = terminator is > 0 and <= MaximumUnityVersionLength &&
+                UnityVersionStamp().IsMatch(Encoding.ASCII.GetString(versionBytes[..terminator])) ? terminator : 0;
+            return new HeaderProbe(validBounds, metadata, versionLength);
+        }
+        finally { stream.Position = position; }
+    }
+
+    // A letter/number string alone is not a version. AssetsTools.NET 3.0.0's
+    // permissive probe can mistake opaque GI/resource data for serialized files.
+    // Retain the internal branch suffix used by the pinned Unity 6 player too.
+    [GeneratedRegex(@"\A[0-9]{1,4}\.[0-9]+\.[0-9]+[abcfpx][0-9]+(?:-[A-Za-z0-9.-]+)?\z", RegexOptions.CultureInvariant)]
+    private static partial Regex UnityVersionStamp();
 }

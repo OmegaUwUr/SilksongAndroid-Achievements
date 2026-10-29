@@ -48,7 +48,8 @@ internal static class SyntheticAssetFactory
         int[] shaderPlatforms,
         int[] graphicsApis,
         string buildVersion,
-        uint targetPlatform = LinuxBuildTarget)
+        uint targetPlatform = LinuxBuildTarget,
+        string unityVersion = UnityVersion)
     {
         var blobValue = 0;
         return WithShaderPlatformChunksAndTarget(
@@ -59,7 +60,8 @@ internal static class SyntheticAssetFactory
                     Chunks: new[] { checked((byte)++blobValue) }))
                 .ToArray(),
             graphicsApis,
-            buildVersion);
+            buildVersion,
+            unityVersion: unityVersion);
     }
 
     internal static SyntheticSerializedFile WithShaderBuildSettingsAndPlayerSettings(

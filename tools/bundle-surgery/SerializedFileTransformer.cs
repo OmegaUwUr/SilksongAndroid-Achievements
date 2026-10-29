@@ -55,6 +55,7 @@ internal static class SerializedFileTransformer
         var manager = new AssetsManager();
         try
         {
+            SerializedFileDetection.RequireValidHeader(resolvedInput);
             manager.LoadClassPackage(ClassDataPath);
             var file = manager.LoadAssetsFile(resolvedInput);
             manager.LoadClassDatabaseFromPackage(file.file.Metadata.UnityVersion);
@@ -88,6 +89,7 @@ internal static class SerializedFileTransformer
 
     internal static TransformReport Inspect(string input)
     {
+        SerializedFileDetection.RequireValidHeader(input);
         var manager = new AssetsManager();
         try
         {

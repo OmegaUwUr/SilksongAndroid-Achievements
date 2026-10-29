@@ -1,9 +1,39 @@
-# Slime Rancher port work — revision 43
+# Slime Rancher port work — revision 45
 
 **Slime Rancher is not a working Android port in this revision.** Its owner's
 assessment identifies Linux Mono files from Unity **2019.4.29f1**. The workspace
 does not contain those game assemblies, startup metadata or content. No game-specific
 backend selection, real-game shaders, conversion or gameplay have been verified.
+
+## GI content report and revision 45 fix
+
+The owner's latest assessment counts **313 shaders** and reports the same file
+twice: `GI/level3/9e/9e3c39eae4c93b38bfd19160ca9e8c83.ecm`, once as
+`UNREADABLE_SERIALIZED_FILE` and again as `CONTENT_INSPECTION_FAILED`. The report
+does not establish whether that particular file is serialized, opaque or damaged;
+its original bytes have not been supplied.
+
+The pinned asset library's permissive probe reproducibly accepts an ordinary
+letter string after a small format value as serialized content, even with invalid
+header sizes. Revision 45 replaces that probe for loose content and unflagged
+UnityFS entries with bounded header/version detection. Opaque resource bytes stay
+in the inventory and are copied unchanged. There is no `.ecm` exemption: real
+serialized files with that extension still receive platform, exact-engine and
+Vulkan checks. Broken known player-asset names and recognizable truncated assets
+stay blocked, and bundle-entry probes cannot read their neighbours.
+
+Serialized header metadata, declared file size and data offset are checked before
+loading. An unreadable file produces one read diagnostic and a failed per-file
+inspection action; other files are still inspected. This removes duplicate
+reporting without hiding the underlying failure.
+
+All **104 C# cases** pass, including **19 new cases** for the old-probe false
+positive, Unity 2019/6 conversion with byte-preserved opaque GI data, renamed real
+assets, missing Vulkan data, engine/platform mismatches, corruption and bounded
+bundle entries. These are synthetic fixtures, not the owner's `.ecm` file or a
+Slime Rancher gameplay test. Build revision 45 manually and rescan to confirm
+whether the actual file matches the reproduced false-positive case. If it still
+fails, supply that original `.ecm` file alongside the original-code export below.
 
 ## Changes made toward the port
 
@@ -115,7 +145,10 @@ The Kotlin runner requires the compiler/Android/dependency folders described in
 its header. This host's normal .NET SDK CLI crashes reading process-start metadata;
 production C# and the test sources were compiled with the SDK's Roslyn compiler
 and run through a direct reflection runner instead. No test implementation was
-substituted. **85 C# cases**, **57 generic Kotlin checks**, **17 plugin-pack checks**
-and **30 Python checks** pass. All **107 production Kotlin files** type-check against
-the configured Android/Steam dependencies. No revision-43 APK or real Slime Rancher
+substituted. Revision 45 reruns the full C# suite: **104 cases** pass. Earlier
+revision-43 checks cover **57 generic Kotlin checks**, **17 plugin-pack checks**,
+**30 Python checks** and all **107 production Kotlin files** then present. Revision
+44 adds the persistence/update regression coverage and raises the production
+Kotlin count to 110; see [persistent game data](PERSISTENT_GAME_DATA.md). Revision
+45 changes C# content inspection only. No revision-45 APK or real Slime Rancher
 port was built.

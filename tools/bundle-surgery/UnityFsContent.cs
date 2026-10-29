@@ -78,6 +78,8 @@ internal static class UnityFsContent
         foreach (var entry in bundle.file.BlockAndDirInfo.DirectoryInfos)
         {
             if (!IsSerialized(bundle.file, entry)) continue;
+            bundle.file.GetFileRange(bundle.file.GetFileIndex(entry.Name), out var start, out var length);
+            SerializedFileDetection.RequireValidHeader(bundle.file.DataReader.BaseStream, start, length);
             var asset = manager.LoadAssetsFileFromBundle(bundle, entry.Name);
             if (asset.file.Metadata.TargetPlatform != target)
                 throw new InvalidDataException($"UnityFS entry {entry.Name} has a different source platform.");
@@ -92,8 +94,12 @@ internal static class UnityFsContent
         return new TransformReport(shaders, vulkan, missing, target, target);
     }
 
-    private static bool IsSerialized(AssetBundleFile bundle, AssetBundleDirectoryInfo entry) =>
-        (entry.Flags & 4) != 0 || bundle.IsAssetsFile(bundle.GetFileIndex(entry.Name));
+    private static bool IsSerialized(AssetBundleFile bundle, AssetBundleDirectoryInfo entry)
+    {
+        if ((entry.Flags & 4) != 0) return true;
+        bundle.GetFileRange(bundle.GetFileIndex(entry.Name), out var start, out var length);
+        return SerializedFileDetection.IsSerializedFile(bundle.DataReader.BaseStream, start, length);
+    }
 
     private static Dictionary<string, string> ResourceHashes(AssetBundleFile bundle)
     {
