@@ -26,6 +26,7 @@ public final class HollowKnightActivity extends GameActivity {
             buildLock = lockFile.getChannel().tryLock();
             if (buildLock == null || !HollowKnightBuild.isReady(this))
                 throw new IllegalStateException("Hollow Knight is not ready or is being rebuilt");
+            HollowKnightBuild.prepareLaunch(this);
             super.onCreate(state);
         } catch (Exception failure) {
             android.util.Log.e("HollowKnightPort", "Launch stopped", failure);

@@ -29,11 +29,19 @@ object GenericSourceDownload {
         data class Complete(val source: File, val plan: SteamPortPlan) : Event()
     }
 
-    fun fetch(context: GenericPortContext, credentials: TokenStore.Credentials): Flow<Event> = channelFlow {
+    fun fetch(context: GenericPortContext, credentials: TokenStore.Credentials, refresh: Boolean = false): Flow<Event> = channelFlow {
         RandomAccessFile(File(context.filesDir, "port.lock"), "rw").use { handle ->
             val lock = try { handle.channel.tryLock() } catch (_: OverlappingFileLockException) { null }
                 ?: error("Close this game before downloading or preparing it.")
             lock.use {
+                if (!refresh) {
+                    val external = context.getExternalFilesDir(null) ?: error("Game storage is unavailable.")
+                    val preferred = context.getSharedPreferences("setup", android.content.Context.MODE_PRIVATE).getString("source", null)?.let(::File)
+                    CachedGameSource.find(external, context.appId, preferred)?.let { cached ->
+                        send(Event.Progress("Using downloaded game files", 1f))
+                        send(Event.Complete(cached.directory, cached.plan)); return@use
+                    }
+                }
                 send(Event.Progress("Checking Steam ownership and public depots"))
                 SteamSession().use { session ->
                     session.logOn(credentials)
@@ -62,8 +70,7 @@ object GenericSourceDownload {
                     // A new Steam manifest gets a new tree. Never overlay a changed build onto an old one.
                     val install = File(external, "sources/${plan.key}").apply { mkdirs() }
                     val marker = File(install, ".source-complete")
-                    if (runCatching { marker.readText() == plan.key }.getOrDefault(false)) {
-                        check(GameCompatibility.findDataFolders(install).size == 1) { "The cached source is incomplete. Download it again." }
+                    if (CachedGameSource.read(install, context.appId) != null) {
                         send(Event.Complete(install, plan)); return@use
                     }
                     marker.delete()

@@ -34,7 +34,8 @@ object UnityDex {
     private const val D8_MAIN = "com.android.tools.r8.D8"
 
     /** Where the dexed player classes live once built. */
-    fun outputDir(context: Context): File = File(context.filesDir, "unity-dex")
+    fun outputDir(context: Context): File = File(context.filesDir, "pkg/unity-dex").takeIf { it.exists() }
+        ?: File(context.filesDir, "unity-dex")
 
     private fun outputJar(context: Context): File = File(outputDir(context), "classes.jar")
 
@@ -58,7 +59,11 @@ object UnityDex {
 
     /** True once the dex is built and is no older than the jar it came from. */
     fun isBuilt(context: Context, unityRoot: File): Boolean {
-        val out = outputJar(context)
+        return isBuilt(outputDir(context), unityRoot)
+    }
+
+    private fun isBuilt(destination: File, unityRoot: File): Boolean {
+        val out = File(destination, "classes.jar")
         if (!out.isFile || out.length() == 0L) return false
         val src = sourceJar(unityRoot) ?: return true
         return out.lastModified() >= src.lastModified()
@@ -68,12 +73,12 @@ object UnityDex {
      * Dexes the player classes. Cheap enough to be unconditional, but skipped
      * when the output is already current.
      */
-    fun build(context: Context, unityRoot: File) {
-        if (isBuilt(context, unityRoot)) return
+    fun build(context: Context, unityRoot: File, destination: File = outputDir(context)) {
+        if (isBuilt(destination, unityRoot)) return
         val src = sourceJar(unityRoot)
             ?: throw java.io.IOException("no classes.jar in the Unity Android module")
 
-        val out = outputDir(context)
+        val out = destination
         out.deleteRecursively()
         out.mkdirs()
 
@@ -95,12 +100,13 @@ object UnityDex {
         ))
         if (!tmp.isFile || tmp.length() == 0L)
             throw java.io.IOException("d8 produced nothing for ${src.name}")
-        if (!tmp.renameTo(outputJar(context)))
+        val published = File(out, "classes.jar")
+        if (!tmp.renameTo(published))
             throw java.io.IOException("could not move $tmp into place")
 
         LauncherLog.log(
             "$TAG: dexed ${src.name} in ${System.currentTimeMillis() - started} ms " +
-                "(${outputJar(context).length() / 1024} KB)")
+                "(${published.length() / 1024} KB)")
     }
 
     /**

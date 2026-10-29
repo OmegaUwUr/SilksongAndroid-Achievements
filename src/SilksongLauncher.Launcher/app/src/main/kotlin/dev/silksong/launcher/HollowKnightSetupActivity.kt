@@ -42,7 +42,7 @@ class HollowKnightSetupActivity : Activity() {
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        source = preferences.getString("source", null)?.let(::File)
+        source = preferences.getString("source", null)?.let(::File)?.takeIf { it.isDirectory }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(22), dp(20), dp(22), dp(24))
@@ -67,6 +67,18 @@ class HollowKnightSetupActivity : Activity() {
         back = Button(this).apply { setText(R.string.game_check_another); setOnClickListener { finish() } }.also(column::addView)
         setContentView(ScrollView(this).apply { setBackgroundColor(Color.rgb(24, 21, 28)); addView(column) })
         refresh()
+        if (source == null) scope.launch {
+            val cached = withContext(Dispatchers.IO) {
+                runCatching { portContext.getExternalFilesDir(null)?.let { external ->
+                    val depot = SteamDepotTarget.HOLLOW_KNIGHT.hollowKnightDirectory(external)
+                    if (DepotFetcher.isPresent(depot, SteamDepotTarget.HOLLOW_KNIGHT)) HollowKnightSource.find(depot) else null
+                } }.getOrNull()
+            }
+            if (source == null && cached != null) {
+                source = cached; preferences.edit().putString("source", cached.absolutePath).apply()
+                if (!busy) refresh()
+            }
+        }
     }
 
     override fun onResume() {
@@ -124,7 +136,7 @@ class HollowKnightSetupActivity : Activity() {
             val token = data?.getStringExtra(LoginActivity.EXTRA_TOKEN)
             if (!name.isNullOrEmpty() && !token.isNullOrEmpty()) {
                 TokenStore(this).write(TokenStore.Credentials(name, token))
-                startActivity(Intent(this, GameLibraryActivity::class.java).putExtra("scan_steam_library", true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+                startActivity(Intent(this, GameLibraryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
                 finish()
             }
             return

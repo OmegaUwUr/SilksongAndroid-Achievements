@@ -33,6 +33,7 @@ class GenericPortSetupActivity : Activity() {
         super.onCreate(state)
         if (appId <= 0 || appId in listOf(1030300, 367520)) { finish(); return }
         source = prefs.getString("source", null)?.let(::File)?.takeIf { it.isDirectory }
+        intent.getStringExtra("game_title")?.take(200)?.takeIf { it.isNotBlank() }?.let { prefs.edit().putString("title", it).apply() }
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(22), px(18), px(22), px(26)) }
         body.addView(libraryText(intent.getStringExtra("game_title")?.take(200) ?: "Steam game $appId", 25f, true))
         body.addView(libraryText(getString(R.string.generic_port_explain)))
@@ -40,6 +41,7 @@ class GenericPortSetupActivity : Activity() {
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 1000; visibility = View.GONE }.also(body::addView)
         fun action(text: Int, block: () -> Unit) = libraryButton(getString(text)) { if (!busy) block() }.also { body.addView(it); actions += it }
         action(R.string.generic_port_download) { download() }
+        action(R.string.generic_port_refresh_source) { download(refresh = true) }
         action(R.string.generic_port_choose) { pick(71, Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
         action(R.string.generic_port_prepare) { prepare() }
         action(R.string.generic_port_import) { pick(72, Intent(Intent.ACTION_OPEN_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE)) }
@@ -67,6 +69,13 @@ class GenericPortSetupActivity : Activity() {
         body.addView(libraryButton(getString(R.string.game_library_back)) { if (!busy) finish() })
         setContentView(ScrollView(this).apply { setBackgroundColor(getColor(R.color.surface)); addView(body) })
         refresh()
+        if (source == null) scope.launch {
+            val cached = withContext(Dispatchers.IO) { runCatching { port.getExternalFilesDir(null)?.let { CachedGameSource.find(it, appId) } }.getOrNull() }
+            if (source == null && cached != null) {
+                source = cached.directory; prefs.edit().putString("source", cached.directory.absolutePath).apply()
+                if (!busy) refresh()
+            }
+        }
         if (intent.getBooleanExtra("launch_prepared", false) && GenericPortBuild.isReady(port)) {
             intent.removeExtra("launch_prepared")
             launch()
@@ -109,12 +118,12 @@ class GenericPortSetupActivity : Activity() {
         prefs.edit().putString("report", result.asText()).apply()
     }
     private fun prepare() = operation { assess() }
-    private fun download() {
+    private fun download(refresh: Boolean = false) {
         val credentials = TokenStore(this).read()
         if (credentials == null) { startActivity(Intent(this, GameLibraryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)); finish(); return }
         operation {
             assessment = null
-            GenericSourceDownload.fetch(port, credentials).collect { event ->
+            GenericSourceDownload.fetch(port, credentials, refresh).collect { event ->
                 when (event) {
                     is GenericSourceDownload.Event.Progress -> update(PlayerImage.Progress(event.step, event.fraction))
                     is GenericSourceDownload.Event.Complete -> {
@@ -145,6 +154,7 @@ class GenericPortSetupActivity : Activity() {
                         val gameLock = try { gameHandle.channel.tryLock() } catch (_: OverlappingFileLockException) { null }
                             ?: error(getString(R.string.generic_port_close_running))
                         gameLock.use {
+                            GenericPortBuild.prepareLaunch(port)
                             val account = TokenStore(this@GenericPortSetupActivity).read()?.accountName
                                 ?: error(getString(R.string.library_sign_in_first))
                             val previous = prefs.getString("save-account", null)

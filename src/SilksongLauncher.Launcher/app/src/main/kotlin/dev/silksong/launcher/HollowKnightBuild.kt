@@ -19,20 +19,12 @@ object HollowKnightBuild {
     private val target = PortTarget.HOLLOW_KNIGHT
     private const val GB = 1024L * 1024L * 1024L
 
-    private fun signature(context: Context): String {
-        val info = context.packageManager.getPackageInfo(context.packageName, 0)
-        @Suppress("DEPRECATION")
-        val version = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
-        return "hk-adapter-1|${HollowKnightSource.VERSION}|${target.unityVersion}|$version|${info.lastUpdateTime}"
-    }
+    private val identity = PortInstallation.Identity("hollow-knight", target.unityVersion, HollowKnightSource.VERSION)
 
-    @JvmStatic fun isReady(context: Context): Boolean = runCatching {
-        val pkg = File(context.filesDir, "pkg")
-        File(pkg, ".built").readText() == signature(context) &&
-            listOf("data.apk", ClassicPlayerImage.mainObbName(context), "lib/arm64/libunity.so",
-                "lib/arm64/libmain.so", "lib/arm64/libil2cpp.so").all { File(pkg, it).length() > 0 } &&
-            File(UnityDex.outputDir(context), "classes.jar").length() > 0
-    }.getOrDefault(false)
+    @JvmStatic fun isReady(context: Context): Boolean = PortInstallation.inspect(context.filesDir, context.packageName, identity) != null
+
+    /** Caller holds port.lock; app updates need only a fast expansion-file rename. */
+    @JvmStatic fun prepareLaunch(context: Context) = PortInstallation.prepareLaunch(context.filesDir, context.packageName, identity, ClassicPlayerImage.mainObbName(context))
 
     fun build(context: Context, source: File): Flow<PlayerImage.Progress> = channelFlow {
         check(context.filesDir.path.replace('\\', '/').endsWith("/games/hollow-knight"))
@@ -73,7 +65,8 @@ object HollowKnightBuild {
                 }
                 if (!Toolchain.canExecute(tools)) throw IOException("Android cannot run the downloaded compiler on this device.")
                 MonoRuntime.stage(context).collect { send(PlayerImage.Progress(it.step, it.fraction, it.detail)) }
-                UnityDex.build(context, unity)
+                pending.mkdirs()
+                UnityDex.build(context, unity, File(pending, "unity-dex"))
 
                 if (!PackageCompiler.isCurrent(unity, data, root)) PackageCompiler.compile(unity, data, context, root).collect {
                     send(PlayerImage.Progress(it.step, it.fraction, it.detail))
@@ -100,7 +93,7 @@ object HollowKnightBuild {
                 send(PlayerImage.Progress("Packing Hollow Knight", -1f, "Creating APK and expansion archives"))
                 ClassicPlayerImage.install(context, root, pending)
                 coroutineContext.ensureActive()
-                File(pending, ".built").writeText(signature(context))
+                PortInstallation.complete(pending, context.filesDir, context.packageName, identity, target.unityVersion)
                 if (pkg.exists() && !pkg.renameTo(previous)) throw IOException("Could not preserve the previous build.")
                 if (!pending.renameTo(pkg)) {
                     previous.renameTo(pkg)

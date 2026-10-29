@@ -28,6 +28,9 @@ class GameLibraryActivity : Activity() {
     private var filter = 0
     private var query = ""
     private var complete = false
+    private var hasLibrary = false
+    private var lastCheckpoint = 0L
+    private val checkedIds = linkedSetOf<Int>()
     private var loginOpen = false
     private var lastGridWidth = 0
     private var games = listOf<SteamLibraryScanner.Game>()
@@ -36,7 +39,7 @@ class GameLibraryActivity : Activity() {
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        current = java.lang.ref.WeakReference(this)
+        claimCurrent()
         query = state?.getString("query").orEmpty(); filter = state?.getInt("filter") ?: 0
         loginOpen = state?.getBoolean("login_open") == true
         buildUi()
@@ -98,9 +101,20 @@ class GameLibraryActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (!::grid.isInitialized) return
+        val resumed = claimCurrent()
         val current = TokenStore(this).read()?.accountName
-        if (current != account) { if (current == null) resetAccount() else loadAccount(current) }
+        if (resumed || current != account) { if (current == null) resetAccount() else loadAccount(current) }
         else { refreshAccount(); render() }
+    }
+
+    /** Only the visible library instance may checkpoint; an older back-stack instance cannot overwrite it. */
+    private fun claimCurrent(): Boolean {
+        val earlier = current?.get()
+        if (earlier === this) return false
+        earlier?.account?.let { earlier.saveCache(it) }
+        earlier?.apply { epoch++; scanJob?.cancel(); loadJob?.cancel(); scanJob = null; loadJob = null; hasLibrary = false }
+        current = java.lang.ref.WeakReference(this)
+        return true
     }
 
     private fun refreshAccount() {
@@ -109,8 +123,9 @@ class GameLibraryActivity : Activity() {
     }
 
     private fun resetAccount() {
+        account?.let { saveCache(it) }
         epoch++; scanJob?.cancel(); loadJob?.cancel(); scanJob = null; loadJob = null
-        account = null; games = emptyList(); candidates.clear(); complete = false
+        account = null; games = emptyList(); candidates.clear(); checkedIds.clear(); complete = false; hasLibrary = false
         scanButton.setText(R.string.library_scan_short); status.setText(R.string.library_sign_in_first)
         refreshAccount(); render()
     }
@@ -121,9 +136,12 @@ class GameLibraryActivity : Activity() {
         loadJob = scope.launch {
             val saved = withContext(Dispatchers.IO) { SteamLibraryStore.read(this@GameLibraryActivity, name) }
             if (generation != epoch) return@launch
-            if (saved != null) { games = saved.games; complete = saved.complete; saved.candidates.forEach { candidates[it.game.appId] = it }; render() }
-            status.setText(if (complete) R.string.library_cached else R.string.library_connecting)
-            if (forceScan || !complete) scan()
+            if (saved != null) {
+                games = saved.games; complete = saved.complete; hasLibrary = true; checkedIds.addAll(saved.checkedIds)
+                saved.candidates.forEach { candidates[it.game.appId] = it }; render()
+            }
+            status.setText(if (complete) R.string.library_cached else if (hasLibrary) R.string.library_cached_partial else R.string.library_connecting)
+            if (forceScan || !complete) scan(fresh = forceScan)
         }
     }
 
@@ -131,7 +149,13 @@ class GameLibraryActivity : Activity() {
         if (!::grid.isInitialized) return
         val extra = SteamGame.entries.filter { filter == 1 || installed(it.appId) || games.isEmpty() && !complete }
             .map { SteamLibraryScanner.Game(it.appId, it.title) }
-        val base = if (account == null) emptyList() else (games + extra).distinctBy { it.appId }
+        val local = java.io.File(filesDir, "games").listFiles().orEmpty().mapNotNull { dir ->
+            val id = dir.name.removePrefix("steam-").takeIf { dir.name.startsWith("steam-") }?.toIntOrNull() ?: return@mapNotNull null
+            if (id <= 0 || !installed(id)) return@mapNotNull null
+            val title = getSharedPreferences("steam-$id.setup", MODE_PRIVATE).getString("title", null)?.take(200) ?: "Steam game $id"
+            SteamLibraryScanner.Game(id, title)
+        }
+        val base = if (account == null) emptyList() else (games + extra + local).distinctBy { it.appId }
         visible = base.filter { row -> row.title.contains(query, true) && when (filter) {
             1 -> SteamGame.entries.any { it.appId == row.appId } || row.appId in candidates
             2 -> installed(row.appId)
@@ -143,7 +167,11 @@ class GameLibraryActivity : Activity() {
     private fun installed(appId: Int): Boolean = when (appId) {
         367520 -> HollowKnightBuild.isReady(SteamGame.HOLLOW_KNIGHT.context(this))
         1030300 -> java.io.File(filesDir, "pkg/lib/arm64/libil2cpp.so").length() > 0
-        else -> false
+        else -> {
+            val root = java.io.File(filesDir, "games/steam-$appId")
+            appId > 0 && (java.io.File(root, "pkg").isDirectory || java.io.File(root, "pkg.previous").isDirectory) &&
+                GenericPortBuild.isReady(GenericPortContext.wrap(this, appId))
+        }
     }
 
     private fun open(game: SteamLibraryScanner.Game) {
@@ -154,22 +182,38 @@ class GameLibraryActivity : Activity() {
             .putExtra("potential", candidate?.evidence?.potential == true))
     }
 
-    private fun scan() {
+    private fun scan(fresh: Boolean = true) {
         val credentials = TokenStore(this).read() ?: return
         if (scanJob?.isActive == true) return
-        complete = false; candidates.clear(); scanButton.setText(R.string.library_stop_short)
+        complete = false
+        if (fresh) checkedIds.clear()
+        val resume = checkedIds.toSet()
+        saveCache(credentials.accountName)
+        scanButton.setText(R.string.library_stop_short)
         val generation = ++epoch
         scanJob = scope.launch {
             try {
-                SteamLibraryScanner.scan(credentials).collect { event ->
+                SteamLibraryScanner.scan(credentials, resume).collect { event ->
                     if (generation != epoch) throw CancellationException()
                     when (event) {
-                        is SteamLibraryScanner.Event.Library -> { games = event.games; render(); saveCache(credentials.accountName) }
+                        is SteamLibraryScanner.Event.Library -> {
+                            games = event.games; hasLibrary = true
+                            val owned = games.map { it.appId }.toSet()
+                            checkedIds.retainAll(owned); candidates.keys.retainAll(owned)
+                            render(); saveCache(credentials.accountName)
+                        }
                         is SteamLibraryScanner.Event.Artwork -> withContext(Dispatchers.IO) {
                             runCatching { SteamArtwork.remember(this@GameLibraryActivity, event.appId, event.paths) }
                         }
                         is SteamLibraryScanner.Event.Progress -> status.text = getString(R.string.library_progress, event.checked, event.total, event.title)
                         is SteamLibraryScanner.Event.Found -> { candidates[event.candidate.game.appId] = event.candidate; if (filter == 1) render() }
+                        is SteamLibraryScanner.Event.Inspected -> {
+                            if (event.complete) {
+                                checkedIds += event.appId
+                                if (!event.unity) candidates.remove(event.appId)
+                            }
+                            saveCache(credentials.accountName, force = false)
+                        }
                         is SteamLibraryScanner.Event.Done -> { complete = true; status.text = getString(R.string.library_done, event.checked, candidates.size, event.incomplete) }
                     }
                 }
@@ -180,9 +224,13 @@ class GameLibraryActivity : Activity() {
         }
     }
 
-    private fun saveCache(name: String) {
-        val snapshot = SteamLibraryStore.Snapshot(games.toList(), candidates.values.toList(), complete)
-        scope.launch(Dispatchers.IO) { runCatching { SteamLibraryStore.write(this@GameLibraryActivity, name, snapshot) } }
+    private fun saveCache(name: String, force: Boolean = true) {
+        if (!hasLibrary || current?.get() !== this) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (!force && now - lastCheckpoint < 1000) return
+        lastCheckpoint = now
+        val snapshot = SteamLibraryStore.Snapshot(games.toList(), candidates.values.toList(), complete, checkedIds.toSet())
+        SteamLibraryStore.persist(this, name, snapshot)
     }
 
     private fun openLogin() {
@@ -197,14 +245,15 @@ class GameLibraryActivity : Activity() {
             loginOpen = false
             if (result != RESULT_OK) return
             val name = data?.getStringExtra(LoginActivity.EXTRA_ACCOUNT); val token = data?.getStringExtra(LoginActivity.EXTRA_TOKEN)
-            if (!name.isNullOrEmpty() && !token.isNullOrEmpty()) { TokenStore(this).write(TokenStore.Credentials(name, token)); loadAccount(name, true) }
+            if (!name.isNullOrEmpty() && !token.isNullOrEmpty()) { TokenStore(this).write(TokenStore.Credentials(name, token)); loadAccount(name) }
         } else if (request == ACCOUNT && result == RESULT_OK) {
             AchievementService.stopSafely(this); TokenStore(this).clear(); resetAccount(); openLogin()
         }
     }
 
     override fun onSaveInstanceState(out: Bundle) { out.putString("query", query); out.putInt("filter", filter); out.putBoolean("login_open", loginOpen); super.onSaveInstanceState(out) }
-    override fun onDestroy() { if (current?.get() === this) current = null; epoch++; scope.cancel(); super.onDestroy() }
+    override fun onPause() { account?.let { saveCache(it) }; super.onPause() }
+    override fun onDestroy() { account?.let { saveCache(it) }; if (current?.get() === this) current = null; epoch++; scope.cancel(); super.onDestroy() }
 
     private inner class Covers : BaseAdapter() {
         override fun getCount() = visible.size

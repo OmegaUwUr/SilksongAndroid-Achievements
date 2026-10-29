@@ -8,6 +8,7 @@
     <string name="library_ready">Installed ports</string>
     <string name="library_sign_in_first">Sign in to Steam to load your library.</string>
     <string name="library_cached">Saved library · rescan to refresh compatibility and Steam playtime.</string>
+    <string name="library_cached_partial">Saved scan results · continuing with games not yet inspected.</string>
     <string name="library_inspect_local">Inspect local game files</string>
     <string name="library_open_game">Open %1$s</string>
     <string name="library_installed">Installed port</string>
@@ -55,6 +56,7 @@
     <string name="game_page_account_saves">These local saves were used by a different Steam account. Reuse them with this account? Syncing can transfer their progress to this Steam account.</string>
     <string name="game_page_reuse_saves">Reuse local saves</string>
     <string name="generic_port_export">Export porting files for review</string>
+    <string name="generic_port_refresh_source">Check Steam for newer game files</string>
     <string name="generic_port_export_explain">For a port that needs an adapter, export its original managed game code, startup metadata and technical reports for review. The ZIP excludes saves, Steam credentials, media and engine packages. You choose where to save and whether to share it.</string>
     <string name="generic_port_export_done">Porting files exported. Share the ZIP with your port developer to review this exact game build.</string>
 </resources>

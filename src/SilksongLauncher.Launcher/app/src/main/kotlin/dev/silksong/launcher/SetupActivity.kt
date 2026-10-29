@@ -800,7 +800,7 @@ class SetupActivity : Activity() {
         }
         val creds = TokenStore.Credentials(account, token)
         TokenStore(this).write(creds)
-        startActivity(Intent(this, GameLibraryActivity::class.java).putExtra("scan_steam_library", true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+        startActivity(Intent(this, GameLibraryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
         finish()
     }
 

@@ -97,6 +97,11 @@ object GameCompatibility {
             }
             total
         }
+        readHeader(bytes.copyOf(count), file.length())
+    }.getOrNull()
+
+    internal fun readHeader(bytes: ByteArray, length: Long): Header? = runCatching {
+        val count = bytes.size
         if (count < 25) return@runCatching null
         val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
         val format = buffer.getInt(8)
@@ -104,7 +109,7 @@ object GameCompatibility {
         val start = if (format >= 22) 48 else 20
         if (start >= count) return@runCatching null
         val declaredLength = if (format >= 22) buffer.getLong(24) else (buffer.getInt(4).toLong() and 0xffffffffL)
-        if (declaredLength != file.length()) return@runCatching null
+        if (declaredLength != length) return@runCatching null
         val end = (start until minOf(count, start+128)).firstOrNull { bytes[it] == 0.toByte() }
             ?: return@runCatching null
         if (end+5 > count || bytes[16].toInt() !in 0..1) return@runCatching null

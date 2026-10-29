@@ -18,18 +18,13 @@ import kotlin.coroutines.coroutineContext
 /** Shared experimental classic-Mono pipeline; dedicated adapters retain their own source guards. */
 object GenericPortBuild {
     private const val GB = 1024L * 1024 * 1024
-    private fun signature(context: GenericPortContext): String {
-        val info = context.packageManager.getPackageInfo(context.packageName, 0)
-        @Suppress("DEPRECATION") val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
-        return "generic-classic-1|${context.appId}|$code|${info.lastUpdateTime}"
-    }
+    private fun identity(context: GenericPortContext) = PortInstallation.Identity("steam-${context.appId}")
     @JvmStatic fun isReady(context: Context): Boolean = runCatching {
         val port = context as? GenericPortContext ?: context.applicationContext as? GenericPortContext ?: GenericPortContext.active(context)
-        val pkg = File(port.filesDir, "pkg")
-        File(pkg, ".built").readText() == signature(port) &&
-            listOf("data.apk", ClassicPlayerImage.mainObbName(port), "lib/arm64/libunity.so", "lib/arm64/libmain.so",
-                "lib/arm64/libil2cpp.so").all { File(pkg, it).length() > 0 } && File(UnityDex.outputDir(port), "classes.jar").length() > 0
+        PortInstallation.inspect(port.filesDir, port.packageName, identity(port)) != null
     }.getOrDefault(false)
+
+    @JvmStatic fun prepareLaunch(context: GenericPortContext) = PortInstallation.prepareLaunch(context.filesDir, context.packageName, identity(context), ClassicPlayerImage.mainObbName(context))
 
     suspend fun prepare(context: GenericPortContext, source: File,
         progress: suspend (PlayerImage.Progress) -> Unit): GenericPortAssessment = withContext(Dispatchers.IO) {
@@ -140,7 +135,8 @@ object GenericPortBuild {
             val unity = UnityFetcher.rootFor(context)
             val tools = ToolchainFetcher.rootFor(context)
             val root = Il2cppConverter.rootFor(context)
-            UnityDex.build(context, unity)
+            pending.mkdirs()
+            UnityDex.build(context, unity, File(pending, "unity-dex"))
             if (!PackageCompiler.isCurrent(unity, data, root)) PackageCompiler.compile(unity, data, context, root).collect {
                 send(PlayerImage.Progress(it.step, it.fraction, it.detail))
             }
@@ -173,7 +169,7 @@ object GenericPortBuild {
             AndroidPluginPack.verified(context, target.unityVersion, data).values.forEach { it.first.copyTo(File(engine, it.first.name), overwrite = true) }
             BundledNativeLibraries.copyNotices(context, File(pending, "third-party/included-native-libraries"))
             coroutineContext.ensureActive()
-            File(pending, ".built").writeText(signature(context))
+            PortInstallation.complete(pending, context.filesDir, context.packageName, identity(context), target.unityVersion)
             if (pkg.exists()) check(pkg.renameTo(previous)) { "Could not preserve the previous working build." }
             if (!pending.renameTo(pkg)) { previous.renameTo(pkg); error("Could not publish the new build. The previous package was kept.") }
             previous.deleteRecursively()

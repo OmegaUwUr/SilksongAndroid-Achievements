@@ -44,7 +44,13 @@ or Valve release.
   depot. The revision-34 candidate corrects Hollow Knight to app 367520 / Linux
   depot 367523, checks Steam's platform metadata and validates exact Linux
   1.5.12620 files. Local game files remain supported.
-- **Steam library discovery and preparation (revision 43 candidate):** scans the authenticated
+- **Persistent library and installed ports (revision 44 candidate):** caches scanned
+  games and inspection progress per account, resumes interrupted scans, and keeps
+  completed Hollow Knight/generic ports usable after routine APK updates. Migrates
+  old build markers and expansion filenames without downloading or recompiling
+  the game. Recovers completed local sources; checking Steam for newer game files
+  is a separate action. See [update behavior and checks](docs/PERSISTENT_GAME_DATA.md).
+- **Steam library discovery and preparation (revision 44 candidate):** scans the authenticated
   library and Linux, Windows or macOS depot manifests for Unity candidates without
   downloading entire games. Owned games appear in the artwork library before the
   scan completes. Other entries offer **Prepare port**: owned source downloads,

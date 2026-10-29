@@ -88,7 +88,7 @@ object GameSteam {
             RandomAccessFile(File(game.context(activity).filesDir, "port.lock"), "rw").use { handle ->
                 val lock = try { handle.channel.tryLock() } catch (_: OverlappingFileLockException) { null }
                     ?: error(activity.getString(R.string.game_page_game_running))
-                lock.release()
+                lock.use { HollowKnightBuild.prepareLaunch(game.context(activity)) }
             }
         }
         val credentials = TokenStore(activity).read() ?: error(activity.getString(R.string.library_sign_in_first))

@@ -2,6 +2,32 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.44 (candidate)
+
+- Persists account-scoped library results and scan checkpoints independently of
+  the Activity. Reuses completed scans after restart, navigation, sign-in and APK
+  updates; interrupted scans skip both matching and non-matching games already
+  inspected. Manual Scan refreshes the library. Older caches retain their results.
+- Removes APK version/update timestamps from Hollow Knight and generic installed
+  port compatibility. Adopts known older build markers after checking the actual
+  player archives, engine identity, ARM64 libraries and matching expansion GUID.
+  Updates only the expansion filename needed by Unity; preserves game/source/save
+  bytes and does not invoke downloads or compilers to migrate a valid port.
+- Publishes player dex with each new port and retains the previous complete
+  package during a rebuild. Loads included native providers using the manifest
+  saved with that port, so a newer APK library bundle does not change its load set.
+- Restores downloaded sources when their saved selection is missing, reuses
+  completed manifest-bound snapshots locally, and adds an explicit Steam source
+  update action. Installed generic ports now appear in the Installed filter.
+
+Validation: all 110 production Kotlin files and both actual Java launch adapters
+compile against Android API 35 and the configured dependencies. 28 filesystem,
+cache and update-regression checks, 41 Steam library/dependency checks, 57 generic
+preparation checks and 17 plugin-pack checks pass. The Java adapters use an explicit
+Unity hosting API fixture; no Android/native/game code is executed. APK assembly
+remains manual. Device upgrade, offline and gameplay testing are still required.
+See docs/PERSISTENT_GAME_DATA.md. Slime Rancher's existing adapter blockers remain.
+
 ## 1.0.3-achievements.43 (candidate)
 
 - Adds checked local UnityFS bundle inspection/conversion, including legacy Unity

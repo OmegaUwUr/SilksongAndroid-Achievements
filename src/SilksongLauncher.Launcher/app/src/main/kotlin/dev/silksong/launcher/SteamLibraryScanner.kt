@@ -26,10 +26,13 @@ object SteamLibraryScanner {
         data class Progress(val checked: Int, val total: Int, val title: String) : Event()
         data class Found(val candidate: Candidate) : Event()
         data class Artwork(val appId: Int, val paths: Map<String, List<String>>) : Event()
+        data class Inspected(val appId: Int, val complete: Boolean, val unity: Boolean) : Event()
         data class Done(val checked: Int, val total: Int, val incomplete: Int) : Event()
     }
 
-    fun scan(credentials: TokenStore.Credentials): Flow<Event> = flow {
+    internal fun remainingGames(games: List<Game>, checkedIds: Set<Int>): List<Game> = games.filterNot { it.appId in checkedIds }
+
+    fun scan(credentials: TokenStore.Credentials, checkedIds: Set<Int> = emptySet()): Flow<Event> = flow {
         SteamSession().use { session ->
             runInterruptible { session.logOn(credentials) }
             val unified = requireNotNull(session.steamClient.getHandler(SteamUnifiedMessages::class.java))
@@ -46,10 +49,11 @@ object SteamLibraryScanner {
                 .sortedBy { it.title.lowercase(java.util.Locale.ROOT) }
             emit(Event.Library(games))
             val apps = requireNotNull(session.steamClient.getHandler(SteamApps::class.java))
-            var checked = 0
+            val remaining = remainingGames(games, checkedIds)
+            var checked = games.size - remaining.size
             var incomplete = 0
             SteamManifestInventory(session).use { inventory ->
-                for (batch in games.chunked(50)) {
+                for (batch in remaining.chunked(50)) {
                     currentCoroutineContext().ensureActive()
                     var batchComplete = false
                     val products = try {
@@ -90,6 +94,7 @@ object SteamLibraryScanner {
                         val evidence = inspected.copy(details = inspected.details + planIssues)
                         if (evidence.unity) emit(Event.Found(Candidate(game, evidence)))
                         checked++
+                        emit(Event.Inspected(game.appId, complete, evidence.unity))
                     }
                 }
             }

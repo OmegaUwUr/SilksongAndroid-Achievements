@@ -32,6 +32,7 @@ public final class GenericPortActivity extends GameActivity {
             if (runtimeLock == null || buildLock == null || getIntent().getIntExtra("app_id", 0) != port.getAppId() ||
                 GenericPortContext.active(getBaseContextForSelection()).getAppId() != port.getAppId() || !GenericPortBuild.isReady(port))
                 throw new IllegalStateException("The selected port is not ready, changed, or is being rebuilt");
+            GenericPortBuild.prepareLaunch(port);
             BundledNativeLibraries.preloadForGame(port, new File(getFilesDir(), "pkg/lib/arm64"));
             super.onCreate(state);
         } catch (Exception error) {
