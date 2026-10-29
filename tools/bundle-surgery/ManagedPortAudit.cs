@@ -9,7 +9,7 @@ internal static class ManagedPortAudit
     internal sealed record Import(string Assembly, string Library, string EntryPoint);
     internal sealed record Report(int Schema, string[] Assemblies, Import[] NativeImports,
         string[] MissingAssemblies, string[] MissingMembers, string[] DesktopApis, string[] Diagnostics,
-        bool AndroidProfileChecked, string[] PendingProfileAssemblies);
+        bool AndroidProfileChecked, string[] PendingProfileAssemblies, string[] BundleLoadingIssues);
 
     internal static int Run(string data, string unity, string output, string? overrides = null)
     {
@@ -30,6 +30,7 @@ internal static class ManagedPortAudit
         var desktop = new SortedSet<string>(StringComparer.Ordinal);
         var members = new SortedSet<string>(StringComparer.Ordinal);
         var diagnostics = new List<string>();
+        var bundleIssues = new SortedSet<string>(StringComparer.Ordinal);
         var pendingProfile = new SortedSet<string>(StringComparer.Ordinal);
         var managed = Path.Combine(data, "Managed");
         var gameFiles = Directory.Exists(managed) ? Directory.GetFiles(managed, "*.dll") : [];
@@ -96,6 +97,8 @@ internal static class ManagedPortAudit
                     foreach (var instruction in method.Body.Instructions)
                     {
                         if (instruction.Operand is not MethodReference call) continue;
+                        var bundleIssue = BundleLoadingAudit.Issue(method, instruction, call);
+                        if (bundleIssue is not null) bundleIssues.Add(name + " -> " + bundleIssue);
                         if (call.DeclaringType.FullName.StartsWith("Microsoft.Win32.Registry", StringComparison.Ordinal) ||
                             call.DeclaringType.FullName == "System.Diagnostics.Process" && call.Name == "Start")
                             desktop.Add(name + " -> " + call.DeclaringType.FullName + "." + call.Name);
@@ -124,7 +127,7 @@ internal static class ManagedPortAudit
         return new Report(2, gameFiles.Select(Path.GetFileName).OfType<string>().Order().ToArray(),
             imports.Distinct().OrderBy(i => i.Library).ThenBy(i => i.EntryPoint).ToArray(),
             missing.ToArray(), members.Take(1000).ToArray(), desktop.ToArray(), diagnostics.ToArray(),
-            unity is not null, pendingProfile.ToArray());
+            unity is not null, pendingProfile.ToArray(), bundleIssues.ToArray());
     }
 
     internal static int RuntimeInitializers(string packages, string unity, string output)

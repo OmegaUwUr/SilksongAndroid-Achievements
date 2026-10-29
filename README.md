@@ -44,7 +44,7 @@ or Valve release.
   depot. The revision-34 candidate corrects Hollow Knight to app 367520 / Linux
   depot 367523, checks Steam's platform metadata and validates exact Linux
   1.5.12620 files. Local game files remain supported.
-- **Steam library discovery and preparation (revision 42 candidate):** scans the authenticated
+- **Steam library discovery and preparation (revision 43 candidate):** scans the authenticated
   library and Linux, Windows or macOS depot manifests for Unity candidates without
   downloading entire games. Owned games appear in the artwork library before the
   scan completes. Other entries offer **Prepare port**: owned source downloads,
@@ -57,6 +57,12 @@ or Valve release.
   unused declarations remain subject to review. Mono wrappers are checked against the
   selected managed profile, and packs cannot replace Android system libraries. Cult
   of the Lamb and Slime Rancher still need engine/content/platform adapters.
+- **Local bundle conversion (revision 43 candidate):** checks and retargets bounded
+  UnityFS content, including Unity 2019 serialized layouts. Inspects content even
+  when other requirements remain blocked and checks CRC/catalog loading paths.
+  **Export porting files for review** provides original code/startup metadata for
+  adapter work. [Slime Rancher status and source collection](docs/SLIME_RANCHER_PORT.md)
+  explains what is still missing; this does not enable the game to compile.
 - **Included Android native libraries (revision 41 candidate):** eight real ARM64 C
   libraries cover SQLite, LZ4, Zstandard, Ogg/Vorbis and PNG. Preparation identifies
   matching declarations; **Add included libraries** creates a game-bound pack and
@@ -206,7 +212,7 @@ for the timing logs and device checks.
 
 ## Getting started
 
-### Game options and compatibility (revision 42 candidate)
+### Game options and compatibility (revision 43 candidate)
 
 First launch opens **Steam sign-in**, then an automatically scanned **Library**.
 Portrait covers adapt to phone/tablet widths. Tap a cover for its hero artwork,

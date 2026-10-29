@@ -40,12 +40,10 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
                 File(data, "Managed/Metadata/global-metadata.dat").exists() ||
                 listOf("GameAssembly.dll", "GameAssembly.so", "libil2cpp.so").any { File(data.parentFile, it).isFile })
                 blockers += "A complete Mono managed build is required. Desktop IL2CPP machine code cannot be rebuilt from these files."
-            // Loose scenes are supported here. Do not package unconverted Addressables/AssetBundles as if ready.
-            if (File(data, "StreamingAssets/aa").exists() || data.walkTopDown().filter { it.isFile }.any {
-                    it.extension.lowercase(Locale.ROOT) in listOf("bundle", "assetbundle") ||
-                        (it.length() >= 7 && it.inputStream().use { input -> val bytes = ByteArray(7)
-                            input.read(bytes) == 7 && String(bytes, Charsets.US_ASCII) in listOf("UnityFS", "UnityRa", "UnityWe") }) })
-                blockers += "This game uses AssetBundles/Addressables. Their catalog, platform paths and shaders need an adapter; the generic classic-scene converter cannot copy them unchanged."
+            // Local UnityFS content has a checked conversion path. Addressables catalogs still need a provider.
+            if (File(data, "StreamingAssets/aa").exists())
+                blockers += "This game uses AssetBundles/Addressables catalogs. Catalog dependencies, checksums and platform paths need an adapter; local bundle conversion alone cannot adapt the catalog."
+            facts += "Local UnityFS bundles are inspected recursively and converted with the source's exact Unity version, source platform and Vulkan checks. Other bundle formats and Addressables catalogs require an adapter."
             if (!File(data, "level0").isFile) blockers += "A classic scene tree starting with level0 is required."
             val registration = listOf("ScriptingAssemblies.json", "RuntimeInitializeOnLoads.json").filter { !File(data, it).isFile }
             if (registration.isNotEmpty() && header != null && !UnityDistribution.supports(header.version))
@@ -79,6 +77,7 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             if (desktop.isNotEmpty()) blockers += "Desktop API references need an Android code-path review or replacement: ${desktop.take(30).joinToString()}. Declared references do not prove these methods execute on Android."
             val diagnostics = strings(managed, "diagnostics")
             if (diagnostics.isNotEmpty()) blockers += "Managed metadata could not be verified: ${diagnostics.take(20).joinToString()}"
+            if (managed.has("bundleLoadingIssues")) blockers += strings(managed, "bundleLoadingIssues").take(30)
             val plugins = try { AndroidPluginPack.verified(context, initial.version!!, initial.data!!) }
                 catch (error: Exception) { blockers += "Imported Android plugin pack was rejected: ${error.message}"; emptyMap() }
             val pageSize = android.system.Os.sysconf(android.system.OsConstants._SC_PAGESIZE)
@@ -109,11 +108,20 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             if (assets != null) {
                 require(assets.getInt("schemaVersion") == 1 && Regex("[a-f0-9]{64}").matches(assets.getString("sourceTreeSha256")))
                 val census = assets.getJSONObject("census")
+                if (census.optInt("bundles", 0) > 0) {
+                    if (!managed.has("bundleLoadingIssues")) blockers += "Update the managed audit tool to inspect bundle CRC and catalog loading before compiling local bundles."
+                }
                 val missingShaders = census.getInt("missingVulkanShaders")
-                if (missingShaders != 0) blockers += "$missingShaders shaders lack a Vulkan slice. Shader source or an Android shader adapter is required."
-                else facts += "Vulkan shader inspection: ${census.getInt("shaders")} shaders checked."
                 val assetProblems = assets.getJSONArray("diagnostics")
-                if (assetProblems.length() > 0) blockers += "Classic assets failed layout validation. See the compatibility report in game storage."
+                if (missingShaders != 0) blockers += "$missingShaders inspected shaders lack a Vulkan slice. Shader source or an Android shader adapter is required."
+                facts += "Content inspection: ${census.getInt("shaders")} shaders inspected in loose files and local bundles; ${assetProblems.length()} content/layout problems."
+                if (assetProblems.length() > 0) {
+                    for (index in 0 until minOf(assetProblems.length(), 12)) {
+                        val problem = assetProblems.getJSONObject(index)
+                        blockers += "Content ${problem.getString("code")}: ${problem.optString("relativePath", "").takeIf { it != "null" }.orEmpty()} ${problem.getString("message")}"
+                    }
+                    if (assetProblems.length() > 12) blockers += "Additional content diagnostics are available in the exported technical report."
+                }
             } else if (!initial.verified) facts += "Scene and shader conversion has not been validated yet."
             facts += "Native declarations include unused wrapper methods. Runtime reachability is unverified; requirements stay blocked until a reviewed Android path or replacement exists. Passing metadata/export checks does not establish gameplay compatibility."
             return initial.copy(facts = facts.distinct(), blockers = blockers.distinct(), verified = assets != null || initial.verified,

@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 42)
+# Reusable Unity preparation and experimental compilation (revision 43)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -46,7 +46,7 @@ retargeted in place. Assessment reports can be shared from the setup screen.
 | --- | --- | --- |
 | Exact Android engine / IL2CPP | Pinned **6000.0.50f1 / 6000.0.61f1**; automatic exact public release resolution for additional **stable 6000.0 patches**, with layout/device checks | Other engine families/streams, custom stamps and changed layouts; do not substitute a nearby release |
 | Managed game code | Owned Mono assemblies, Android engine/BCL replacements, reference and member resolution against rebuilt packages; portable framework facades | Desktop IL2CPP, conflicting desktop class libraries, missing managed SDKs, incompatible desktop APIs |
-| Assets | Linux/Windows 64-bit/macOS classic scene trees with consistent source targets, hash-pinned generated manifests, Vulkan shader checks and Android retargeting | Generic Addressables/AssetBundles, D3D/Metal-only shaders, unsupported texture/platform features |
+| Assets | Linux/Windows 64-bit/macOS classic scene trees and bounded local UnityFS bundles with consistent source targets/versions, hash-pinned manifests, Vulkan checks and Android retargeting | Addressables, remote/cache/catalog/hash loading, unverified CRC/offset arguments, oversized bundles, D3D/Metal-only shaders, unsupported texture/platform features |
 | Native plugins | Import matching Android ARM64 plugins; inspect ELF, Android API note, page alignment, exports and dependency closure | Wrong SDK ABI, Windows/Linux binaries, missing Android implementations, static `__Internal` integrations |
 | Controls | Shared virtual Input System gamepad; reads Input System or legacy touchscreen events; physical controllers through the selected Android engine | Keyboard-only bindings, legacy gamepad/Rewired adaptations, game-specific actions |
 | Steam integration | Dedicated Silksong/HK adapters remain isolated | Generic Steam native API routing, earned-achievement hooks and verified Cloud paths; generic ports cannot use another game's App ID/socket |
@@ -132,8 +132,15 @@ content will run on Android. No Cult of the Lamb port or gameplay test was perfo
 ## Slime Rancher assessment
 
 The owner's Linux source report identifies Unity **2019.4.29f1**. It still needs
-an exact older-engine provider and bundle/shader handling; Linux source alone
+an exact older-engine provider and actual game-code/content review; Linux source alone
 does not establish compatibility with Android.
+
+Revision 43 adds local UnityFS conversion and content inspection before other
+blockers, plus native-call evidence and original-code exports. It has synthetic
+Unity 2019 bundle coverage, not a verified Slime Rancher content adapter. Catalog,
+CRC and remote/cache loading paths remain guarded. See the [Slime Rancher work and
+source-export guide](SLIME_RANCHER_PORT.md) for the exact engine investigation,
+remaining work and files needed. The Unity 2019 engine provider is not enabled.
 
 | Reported requirement | Current interpretation |
 | --- | --- |

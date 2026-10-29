@@ -36,6 +36,17 @@ object GenericPortBuild {
         withLock(context) { assess(context, source, progress) }
     }
 
+    suspend fun exportEvidence(context: GenericPortContext, source: File, output: java.io.OutputStream,
+        progress: suspend (PlayerImage.Progress) -> Unit) = withContext(Dispatchers.IO) {
+        withLock(context) {
+            val report = assess(context, source, progress)
+            val data = report.data ?: error("Choose complete original game files first.")
+            val version = report.version ?: error("The source Unity version is unreadable.")
+            progress(PlayerImage.Progress("Exporting game code and compatibility reports", -1f))
+            PortEvidenceExport.write(context.appId, data, version, Il2cppConverter.rootFor(context), report.asText(), output)
+        }
+    }
+
     suspend fun addIncludedLibraries(context: GenericPortContext, source: File,
         progress: suspend (PlayerImage.Progress) -> Unit): GenericPortAssessment = withContext(Dispatchers.IO) {
         withLock(context) {
@@ -79,16 +90,22 @@ object GenericPortBuild {
         // Check native declarations before fetching hundreds of megabytes of engine components.
         val managedPath = File(root, "managed-port-audit.json")
         PlayerImage.run(surgery, context, listOf("inspect-managed-port", initial.data!!.absolutePath, "-", managedPath.absolutePath))
+        val callSites = File(root, "native-call-sites.json").also { it.delete() }
+        progress(PlayerImage.Progress("Inspecting native backend call sites", -1f))
+        PlayerImage.run(surgery, context, listOf("inspect-native-call-sites", initial.data.absolutePath, callSites.absolutePath))
         fun json(file: File): JSONObject { require(file.length() in 1L..(32 * 1024 * 1024L)); return JSONObject(file.readText()) }
-        val nativeCheck = GenericPortAssessment.finish(initial, context, json(managedPath), null)
-        if (nativeCheck.blockers.isNotEmpty()) return nativeCheck
-        val target = PortTarget.classic(context.appId, initial.version, initial.sourcePlatform!!)
-        progress(PlayerImage.Progress("Inspecting scenes and Vulkan shaders", -1f))
-        val assetPath = File(root, "classic-inventory.json")
-        PlayerImage.run(surgery, context, listOf("manifest-portable-tree", initial.data.absolutePath,
-            target.sourcePlatform.toString(), assetPath.absolutePath))
-        val preliminary = GenericPortAssessment.finish(initial, context, json(managedPath), json(assetPath))
+        // Content inspection is read-only and independent of engine/native eligibility. Report
+        // real shader/bundle failures even when another requirement currently blocks compilation.
+        val assetPath = File(root, "classic-inventory.json").also { it.delete() }
+        val content = if (initial.sourcePlatform in PortTarget.desktopPlatforms) {
+            progress(PlayerImage.Progress("Inspecting scenes, local bundles and Vulkan shaders", -1f))
+            PlayerImage.run(surgery, context, listOf("inspect-portable-content", initial.data.absolutePath,
+                initial.sourcePlatform.toString(), assetPath.absolutePath))
+            json(assetPath)
+        } else null
+        val preliminary = GenericPortAssessment.finish(initial, context, json(managedPath), content)
         if (preliminary.blockers.isNotEmpty()) return preliminary
+        val target = PortTarget.classic(context.appId, initial.version, initial.sourcePlatform!!)
         if (!UnityFetcher.isPresent(unity, target)) UnityFetcher.fetch(unity, target = target).collect {
             progress(PlayerImage.Progress(it.step, it.fraction, it.detail))
         }

@@ -94,35 +94,46 @@ internal static class SerializedFileTransformer
             manager.LoadClassPackage(ClassDataPath);
             var file = manager.LoadAssetsFile(Path.GetFullPath(input));
             manager.LoadClassDatabaseFromPackage(file.file.Metadata.UnityVersion);
-            var shadersSeen = 0;
-            var vulkanShaders = 0;
-            var missingVulkanShaders = 0;
-            foreach (var asset in file.file.GetAssetsOfType(AssetClassID.Shader))
-            {
-                shadersSeen++;
-                var shader = manager.GetBaseField(file, asset);
-                if (shader is not null && HasVulkan(shader))
-                {
-                    vulkanShaders++;
-                }
-                else
-                {
-                    missingVulkanShaders++;
-                }
-            }
-
-            var target = checked((int)file.file.Metadata.TargetPlatform);
-            return new TransformReport(
-                shadersSeen,
-                vulkanShaders,
-                missingVulkanShaders,
-                target,
-                target);
+            return InspectLoaded(manager, file);
         }
         finally
         {
             manager.UnloadAll();
         }
+    }
+
+    internal static TransformReport InspectLoaded(AssetsManager manager, AssetsFileInstance file, bool normalized = false)
+    {
+        var shadersSeen = 0;
+        var vulkanShaders = 0;
+        var missingVulkanShaders = 0;
+        foreach (var asset in file.file.GetAssetsOfType(AssetClassID.Shader))
+        {
+            shadersSeen++;
+            var shader = manager.GetBaseField(file, asset);
+            if (shader is not null && HasVulkan(shader))
+            {
+                if (normalized)
+                {
+                    if (shader["platforms.Array"].AsArray.size != 1 || shader["platforms.Array"][0].AsInt != VulkanPlatform)
+                        throw new InvalidDataException("Converted bundle shader retains another graphics platform.");
+                    VerifyNormalizedChunks(shader);
+                }
+                vulkanShaders++;
+            }
+            else
+            {
+                missingVulkanShaders++;
+            }
+        }
+
+        var target = checked((int)file.file.Metadata.TargetPlatform);
+        return new TransformReport(
+            shadersSeen,
+            vulkanShaders,
+            missingVulkanShaders,
+            target,
+            target);
     }
 
     internal static LoadedTransformResult TransformLoaded(

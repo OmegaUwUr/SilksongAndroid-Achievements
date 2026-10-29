@@ -6,7 +6,7 @@ import java.util.Locale
 object PortDependencyAudit {
     fun nativeLibrary(path: String): Boolean = path.lowercase(Locale.ROOT).let {
         it.endsWith(".dll") && !it.contains("/managed/") && !it.startsWith("managed/") ||
-            it.endsWith(".dylib") || Regex(".*\\.so(?:\\.[0-9.]+)?$").matches(it)
+            it.endsWith(".dylib") || it.endsWith(".bundle") || Regex(".*\\.so(?:\\.[0-9.]+)?$").matches(it)
     }
 
     fun requirements(paths: Collection<String>): List<String> {

@@ -53,6 +53,8 @@ internal static class Program
             Console.Error.WriteLine("  manifest-classic-tree <source-root> <report.json>");
             Console.Error.WriteLine("  retarget-classic-tree <source-root> <output-root> <profile-manifest.json> <report.json>");
             Console.Error.WriteLine("  manifest-portable-tree <source-root> <source-target: 24|19|2> <report.json>");
+            Console.Error.WriteLine("  inspect-portable-content <source-root> <source-target: 24|19|2> <report.json> — diagnostic report, including UnityFS content");
+            Console.Error.WriteLine("  inspect-native-call-sites <source-root> <report.json> — metadata for reviewing native backend adapters");
             Console.Error.WriteLine("  create-portable-profile-manifest <source-root> <steam-ID> <game-version> <unity-version> <source-target> <manifest.json>");
             Console.Error.WriteLine("  retarget-portable-tree <source-root> <output-root> <manifest.json> <source-target> <report.json>");
             Console.Error.WriteLine("  extract-vulkan-android <in.bundle> <out.bundle>  — extract Vulkan SPIR-V slice + retarget to Android (the main pipeline command)");
@@ -76,6 +78,7 @@ internal static class Program
             "redirect-file-replace" when args.Length >= 3 => RedirectFileReplace.Run(args[1], args[2], args.Skip(3).Contains("--allow-empty")),
             "hook-port-services" when args.Length == 3 => HookPortServices.Run(args[1], args[2]),
             "inspect-managed-port" when args.Length == 4 => ManagedPortAudit.Run(args[1], args[2], args[3]),
+            "inspect-native-call-sites" when args.Length == 3 => NativeCallEvidence.Run(args[1], args[2]),
             "inspect-managed-port" when args.Length == 5 => ManagedPortAudit.Run(args[1], args[2], args[3], args[4]),
             "list-port-initializers" when args.Length == 4 => ManagedPortAudit.RuntimeInitializers(args[1], args[2], args[3]),
             "retarget-tree" when args.Length >= 3 => RetargetTree(args[1], args[2]),
@@ -84,6 +87,8 @@ internal static class Program
                 ClassicTreeCommands.Manifest(args[1], args[2]),
             "manifest-portable-tree" when args.Length == 4 && int.TryParse(args[2], out var inspectTarget) =>
                 ClassicTreeCommands.Manifest(args[1], args[3], inspectTarget),
+            "inspect-portable-content" when args.Length == 4 && int.TryParse(args[2], out var contentTarget) =>
+                ClassicTreeCommands.InspectContent(args[1], args[3], contentTarget),
             "create-classic-profile-manifest" when args.Length == 6 =>
                 ClassicTreeCommands.CreateProfileManifest(args[1], args[2], args[3], args[4], args[5]),
             "create-portable-profile-manifest" when args.Length == 7 && int.TryParse(args[5], out var createTarget) =>

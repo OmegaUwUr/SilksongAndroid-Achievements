@@ -54,4 +54,7 @@
     <string name="game_page_conflicts_kept">Newer saves were kept. Conflicting files were not replaced.</string>
     <string name="game_page_account_saves">These local saves were used by a different Steam account. Reuse them with this account? Syncing can transfer their progress to this Steam account.</string>
     <string name="game_page_reuse_saves">Reuse local saves</string>
+    <string name="generic_port_export">Export porting files for review</string>
+    <string name="generic_port_export_explain">For a port that needs an adapter, export its original managed game code, startup metadata and technical reports for review. The ZIP excludes saves, Steam credentials, media and engine packages. You choose where to save and whether to share it.</string>
+    <string name="generic_port_export_done">Porting files exported. Share the ZIP with your port developer to review this exact game build.</string>
 </resources>

@@ -98,7 +98,7 @@ internal static class SyntheticAssetFactory
         {
             Header = new AssetsFileHeader
             {
-                Version = 22,
+                Version = unityVersion.StartsWith("2019.", StringComparison.Ordinal) ? 21u : 22u,
                 Endianness = false,
             },
             Metadata = new AssetsFileMetadata

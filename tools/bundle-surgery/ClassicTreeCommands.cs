@@ -16,12 +16,27 @@ internal static class ClassicTreeCommands
         try
         {
             var inventory = ClassicPlayerTree.Discover(sourceRoot, sourceTarget);
-            ClassicTreeConverter.WriteInventoryReport(inventory, reportPath);
-            return inventory.Diagnostics.Count == 0 ? 0 : 3;
+            var report = ClassicTreeConverter.WriteInventoryReport(inventory, reportPath);
+            return report.Diagnostics.Count == 0 ? 0 : 3;
         }
         catch (Exception error)
         {
             Console.Error.WriteLine($"manifest-classic-tree failed: {error.Message}");
+            return 1;
+        }
+    }
+
+    // Preparation needs a complete diagnostic report even when the source is not buildable.
+    internal static int InspectContent(string sourceRoot, string reportPath, int sourceTarget)
+    {
+        try
+        {
+            ClassicTreeConverter.WriteInventoryReport(ClassicPlayerTree.Discover(sourceRoot, sourceTarget), reportPath);
+            return 0;
+        }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine("Content inspection could not publish its report: " + error.Message);
             return 1;
         }
     }
@@ -185,7 +200,7 @@ internal static class ClassicTreeCommands
                 file.Sha256,
                 file.Kind switch
                 {
-                    ClassicFileKind.Serialized => ClassicManifestAction.Transform,
+                    ClassicFileKind.Serialized or ClassicFileKind.Bundle => ClassicManifestAction.Transform,
                     ClassicFileKind.NativePlugin => ClassicManifestAction.Exclude,
                     ClassicFileKind.ReplacementRequired =>
                         ClassicManifestAction.ReplaceAtAssembly,

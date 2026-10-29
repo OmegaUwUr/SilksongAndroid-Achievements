@@ -9,6 +9,7 @@ using AssetsTools.NET.Extra;
 internal enum ClassicFileKind
 {
     Serialized,
+    Bundle,
     Sidecar,
     Media,
     NativePlugin,
@@ -107,6 +108,7 @@ internal static partial class ClassicPlayerTree
         var root = Path.GetFullPath(sourceRoot);
         var files = new List<ClassicFileEntry>();
         var diagnostics = new List<ClassicDiagnostic>();
+        var versions = new Dictionary<string, string>(StringComparer.Ordinal);
 
         if (!Directory.Exists(root))
         {
@@ -135,7 +137,8 @@ internal static partial class ClassicPlayerTree
                 null));
             if (kind == ClassicFileKind.Serialized)
             {
-                ValidateSourceTarget(path, relativePath, diagnostics, sourceTarget);
+                var version = ValidateSourceTarget(path, relativePath, diagnostics, sourceTarget);
+                if (version is not null) versions.Add(relativePath, version);
             }
         }
 
@@ -180,6 +183,11 @@ internal static partial class ClassicPlayerTree
                     StringComparison.OrdinalIgnoreCase));
             identity = ReadSourceIdentity(root, globalManagersPath, diagnostics);
         }
+
+        if (identity is not null)
+            foreach (var (path, version) in versions.Where(row => row.Value != identity.UnityVersion))
+                diagnostics.Add(new ClassicDiagnostic("MIXED_UNITY_VERSION",
+                    $"Serialized file uses Unity {version}, while globalgamemanagers uses {identity.UnityVersion}.", path));
 
         return CreateInventory(root, files, diagnostics, identity, sourceTarget);
     }
@@ -551,6 +559,9 @@ internal static partial class ClassicPlayerTree
     private static ClassicFileKind Classify(string path, string relativePath)
     {
         if (IsSidecar(path)) return ClassicFileKind.Sidecar;
+        if (UnityFsContent.HasBundleSignature(path) || Path.GetExtension(path).Equals(".assetbundle", StringComparison.OrdinalIgnoreCase) ||
+            !relativePath.StartsWith("Plugins/", StringComparison.OrdinalIgnoreCase) && Path.GetExtension(path).Equals(".bundle", StringComparison.OrdinalIgnoreCase))
+            return ClassicFileKind.Bundle;
         var name = Path.GetFileName(path);
         if (name.Equals("unity default resources", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("unity_builtin_extra", StringComparison.OrdinalIgnoreCase))
@@ -567,7 +578,7 @@ internal static partial class ClassicPlayerTree
 
         return Path.GetExtension(path).ToLowerInvariant() switch
         {
-            ".so" or ".dll" or ".dylib" => ClassicFileKind.NativePlugin,
+            ".so" or ".dll" or ".dylib" or ".bundle" => ClassicFileKind.NativePlugin,
             ".mp4" or ".webm" or ".ogv" or ".wav" or ".ogg" or ".mp3" =>
                 ClassicFileKind.Media,
             _ => ClassicFileKind.PassThrough,
@@ -635,7 +646,7 @@ internal static partial class ClassicPlayerTree
         int.TryParse(profileId[6..], NumberStyles.None, CultureInfo.InvariantCulture, out var id) &&
         id > 0 && id is not (1030300 or 367520) && profileId == "steam-" + id.ToString(CultureInfo.InvariantCulture);
 
-    private static void ValidateSourceTarget(
+    private static string? ValidateSourceTarget(
         string path,
         string relativePath,
         List<ClassicDiagnostic> diagnostics,
@@ -652,6 +663,7 @@ internal static partial class ClassicPlayerTree
                     $"Serialized file does not match source target {sourceTarget}: {relativePath}",
                     relativePath));
             }
+            return file.file.Metadata.UnityVersion;
         }
         catch (Exception error)
         {
@@ -659,6 +671,7 @@ internal static partial class ClassicPlayerTree
                 "UNREADABLE_SERIALIZED_FILE",
                 $"Serialized file could not be read: {relativePath}: {error.Message}",
                 relativePath));
+            return null;
         }
         finally
         {
@@ -778,7 +791,7 @@ internal static partial class ClassicPlayerTree
         var valid = manifestFile.Action switch
         {
             ClassicManifestAction.Transform =>
-                inventoryFile.Kind == ClassicFileKind.Serialized,
+                inventoryFile.Kind is ClassicFileKind.Serialized or ClassicFileKind.Bundle,
             ClassicManifestAction.Copy =>
                 inventoryFile.Kind is ClassicFileKind.Sidecar or
                     ClassicFileKind.Media or ClassicFileKind.PassThrough,

@@ -10,6 +10,7 @@ fun main(args: Array<String>) {
     fun test(name: String, body: () -> Unit) { body(); cases++; println("PASS: $name") }
     nativeRequirementChecks(::test)
     bundledLibraryChecks(::test)
+    portEvidenceExportChecks(::test)
     val fixture = File(args[0])
     test("Python and Android reserve the same public system library names") {
         check(File(fixture, "system-libraries.txt").readLines().toSet() == NativePortRequirements.androidSystemLibraries)
@@ -140,11 +141,12 @@ fun main(args: Array<String>) {
             val metadata = write("il2cpp_data/Metadata/global-metadata.dat", byteArrayOf(1))
             check(GenericPortAssessment.source(data).blockers.any { "Desktop IL2CPP" in it }); metadata.delete()
         }
-        test("Addressables and renamed UnityFS bundles cannot enter the classic copier") {
+        test("Addressables stay blocked and local bundles require full content conversion") {
             val aa = File(data, "StreamingAssets/aa").apply { mkdirs() }
             check(GenericPortAssessment.source(data).blockers.any { "AssetBundles/Addressables" in it }); aa.delete()
             val bundle = write("StreamingAssets/renamed.bytes", "UnityFS\u0000anything".toByteArray())
-            check(GenericPortAssessment.source(data).blockers.any { "AssetBundles/Addressables" in it }); bundle.delete()
+            val local = GenericPortAssessment.source(data)
+            check(!local.canBuild && !local.verified && local.facts.any { "Local UnityFS" in it }); bundle.delete()
         }
         test("incomplete runtime files identify the dependency before compilation") {
             File(data, "Managed/UnityEngine.UI.dll").delete()

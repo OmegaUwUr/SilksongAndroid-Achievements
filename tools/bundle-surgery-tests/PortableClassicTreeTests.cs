@@ -6,6 +6,16 @@ namespace BundleSurgery.Tests;
 
 public sealed class PortableClassicTreeTests
 {
+    [Fact]
+    public void Mixed_loose_Unity_versions_are_reported_even_when_platforms_match()
+    {
+        using var first = SyntheticAssetFactory.WithShaderPlatforms(18);
+        using var other = SyntheticAssetFactory.WithShaderPlatformsAndUnityVersion("6000.0.50f1", 18);
+        var source = Tree(first); File.Copy(other.InputPath, Path.Combine(source, "level1"));
+        Assert.Contains(ClassicPlayerTree.Discover(source).Diagnostics, d => d.Code == "MIXED_UNITY_VERSION");
+        Assert.Equal(3, ClassicTreeCommands.CreateProfileManifest(source, "steam-987", "owned", "6000.0.61f1", Path.Combine(first.Root, "manifest.json"), 24, true));
+    }
+
     [Theory]
     [InlineData(19, "windows")]
     [InlineData(2, "macos")]

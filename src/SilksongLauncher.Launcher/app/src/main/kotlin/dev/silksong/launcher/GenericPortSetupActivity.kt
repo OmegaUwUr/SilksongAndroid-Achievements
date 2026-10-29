@@ -58,6 +58,11 @@ class GenericPortSetupActivity : Activity() {
         action(R.string.game_share_report) {
             startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, status.text.toString()), getString(R.string.game_share_report)))
         }
+        body.addView(libraryText(getString(R.string.generic_port_export_explain)))
+        action(R.string.generic_port_export) {
+            pick(73, Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE)
+                .putExtra(Intent.EXTRA_TITLE, "porting-source-$appId.zip"))
+        }
         cancel = libraryButton(getString(android.R.string.cancel)) { job?.cancel() }.also(body::addView)
         body.addView(libraryButton(getString(R.string.game_library_back)) { if (!busy) finish() })
         setContentView(ScrollView(this).apply { setBackgroundColor(getColor(R.color.surface)); addView(body) })
@@ -175,6 +180,22 @@ class GenericPortSetupActivity : Activity() {
             if (selected == null) { status.setText(R.string.game_local_folder_required); return }
             source = selected; assessment = null
             prefs.edit().putString("source", selected.absolutePath).apply(); prepare()
+        } else if (request == 73) operation {
+            val selected = source ?: error(getString(R.string.generic_port_start))
+            try {
+                withContext(Dispatchers.IO) {
+                    contentResolver.openOutputStream(uri, "w")?.use { output ->
+                        GenericPortBuild.exportEvidence(port, selected, output) { update(it) }
+                    } ?: error("Cannot write to the selected document.")
+                }
+                status.setText(R.string.generic_port_export_done)
+            } catch (error: Throwable) {
+                // ACTION_CREATE_DOCUMENT created this file for this operation. Remove partial exports.
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { android.provider.DocumentsContract.deleteDocument(contentResolver, uri) }
+                }
+                throw error
+            }
         } else if (request == 72) operation {
             val selected = source ?: error(getString(R.string.generic_port_start))
             val initial = withContext(Dispatchers.IO) { GenericPortAssessment.source(selected) }

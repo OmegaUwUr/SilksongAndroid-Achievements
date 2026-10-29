@@ -2,6 +2,25 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.43 (candidate)
+
+- Adds checked local UnityFS bundle inspection/conversion, including legacy Unity
+  2019 serialized-file coverage. Preserves resource bytes and rejects mixed engine
+  versions/platforms, unsupported shaders and oversized/corrupt archives.
+- Runs read-only content checks before returning engine/native blockers, retaining
+  individual content diagnostics. Adds guards for bundle CRCs, offsets and catalog/
+  cache/remote loading paths so desktop hashes are not silently reused.
+- Adds source-bound native-call evidence and a manual game-code/startup-metadata
+  export for reviewing missing adapters. Includes a standalone PC collector;
+  excludes saves, credentials, media and engine binaries.
+- Audits complete official Unity 2019.4.29f1 editor/Android archives and converts a
+  synthetic legacy assembly to C++/metadata on the host. Does not enable a Unity 2019 provider:
+  native compilation, player/registration integration and game-specific adapters
+  remain unfinished. Slime Rancher is still blocked; its original files are needed.
+
+Validation and exact boundaries: docs/SLIME_RANCHER_PORT.md. APK building remains
+manual. No Slime Rancher conversion or gameplay was tested.
+
 ## 1.0.3-achievements.42 (candidate)
 
 - Resolves exact public stable Unity 6000.0 patch releases automatically using

@@ -11,7 +11,7 @@ internal sealed record ClassicTransformOptions(
     string? UnityStamp)
 {
     internal static ClassicTransformOptions Default { get; } = new(
-        "1",
+        "2-unityfs",
         SerializedFileTransformer.AndroidBuildTarget,
         true,
         [21],
@@ -39,7 +39,8 @@ internal sealed record ClassicCensus(
     int Shaders,
     int MissingVulkanShaders,
     IReadOnlyList<string> NativePlugins,
-    IReadOnlyList<string> Media);
+    IReadOnlyList<string> Media,
+    int Bundles = 0);
 
 internal sealed record ClassicTreeReport(
     int SchemaVersion,
@@ -122,7 +123,9 @@ internal static class ClassicTreeConverter
                             inventoryFile,
                             sourcePath,
                             outputPath,
-                            options));
+                            options,
+                            layout.Inventory.SourceTarget,
+                            layout.Manifest.UnityVersion));
                         break;
                     case ClassicManifestAction.Copy:
                         reports.Add(CopyFile(
@@ -248,14 +251,18 @@ internal static class ClassicTreeConverter
         Directory.CreateDirectory(reportDirectory);
 
         var files = new List<ClassicFileReport>();
+        var diagnostics = inventory.Diagnostics.ToList();
         foreach (var input in inventory.Files)
         {
             TransformReport? inspected = null;
-            if (input.Kind == ClassicFileKind.Serialized)
+            try
             {
-                inspected = SerializedFileTransformer.Inspect(
-                    ResolveContained(sourceRoot, input.RelativePath));
+                if (input.Kind == ClassicFileKind.Serialized)
+                    inspected = SerializedFileTransformer.Inspect(ResolveContained(sourceRoot, input.RelativePath));
+                if (input.Kind == ClassicFileKind.Bundle)
+                    inspected = UnityFsContent.Inspect(ResolveContained(sourceRoot, input.RelativePath), inventory.SourceTarget, inventory.Identity?.UnityVersion);
             }
+            catch (Exception error) { diagnostics.Add(new ClassicDiagnostic("CONTENT_INSPECTION_FAILED", error.Message, input.RelativePath)); }
             files.Add(new ClassicFileReport(
                 input.RelativePath,
                 input.Kind.ToString(),
@@ -275,12 +282,12 @@ internal static class ClassicTreeConverter
         var report = new ClassicInventoryReport(
             1,
             "manifest-classic-tree",
-            "INVENTORIED",
+            diagnostics.Count == 0 ? "INVENTORIED" : "INSPECTION_FAILED",
             inventory.SourceTreeSha256,
             inventory.Identity,
             files,
             CreateCensus(inventory, files),
-            inventory.Diagnostics);
+            diagnostics);
         PublishInventoryReport(resolvedReportPath, report);
         return report;
     }
@@ -353,14 +360,18 @@ internal static class ClassicTreeConverter
         ClassicFileEntry input,
         string sourcePath,
         string outputPath,
-        ClassicTransformOptions options)
+        ClassicTransformOptions options,
+        int sourceTarget,
+        string unityVersion)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         var isGlobalManagers = string.Equals(
             Path.GetFileName(input.RelativePath),
             "globalgamemanagers",
             StringComparison.OrdinalIgnoreCase);
-        var transformed = SerializedFileTransformer.Transform(
+        var transformed = input.Kind == ClassicFileKind.Bundle
+            ? UnityFsContent.Transform(sourcePath, outputPath, sourceTarget, unityVersion)
+            : SerializedFileTransformer.Transform(
             sourcePath,
             outputPath,
             new SerializedTransformOptions(
@@ -459,7 +470,8 @@ internal static class ClassicTreeConverter
             inventory.Files
                 .Where(file => file.Kind == ClassicFileKind.Media)
                 .Select(file => file.RelativePath)
-                .ToArray());
+                .ToArray(),
+            inventory.Files.Count(file => file.Kind == ClassicFileKind.Bundle));
 
     private static string CreateResumeKey(
         ClassicPlayerTree.ValidatedClassicPlayerLayout layout,
@@ -513,7 +525,7 @@ internal static class ClassicTreeConverter
                 JsonOptions) ?? throw new InvalidDataException(
                     "Classic inventory report could not be reopened");
             if (reopened.SchemaVersion != report.SchemaVersion ||
-                reopened.Status != "INVENTORIED" ||
+                reopened.Status != report.Status ||
                 reopened.SourceTreeSha256 != report.SourceTreeSha256 ||
                 reopened.Files.Count != report.Files.Count)
             {
