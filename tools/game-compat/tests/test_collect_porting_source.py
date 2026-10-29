@@ -55,6 +55,18 @@ class CollectionTests(unittest.TestCase):
             collector.collect(self.data, self.output, 433340)
         self.assertEqual(self.output.read_text(), "keep existing")
 
+    def test_custom_assembly_set_is_exported_without_a_predefined_main_assembly(self):
+        custom = self.assembly.with_name("Example.Gameplay.dll")
+        self.assembly.rename(custom)
+        secondary = custom.with_name("Example.Saves.dll")
+        secondary.write_bytes(b"secondary metadata fixture")
+        report = collector.collect(self.data, self.output, 123456)
+        with zipfile.ZipFile(self.output) as archive:
+            self.assertIn("source/Managed/Example.Gameplay.dll", archive.namelist())
+            self.assertIn("source/Managed/Example.Saves.dll", archive.namelist())
+            self.assertNotIn("source/Managed/Assembly-CSharp.dll", archive.namelist())
+        self.assertEqual(len(report["files"]), 3)
+
     def test_no_output_inside_original_source(self):
         with self.assertRaises(ValueError):
             collector.collect(self.data, self.data / "source.zip", 433340)

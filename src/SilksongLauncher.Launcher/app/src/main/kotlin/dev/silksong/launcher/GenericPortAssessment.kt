@@ -35,8 +35,11 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
                 else if (UnityDistribution.isPinned(header.version)) facts += "Exact Android engine and IL2CPP components: downloadable automatically from Unity (pinned component set)."
                 else facts += "Unity 6.0 runtime: resolve this exact public release automatically from Unity, verify its archives and check the installed layout before compilation. This is experimental runtime eligibility, not gameplay verification. The initial editor transfer can exceed 4 GB to verify its full published checksum."
             }
-            if (!GameCompatibility.hasManagedHeader(File(data, "Managed/Assembly-CSharp.dll")) ||
-                File(data, "il2cpp_data/Metadata/global-metadata.dat").exists() ||
+            try {
+                val assemblies = GameCompatibility.monoAssemblies(data)
+                facts += "Mono assembly set: ${assemblies.size} files. Custom assembly-definition names are supported; Assembly-CSharp.dll is not required."
+            } catch (error: Exception) { blockers += error.message ?: "A complete Mono managed assembly set is required." }
+            if (File(data, "il2cpp_data/Metadata/global-metadata.dat").exists() ||
                 File(data, "Managed/Metadata/global-metadata.dat").exists() ||
                 listOf("GameAssembly.dll", "GameAssembly.so", "libil2cpp.so").any { File(data.parentFile, it).isFile })
                 blockers += "A complete Mono managed build is required. Desktop IL2CPP machine code cannot be rebuilt from these files."

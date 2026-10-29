@@ -81,6 +81,35 @@ fun main() = runBlocking {
         Fixture.cancelRewrite = false
         pass("cancelling save rewrite stops conversion and invalidates old completion")
 
+        val modular = File(root, "modular/Game_Data").apply { mkdirs() }
+        val modularBuild = File(root, "modular-build")
+        val target = PortTarget.classic(987, "6000.0.61f1")
+        val header = ByteArray(256)
+        val buffer = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.BIG_ENDIAN)
+        buffer.putInt(8, 22); buffer.putInt(20, 120); buffer.putLong(24, 256); buffer.putLong(32, 192)
+        val stamp = "6000.0.61f1\u0000".toByteArray(); stamp.copyInto(header, 48)
+        buffer.order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(48 + stamp.size, 24)
+        File(modular, "globalgamemanagers").writeBytes(header)
+        for (name in listOf("Example.Gameplay.dll", "Example.Saves.dll", "UnityEngine.CoreModule.dll", "Unity.InputSystem.dll")) {
+            val file = File(modular, "Managed/$name").apply { parentFile.mkdirs() }; file.writeBytes(Fixture.cli())
+        }
+        Fixture.write(modularBuild, "packages/Unity.InputSystem.dll", "Android input replacement")
+        Fixture.write(modularBuild, "packages/${PackageCompiler.IO_ASSEMBLY}")
+        Fixture.write(modularBuild, "packages/GenericPortPatches.dll")
+        val originals = File(modular, "Managed").listFiles()!!.associate { it.name to it.readBytes().toList() }
+        Fixture.rewrites.clear()
+        Il2cppConverter.convert(unity, modular, ctx, modularBuild, target).collect()
+        val batch = Fixture.rewrites.single()
+        check(batch[0] == "redirect-port-file-replace")
+        val selection = org.json.JSONArray(File(batch[3]).readText())
+        check((0 until selection.length()).map { selection.getString(it) } == listOf("Example.Gameplay.dll", "Example.Saves.dll"))
+        check(!File(Il2cppConverter.asmDir(modularBuild), "Assembly-CSharp.dll").exists())
+        check(File(Il2cppConverter.asmDir(modularBuild), "Unity.InputSystem.dll").readText() == "Android input replacement")
+        check(Il2cppConverter.isCurrent(unity, modular, modularBuild, target))
+        check(!Il2cppConverter.isCurrent(unity, modular, modularBuild))
+        check(File(modular, "Managed").listFiles()!!.associate { it.name to it.readBytes().toList() } == originals)
+        pass("custom script assemblies reach the converter and one save batch; SDK overrides and original bytes stay separate")
+
         val pkg = UnityFetcher.packageDir(unity)
         Fixture.write(pkg, ".complete", "verified-package-v1")
         Fixture.write(pkg, "InputSystem/Unity.InputSystem.asmdef")

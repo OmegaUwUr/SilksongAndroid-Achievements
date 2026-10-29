@@ -36,7 +36,7 @@ internal object CachedGameSource {
         val data = GameCompatibility.findDataFolders(directory).single()
         val header = GameCompatibility.readHeader(File(data, "globalgamemanagers")) ?: return null
         require(header.platform == when (platform) { "linux" -> 24; "windows" -> 19; else -> 2 })
-        require(GameCompatibility.hasManagedHeader(File(data, "Managed/Assembly-CSharp.dll")))
+        GameCompatibility.monoAssemblies(data)
         Cached(directory, plan)
     }.getOrNull()
 }

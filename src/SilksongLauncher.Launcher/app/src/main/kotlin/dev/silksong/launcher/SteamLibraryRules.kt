@@ -18,7 +18,10 @@ object SteamLibraryRules {
         val names = paths.map { it.replace('\\', '/').lowercase(Locale.ROOT) }.toSet()
         val roots = names.filter { (it.endsWith("_data/globalgamemanagers") || it.endsWith("/contents/resources/data/globalgamemanagers")) }.map { it.removeSuffix("globalgamemanagers") }
         if (roots.isEmpty()) return Evidence(false, false, emptyList())
-        val mono = roots.any { "${it}managed/assembly-csharp.dll" in names }
+        val mono = roots.any { root -> names.any { name ->
+            name.startsWith("${root}managed/") && name.endsWith(".dll") &&
+                '/' !in name.removePrefix("${root}managed/")
+        } }
         val il2cpp = names.any { it.endsWith("/global-metadata.dat") || it.substringAfterLast('/') in
             listOf("gameassembly.dll", "gameassembly.so", "libil2cpp.so") }
         val facts = mutableListOf("Unity data files found in a Steam $platform base-game depot.",
@@ -26,8 +29,8 @@ object SteamLibraryRules {
         facts += when {
             mono && il2cpp -> "Mixed Mono/IL2CPP files: manual inspection required."
             il2cpp -> "Desktop IL2CPP build: the current conversion pipeline cannot port it."
-            mono -> "Managed game assembly found: potential port candidate; gameplay is unverified."
-            else -> "No Assembly-CSharp.dll found: this pipeline needs a managed game assembly."
+            mono -> "Mono assembly filenames found, including custom assembly-definition layouts: potential port candidate; headers and gameplay are unverified."
+            else -> "No managed assembly files found under this Unity data tree."
         }
         if (platform != "linux") facts += "Run full preparation to check the exact engine, Vulkan shaders and Android dependencies. Direct3D/Metal-only shaders need a converter; filenames alone do not establish compatibility."
         if (roots.size != 1) facts += "Multiple Unity data trees: select and inspect one game build."

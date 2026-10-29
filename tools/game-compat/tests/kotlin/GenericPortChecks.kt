@@ -67,6 +67,52 @@ fun main(args: Array<String>) {
             target.requireData(data)
             check(UnityDistribution.forTarget(target) == UnityDistribution.forTarget(PortTarget.SILKSONG))
         }
+        test("custom script assembly layouts pass the shared source path without granting build approval") {
+            val main = File(data, "Managed/Assembly-CSharp.dll")
+            val custom = File(data, "Managed/Example.Gameplay.dll")
+            val saves = File(data, "Managed/Example.Saves.dll")
+            check(main.renameTo(custom)); saves.writeBytes(managed())
+            try {
+                val report = GenericPortAssessment.source(data)
+                check(report.blockers.isEmpty() && !report.canBuild)
+                check(GameCompatibility.monoAssemblies(data).map { it.name } == listOf("Example.Gameplay.dll", "Example.Saves.dll", "UnityEngine.UI.dll"))
+                PortTarget.classic(987, "6000.0.50f1").requireData(data)
+                saves.writeText("truncated")
+                check(GenericPortAssessment.source(data).blockers.any { "Example.Saves.dll" in it })
+                check(runCatching { PortTarget.classic(987, "6000.0.50f1").requireData(data) }.isFailure)
+            } finally { saves.delete(); check(custom.renameTo(main)) }
+        }
+        test("assembly inventories reject collisions links and empty or excessive sets") {
+            val sandbox = File(root, "assembly-inventory").apply { mkdirs() }
+            val dir = File(sandbox, "Managed").apply { mkdirs() }
+            try {
+                check(!GameCompatibility.hasMonoAssemblies(sandbox))
+                val first = File(dir, "Example.Gameplay.dll").apply { writeBytes(managed()) }
+                check(GameCompatibility.hasMonoAssemblies(sandbox))
+                val other = File(dir, "example.gameplay.dll").apply { writeBytes(managed()) }
+                check(!GameCompatibility.hasMonoAssemblies(sandbox)); other.delete()
+                val link = File(dir, "Linked.dll")
+                java.nio.file.Files.createSymbolicLink(link.toPath(), first.toPath())
+                check(!GameCompatibility.hasMonoAssemblies(sandbox)); link.delete()
+                repeat(1024) { File(dir, "Part$it.dll").writeBytes(managed()) }
+                check(!GameCompatibility.hasMonoAssemblies(sandbox))
+            } finally { sandbox.deleteRecursively() }
+        }
+        test("custom script registration cannot hide missing or duplicate assemblies") {
+            val registration = File(data, "ScriptingAssemblies.json")
+            val saved = registration.readText()
+            try {
+                for (value in listOf("{\"names\":[\"Example.Missing.dll\"],\"types\":[16]}",
+                    "{\"names\":[\"Assembly-CSharp.dll\",\"Assembly-CSharp.dll\"],\"types\":[16,16]}",
+                    "{\"names\":[\"Assembly-CSharp.dll\"],\"types\":[]}")) {
+                    registration.writeText(value)
+                    check(!GameCompatibility.hasMonoAssemblies(data))
+                    check(GenericPortAssessment.source(data).blockers.isNotEmpty())
+                }
+                registration.writeText("{\"names\":[\"Assembly-CSharp.dll\",\"UnityEngine.UI.dll\"],\"types\":[16,16]}")
+                check(GameCompatibility.hasMonoAssemblies(data))
+            } finally { registration.writeText(saved) }
+        }
         test("dedicated game IDs and unregistered engine versions cannot bypass source guards") {
             for (id in listOf(0, 1030300, 367520)) check(runCatching { PortTarget.classic(id, "6000.0.50f1") }.isFailure)
             check(runCatching { PortTarget.classic(987, "2022.3.1f1") }.isFailure)

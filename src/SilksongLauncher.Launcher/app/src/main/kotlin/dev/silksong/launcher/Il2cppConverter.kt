@@ -37,6 +37,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
+import org.json.JSONArray
 
 object Il2cppConverter {
 
@@ -93,22 +94,23 @@ object Il2cppConverter {
     private const val DEFAULT_SOURCES = 1148
 
     /** Completed output for exactly these source assemblies and converter. */
-    fun isCurrent(unity: File, depot: File, root: File): Boolean =
-        runCatching { ConversionCache.isCurrent(root, inputSignature(unity, depot, root)) }
+    fun isCurrent(unity: File, depot: File, root: File, target: PortTarget = PortTarget.SILKSONG): Boolean =
+        runCatching { ConversionCache.isCurrent(root, inputSignature(unity, depot, root, target)) }
             .getOrDefault(false)
 
-    private fun inputSignature(unity: File, depot: File, root: File): String {
+    private fun inputSignature(unity: File, depot: File, root: File, target: PortTarget): String {
         val managed = depotManaged(depot) ?: throw IOException("missing game assemblies")
         fun dlls(dir: File): List<File> = dir.listFiles()?.filter {
             it.isFile && it.extension == "dll"
         }?.takeIf { it.isNotEmpty() } ?: throw IOException("no assemblies in $dir")
-        return ConversionCache.inputs(listOf(
+        val signature = ConversionCache.inputs(listOf(
             "bcl" to dlls(bclDir(unity)),
             "android-engine" to dlls(engineManagedDir(unity)),
             "game" to dlls(managed),
             "rebuilt-packages" to dlls(PackageCompiler.outputDir(root)),
             "converter" to listOf(File(deployDir(unity), "il2cpp.dll")),
         ))
+        return if (target.generic) UnityReleaseCatalog.hash("$signature|generic-save-batch-2".toByteArray()) else signature
     }
 
     // ── inputs ─────────────────────────────────────────────────────────────
@@ -132,7 +134,7 @@ object Il2cppConverter {
      */
     private fun depotManaged(depot: File): File? =
         PlayerImage.depotData(depot)?.let { File(it, "Managed") }
-            ?.takeIf { File(it, "Assembly-CSharp.dll").isFile }
+            ?.takeIf { it.listFiles().orEmpty().any { file -> file.isFile && file.extension == "dll" } }
 
     // ── the run ────────────────────────────────────────────────────────────
 
@@ -143,7 +145,7 @@ object Il2cppConverter {
         val engine = engineManagedDir(unity)
         val deploy = deployDir(unity)
         val managed = depotManaged(depot)
-            ?: throw IOException("no Managed folder with Assembly-CSharp.dll under $depot")
+            ?: throw IOException("no Mono Managed assembly directory under $depot")
         // Last line of defence, and the one that names the cause. Everything
         // above this can be reached by a depot that was accepted before the
         // platform was ever checked -- an app updated mid-build, a pointer
@@ -158,17 +160,24 @@ object Il2cppConverter {
         // Invalidate BEFORE staging: even cancellation during a save rewrite
         // must not leave the previous success marker attached to new inputs.
         ConversionCache.invalidate(root)
-        val inputSignature = inputSignature(unity, depot, root)
+        val inputSignature = inputSignature(unity, depot, root, target)
         send(Progress("Preparing the converter", -1f, "assemblies"))
-        val assemblies = stageAssemblies(bcl, engine, managed, PackageCompiler.outputDir(root), asmDir(root))
+        val staged = stageAssemblies(bcl, engine, managed, PackageCompiler.outputDir(root), asmDir(root))
+        val assemblies = staged.files
         LauncherLog.log("il2cpp input: ${assemblies.size} assemblies")
 
         if (target == PortTarget.SILKSONG) redirectSaveCalls(context, root)
         if (target == PortTarget.HOLLOW_KNIGHT || target.generic) {
             val surgery = PlayerImage.stageSurgery(root, context.assets)
-            PlayerImage.run(surgery, context, listOf("redirect-file-replace",
+            val saveArgs = if (target.generic) {
+                val selection = File(root, "save-rewrite-assemblies.json")
+                selection.writeText(JSONArray(staged.gameFiles.map { it.name }).toString())
+                listOf("redirect-port-file-replace", asmDir(root).absolutePath,
+                    File(asmDir(root), PackageCompiler.IO_ASSEMBLY).absolutePath, selection.absolutePath)
+            } else listOf("redirect-file-replace",
                 File(asmDir(root), "Assembly-CSharp.dll").absolutePath,
-                File(asmDir(root), PackageCompiler.IO_ASSEMBLY).absolutePath, "--allow-empty")) {
+                File(asmDir(root), PackageCompiler.IO_ASSEMBLY).absolutePath, "--allow-empty")
+            PlayerImage.run(surgery, context, saveArgs) {
                 LauncherLog.log("${if (target.generic) "Generic" else "Hollow Knight"} save fix: ${it.trim()}")
             }
             if (target == PortTarget.HOLLOW_KNIGHT) PlayerImage.run(surgery, context, listOf("hook-port-services",
@@ -403,18 +412,21 @@ object Il2cppConverter {
         }
     }
 
+    private data class StagedAssemblies(val files: List<File>, val gameFiles: List<File>)
+
     private fun stageAssemblies(
         bcl: File,
         engine: File,
         managed: File,
         packages: File,
         out: File,
-    ): List<File> {
+    ): StagedAssemblies {
         out.deleteRecursively()
         out.mkdirs()
         var fromBcl = 0
         var fromEngine = 0
         var fromDepot = 0
+        val gameFiles = mutableListOf<File>()
         for ((source, counter) in listOf(bcl to 0, engine to 1, managed to 2)) {
             for (dll in source.listFiles().orEmpty()) {
                 if (!dll.isFile || !dll.name.endsWith(".dll")) continue
@@ -424,7 +436,7 @@ object Il2cppConverter {
                 when (counter) {
                     0 -> fromBcl++
                     1 -> fromEngine++
-                    else -> fromDepot++
+                    else -> { fromDepot++; gameFiles += dst }
                 }
             }
         }
@@ -433,6 +445,7 @@ object Il2cppConverter {
         for (dll in packages.listFiles().orEmpty()) {
             if (!dll.isFile || !dll.name.endsWith(".dll")) continue
             val dst = File(out, dll.name)
+            gameFiles.removeAll { it.name == dll.name }
             if (dst.exists()) {
                 // A rebuilt copy of something the depot already has: replace
                 // it, because the depot's is the desktop build.
@@ -452,7 +465,7 @@ object Il2cppConverter {
         )
         val all = out.listFiles().orEmpty().filter { it.name.endsWith(".dll") }.sortedBy { it.name }
         if (all.isEmpty()) throw IOException("no assemblies were staged into $out")
-        return all
+        return StagedAssemblies(all, gameFiles.sortedBy { it.name })
     }
 
     /**

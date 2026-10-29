@@ -115,6 +115,21 @@ def managed_header(path: Path) -> bool:
         return False
 
 
+def mono_assemblies(managed: Path) -> bool:
+    """Bounded CLI-header inventory, independent of script assembly names."""
+    try:
+        if not managed.is_dir() or managed.resolve() != managed.absolute():
+            return False
+        files = sorted(p for p in managed.iterdir() if p.suffix.lower() == ".dll")
+        if not 1 <= len(files) <= 1024 or len({p.name.lower() for p in files}) != len(files):
+            return False
+        return all(p.is_file() and not p.is_symlink() and p.suffix == ".dll" and
+                   not any(ord(c) < 32 or c in "\\:" for c in p.name) and
+                   1 <= p.stat().st_size <= 128 * 1024 * 1024 and managed_header(p) for p in files)
+    except (OSError, ValueError):
+        return False
+
+
 def product(data: Path) -> str | None:
     try:
         info = data / "app.info"
@@ -209,7 +224,7 @@ def inspect(root: Path, profile: dict) -> dict:
         elif header["version"] not in profile["unityVersions"]:
             blockers.append("Unity version does not match this game's registered engine/toolchain.")
     managed = data / "Managed"
-    mono = managed_header(managed / "Assembly-CSharp.dll")
+    mono = managed_header(managed / "Assembly-CSharp.dll") if adapter else mono_assemblies(managed)
     il2cpp = any(p.is_file() for p in (data / "il2cpp_data/Metadata/global-metadata.dat", managed / "Metadata/global-metadata.dat",
                                      data.parent / "GameAssembly.dll", data.parent / "GameAssembly.so", data.parent / "libil2cpp.so"))
     observed["scripting"] = "mixed/ambiguous" if mono and il2cpp else "managed CLI header present" if mono else "precompiled IL2CPP" if il2cpp else "unknown"

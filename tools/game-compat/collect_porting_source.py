@@ -61,8 +61,8 @@ def collect(source: Path, output: Path, app_id: int) -> dict:
     if source.is_symlink() or managed.is_symlink() or not managed.is_dir():
         raise ValueError("Original managed game files are required, without symbolic links.")
     assemblies = sorted((p for p in managed.iterdir() if p.is_file() and p.suffix == ".dll"), key=lambda p: p.name)
-    if not 1 <= len(assemblies) <= 1024 or not any(p.name == "Assembly-CSharp.dll" for p in assemblies):
-        raise ValueError("Managed/Assembly-CSharp.dll and a complete Mono assembly set are required.")
+    if not 1 <= len(assemblies) <= 1024:
+        raise ValueError("A complete Mono assembly set with 1–1024 DLLs is required; custom assembly names are supported.")
     selected = [("source/Managed/" + p.name, p) for p in assemblies] + [
         ("source/" + name, source / name) for name in BOOTSTRAP if (source / name).is_file()]
     if len({name.casefold() for name, _ in selected}) != len(selected):

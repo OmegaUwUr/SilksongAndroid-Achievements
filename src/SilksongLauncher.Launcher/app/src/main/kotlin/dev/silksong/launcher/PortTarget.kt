@@ -24,7 +24,7 @@ class PortTarget private constructor(val id: String, val unityVersion: String,
         if (generic) {
             val header = GameCompatibility.readHeader(File(data, "globalgamemanagers"))
             if (header?.version != unityVersion || header.platform != sourcePlatform ||
-                !GameCompatibility.hasManagedHeader(File(data, "Managed/Assembly-CSharp.dll")) ||
+                !GameCompatibility.hasMonoAssemblies(data) ||
                 File(data, "il2cpp_data/Metadata/global-metadata.dat").exists() ||
                 File(data, "Managed/Metadata/global-metadata.dat").exists())
                 throw IOException("The generic builder needs complete Mono files using Unity $unityVersion and source target $sourcePlatform.")

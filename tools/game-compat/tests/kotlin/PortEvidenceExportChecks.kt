@@ -43,6 +43,19 @@ fun portEvidenceExportChecks(test: (String, () -> Unit) -> Unit) {
             val original = assembly.readBytes(); assembly.appendText("changed")
             try { check(runCatching { write(ByteArrayOutputStream()) }.isFailure) } finally { assembly.writeBytes(original); refresh() }
         }
+        test("porting export retains custom script names and binds the complete assembly set") {
+            val custom = File(assembly.parentFile, "Example.Gameplay.dll")
+            check(assembly.renameTo(custom))
+            try {
+                refresh()
+                val bytes = ByteArrayOutputStream(); write(bytes)
+                val names = mutableListOf<String>()
+                ZipInputStream(bytes.toByteArray().inputStream()).use { zip -> while (true) {
+                    val entry = zip.nextEntry ?: break; names += entry.name; zip.closeEntry()
+                } }
+                check("source/Managed/Example.Gameplay.dll" in names && "source/Managed/Assembly-CSharp.dll" !in names)
+            } finally { check(custom.renameTo(assembly)); refresh() }
+        }
         test("porting export catches source mutation while writing the archive") {
             val original = assembly.readBytes()
             val output = object : ByteArrayOutputStream() {

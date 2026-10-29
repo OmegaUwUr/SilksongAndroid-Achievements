@@ -74,6 +74,46 @@ object GameCompatibility {
         }
     }.getOrDefault(false)
 
+    /** Assembly-definition projects can use any script assembly names. This is a bounded
+     * source inventory only; Cecil, registration, reference and Android-profile audits
+     * still have to validate the complete set before compilation. */
+    fun monoAssemblies(data: File): List<File> {
+        val managed = File(data, "Managed")
+        require(data.canonicalFile == data.absoluteFile && managed.canonicalFile == managed.absoluteFile) {
+            "Managed source must not traverse symbolic links."
+        }
+        val files = managed.listFiles()?.filter { it.extension.equals("dll", true) }?.sortedBy { it.name }
+            ?: throw IOException("A readable Managed assembly directory is required.")
+        require(files.size in 1..1024) { "A complete Mono source needs 1–1024 managed assemblies." }
+        require(files.map { it.name.lowercase(Locale.ROOT) }.distinct().size == files.size) {
+            "Case-conflicting managed assembly names need an adapter."
+        }
+        for (file in files) {
+            require(file.name.none { it == '\\' || it == ':' || it.code < 32 } && file.extension == "dll") { "Unsupported managed assembly filename." }
+            require(file.isFile && file.canonicalFile == file.absoluteFile && file.length() in 1..(128L * 1024 * 1024) && hasManagedHeader(file)) {
+                "Invalid, linked or incomplete managed assembly: ${file.name}"
+            }
+        }
+        val registration = File(data, "ScriptingAssemblies.json")
+        if (registration.exists()) {
+            require(registration.isFile && registration.canonicalFile == registration.absoluteFile && registration.length() in 1..1048576) {
+                "Invalid Mono assembly registration metadata."
+            }
+            val json = org.json.JSONObject(registration.readText())
+            val names = json.getJSONArray("names")
+            require(names.length() <= 1024 && json.getJSONArray("types").length() == names.length()) { "Incomplete Mono assembly registration metadata." }
+            val seen = mutableSetOf<String>()
+            val present = files.map { it.name }.toSet()
+            for (index in 0 until names.length()) {
+                val name = names.getString(index)
+                require(seen.add(name.lowercase(Locale.ROOT)) && name in present) { "Registered Mono assembly is missing or duplicated: $name" }
+            }
+        }
+        return files
+    }
+
+    fun hasMonoAssemblies(data: File): Boolean = runCatching { monoAssemblies(data).isNotEmpty() }.getOrDefault(false)
+
     private fun binaryKind(file: File): String = runCatching {
         RandomAccessFile(file, "r").use { input ->
             if (input.length() < 20) return@use "unknown/truncated"
@@ -184,7 +224,7 @@ object GameCompatibility {
             else if (header.version !in profile.unityVersions) blockers += "This Unity version does not match this game's registered engine/toolchain."
         }
         val managed = File(data, "Managed")
-        val mono = hasManagedHeader(File(managed, "Assembly-CSharp.dll"))
+        val mono = if (profile.hasPortAdapter) hasManagedHeader(File(managed, "Assembly-CSharp.dll")) else hasMonoAssemblies(data)
         val il2cpp = File(data, "il2cpp_data/Metadata/global-metadata.dat").isFile ||
             File(managed, "Metadata/global-metadata.dat").isFile || File(data.parentFile, "GameAssembly.dll").isFile ||
             File(data.parentFile, "GameAssembly.so").isFile || File(data.parentFile, "libil2cpp.so").isFile

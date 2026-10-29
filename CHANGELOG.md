@@ -2,6 +2,34 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.48 (candidate)
+
+- Broadens the common Unity-to-Android tool to Mono games whose script assemblies
+  have custom names, including assembly-definition projects without any
+  `Assembly-CSharp.dll`. Steam discovery, local inspection, source recovery,
+  preparation, conversion and code exports use the assembly set. Dedicated game
+  adapters retain their own identity/source constraints.
+- Validates bounded managed CLI headers, source paths and case conflicts. Modern
+  registration entries must refer to existing assemblies without duplicates.
+  The full Cecil audit still checks every game DLL's native imports, reference
+  closure and selected Android member APIs, and now rejects metadata/name mismatch.
+- Tracks which staged assemblies came from the game after Android BCL/engine and
+  package replacement. One batch applies the existing File.Replace save adapter to
+  that entire game set, including custom save DLLs, without rewriting SDK providers
+  or the port helpers. Original sources are preserved.
+- Versions the generic conversion recipe so a requested rebuild uses the expanded
+  save adaptation. Installed ports and completed library caches keep their existing
+  update behavior; use manual Scan to refresh previously classified library entries.
+- Adds a shared-tool development plan centered on reusable engine, content, input
+  and middleware providers, with Android build/runtime tests as milestones.
+
+Validation: 134 C# cases, 61 generic source/component checks, 17 pack checks,
+42 library/dependency checks, 33 persistence/update checks, 32 Python tests and
+14 porting regression groups pass. All 112 production Kotlin files and both Java
+launch adapters compile against the configured APIs. Converter tests use metadata
+fixtures and a simulated compiler boundary; no new actual-game/native/Android
+compatibility is claimed. APK assembly remains manual. See docs/UNITY_PORTING_TOOL.md.
+
 ## 1.0.3-achievements.47 (candidate)
 
 - Addresses the supplied revision-46 log's 719 rapid Steam CDN DNS failures.

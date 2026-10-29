@@ -135,6 +135,20 @@ class InspectionChecks(unittest.TestCase):
         (data / "globalgamemanagers").write_bytes(serialized("6000.0.50f1-uum-100966-branch1"))
         self.assertTrue(self.report()["basic_checks_passed"])
 
+    def test_custom_assemblies_are_observed_without_enabling_an_unimplemented_adapter(self):
+        data = self.game()
+        main = data / "Managed/Assembly-CSharp.dll"
+        main.rename(main.with_name("Example.Gameplay.dll"))
+        secondary = main.with_name("Example.Saves.dll")
+        secondary.write_bytes(managed())
+        self.assertTrue(inspect_game.mono_assemblies(data / "Managed"))
+        profile = dict(self.profiles["silksong"], id="example", steamAppId=123456, adapter=None)
+        result = inspect_game.inspect(self.root / "game", profile)
+        self.assertEqual(result["observed"]["scripting"], "managed CLI header present")
+        self.assertFalse(result["adapter_present"])
+        secondary.write_bytes(b"truncated")
+        self.assertFalse(inspect_game.mono_assemblies(data / "Managed"))
+
     def test_desktop_il2cpp_and_mixed_builds_are_blocked(self):
         data = self.game()
         metadata = data / "il2cpp_data/Metadata/global-metadata.dat"

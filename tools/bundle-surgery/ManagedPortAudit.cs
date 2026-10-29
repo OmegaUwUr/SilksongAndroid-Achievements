@@ -50,6 +50,10 @@ internal static class ManagedPortAudit
         var pendingProfile = new SortedSet<string>(StringComparer.Ordinal);
         var managed = Path.Combine(data, "Managed");
         var gameFiles = Directory.Exists(managed) ? Directory.GetFiles(managed, "*.dll") : [];
+        if (gameFiles.Length == 0) diagnostics.Add("No Mono assemblies were found in Managed; custom assembly names are supported.");
+        if (gameFiles.Length > 1024) { diagnostics.Add("Managed assembly count exceeds 1024; this audit is incomplete."); gameFiles = gameFiles.Take(1024).ToArray(); }
+        if (gameFiles.Select(Path.GetFileName).Distinct(StringComparer.OrdinalIgnoreCase).Count() != gameFiles.Length)
+            diagnostics.Add("Case-conflicting managed assembly filenames cannot be resolved safely.");
         var replacements = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var replacementFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var available = new HashSet<string>(gameFiles.Select(Path.GetFileNameWithoutExtension)!, StringComparer.OrdinalIgnoreCase);
@@ -75,6 +79,8 @@ internal static class ManagedPortAudit
         var queued = new HashSet<string>(gameFiles.Select(Path.GetFileNameWithoutExtension)!, StringComparer.OrdinalIgnoreCase);
         while (queue.TryDequeue(out var path))
         {
+            try { SourceAdapterFiles.RequireRegular(path, 128 * 1024 * 1024); }
+            catch (Exception error) { diagnostics.Add(Path.GetFileName(path) + ": " + error.Message); continue; }
             var name = Path.GetFileNameWithoutExtension(path);
             var providedFramework = NativeFramework(name) && replacementFiles.TryGetValue(name, out _);
             // These are replaced by matching Android modules/BCL, not ported as desktop binaries.
@@ -88,6 +94,8 @@ internal static class ManagedPortAudit
             {
                 using var assembly = AssemblyDefinition.ReadAssembly(providedFramework ? replacementFiles[name] : path, new ReaderParameters {
                     ReadingMode = ReadingMode.Deferred, ReadSymbols = false, AssemblyResolver = resolver });
+                if (!string.Equals(assembly.Name.Name, name, StringComparison.Ordinal))
+                    diagnostics.Add(name + ": assembly metadata identity does not match its filename.");
                 // Retain the declarations, but do not mistake a desktop Mono facade's
                 // entire platform inventory for required game plugins before profile selection.
                 if (profileDirectories is null && IsFramework(name)) pendingProfile.Add(name);
@@ -140,7 +148,6 @@ internal static class ManagedPortAudit
             }
             catch (Exception error) { diagnostics.Add(Path.GetFileName(path) + ": " + error.GetType().Name); }
         }
-        if (!gameFiles.Any(p => Path.GetFileName(p) == "Assembly-CSharp.dll")) diagnostics.Add("Assembly-CSharp.dll is missing.");
         if (members.Count > 1000) diagnostics.Add("Managed member report was truncated; " + (members.Count - 1000) + " additional mismatches remain. This audit is not complete.");
         return new Report(2, gameFiles.Select(Path.GetFileName).OfType<string>().Order().ToArray(),
             imports.Distinct().OrderBy(i => i.Library).ThenBy(i => i.EntryPoint).ToArray(),

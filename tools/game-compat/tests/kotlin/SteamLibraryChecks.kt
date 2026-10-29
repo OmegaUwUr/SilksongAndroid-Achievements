@@ -153,6 +153,16 @@ fun main() {
         val plan = SteamLibraryRules.linuxPlan(info(depots = (1..33).joinToString(" ") { linux.replace("42", "$it") }), 9)
         check(!plan.complete && plan.depots.size == 32)
     }
+    test("custom script assemblies are Mono candidates within their own Unity data tree") {
+        for (platform in listOf("linux", "windows", "macos")) {
+            val root = if (platform == "macos") "Game.app/Contents/Resources/Data" else "Game_Data"
+            val result = SteamLibraryRules.inspect(listOf("$root/globalgamemanagers", "$root/Managed/Example.Gameplay.dll", "$root/Managed/Example.Saves.dll"), true, platform)
+            check(result.potential && result.details.any { "custom assembly" in it })
+        }
+        check(!SteamLibraryRules.inspect(listOf("Game_Data/globalgamemanagers", "Other_Data/Managed/Example.Gameplay.dll"), true).potential)
+        check(!SteamLibraryRules.inspect(listOf("Game_Data/globalgamemanagers", "Game_Data/Managed/tools/Example.Gameplay.dll"), true).potential)
+        check(!SteamLibraryRules.inspect(listOf("Game_Data/globalgamemanagers", "Game_Data/Managed/Example.Gameplay.dll", "GameAssembly.dll"), true).potential)
+    }
     val mono = listOf("Game_Data/globalgamemanagers", "Game_Data/Managed/Assembly-CSharp.dll")
     test("complete Linux Mono layout is potential, never a playable adapter") {
         val result = SteamLibraryRules.inspect(mono, true)

@@ -6,6 +6,11 @@ and single-screen or dual-screen play. The launcher prepares a native ARM64
 Unity player from your own Linux game files; it is not game streaming and does
 not require the desktop Steam client to run on Android.
 
+Development now prioritizes the **shared Unity-to-Android porting tool**: reusable
+engine-family, content, input and middleware support across games. Revision 48
+adds custom script assembly layouts to the common path, including Mono projects
+without `Assembly-CSharp.dll`. See the [tool scope and development priorities](docs/UNITY_PORTING_TOOL.md).
+
 This is a community project based on **jakobkhansen's SilksongAndroid**, with
 additional SteamSync and achievement features. It is not an official Team Cherry
 or Valve release.

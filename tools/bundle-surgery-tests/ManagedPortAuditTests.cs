@@ -7,6 +7,41 @@ namespace BundleSurgery.Tests;
 public sealed class ManagedPortAuditTests
 {
     [Fact]
+    public void Assembly_definition_layout_is_audited_without_a_predefined_game_DLL()
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game("Example.Gameplay")) game.Write(Path.Combine(fixture.Data, "Managed/Example.Gameplay.dll"));
+        fixture.Native("Example.Backend", "AndroidPlugin", Path.Combine(fixture.Data, "Managed"));
+        var report = ManagedPortAudit.Inspect(fixture.Data, fixture.Unity, fixture.Overrides);
+        Assert.Empty(report.Diagnostics);
+        Assert.Empty(report.MissingAssemblies);
+        Assert.Equal("Example.Backend", Assert.Single(report.NativeImports).Assembly);
+        Assert.Equal(new[] { "Example.Backend.dll", "Example.Gameplay.dll" }, report.Assemblies);
+    }
+
+    [Fact]
+    public void Custom_named_assemblies_still_need_their_actual_API_dependencies()
+    {
+        using var fixture = new MetadataFixture();
+        fixture.GameCallingSdk("Run", gameName: "Example.Gameplay");
+        var report = ManagedPortAudit.Inspect(fixture.Data, fixture.Unity);
+        Assert.Contains("Example.Gameplay -> PluginSdk", report.MissingAssemblies);
+        Assert.DoesNotContain(report.Diagnostics, value => value.Contains("Assembly-CSharp"));
+        fixture.Sdk("Different", fixture.Engine);
+        Assert.Contains(ManagedPortAudit.Inspect(fixture.Data, fixture.Unity, fixture.Overrides).MissingMembers,
+            value => value.StartsWith("Example.Gameplay ->") && value.Contains("Run"));
+    }
+
+    [Fact]
+    public void Missing_assemblies_and_renamed_metadata_are_still_rejected()
+    {
+        using var fixture = new MetadataFixture();
+        Assert.Contains(ManagedPortAudit.Inspect(fixture.Data, null).Diagnostics, value => value.Contains("No Mono assemblies"));
+        using (var game = fixture.Game("InternalName")) game.Write(Path.Combine(fixture.Data, "Managed/IncorrectName.dll"));
+        Assert.Contains(ManagedPortAudit.Inspect(fixture.Data, null).Diagnostics, value => value.Contains("metadata identity"));
+    }
+
+    [Fact]
     public void Provisional_framework_imports_are_retained_for_the_later_profile_audit()
     {
         using var fixture = new MetadataFixture();
@@ -283,8 +318,8 @@ public sealed class ManagedPortAuditTests
         }
         private static AssemblyDefinition New(string name) => AssemblyDefinition.CreateAssembly(
             new AssemblyNameDefinition(name, new Version(4, 0, 0, 0)), name, ModuleKind.Dll);
-        internal AssemblyDefinition Game() {
-            var game = New("Assembly-CSharp"); game.MainModule.Types.Add(new TypeDefinition("Game", "Entry", TypeAttributes.Public, game.MainModule.TypeSystem.Object)); return game;
+        internal AssemblyDefinition Game(string name = "Assembly-CSharp") {
+            var game = New(name); game.MainModule.Types.Add(new TypeDefinition("Game", "Entry", TypeAttributes.Public, game.MainModule.TypeSystem.Object)); return game;
         }
         internal void Native(string name, string library, string destination) {
             using var assembly = New(name); var module = assembly.MainModule;
@@ -301,14 +336,14 @@ public sealed class ManagedPortAuditTests
             method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret)); type.Methods.Add(method);
             sdk.Write(Path.Combine(destination, name + ".dll"));
         }
-        internal void GameCallingSdk(string name, string assembly = "PluginSdk") {
-            using var game = Game(); var module = game.MainModule;
+        internal void GameCallingSdk(string name, string assembly = "PluginSdk", string gameName = "Assembly-CSharp") {
+            using var game = Game(gameName); var module = game.MainModule;
             var scope = new AssemblyNameReference(assembly, new Version(4, 0, 0, 0)); module.AssemblyReferences.Add(scope);
             var api = new TypeReference("Sdk", "Api", module, scope);
             var call = new MethodReference(name, module.TypeSystem.Void, api) { HasThis = false };
             var method = new MethodDefinition("Start", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
             method.Body.Instructions.Add(Instruction.Create(OpCodes.Call, call)); method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-            module.Types[1].Methods.Add(method); game.Write(Path.Combine(Data, "Managed/Assembly-CSharp.dll"));
+            module.Types[1].Methods.Add(method); game.Write(Path.Combine(Data, "Managed/" + gameName + ".dll"));
         }
         public void Dispose() { Directory.Delete(root, recursive: true); }
     }

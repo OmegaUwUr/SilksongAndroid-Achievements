@@ -22,7 +22,7 @@ internal object PortEvidenceExport {
         require(canonical == data.absoluteFile) { "Choose original game files without symbolic links." }
         val managed = File(data, "Managed")
         val assemblies = managed.listFiles().orEmpty().filter { it.isFile && it.extension == "dll" }.sortedBy { it.name }
-        require(assemblies.size in 1..1024 && assemblies.any { it.name == "Assembly-CSharp.dll" })
+        require(assemblies.size in 1..1024)
         require(assemblies.all { file -> file.name.none { it == '\\' || it == ':' || it.code < 32 } }) { "Unsafe assembly filename in porting source." }
         require(managed.canonicalFile == managed.absoluteFile)
         val selected = assemblies.map { "source/Managed/${it.name}" to it } +

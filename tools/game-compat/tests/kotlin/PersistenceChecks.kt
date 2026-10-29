@@ -234,6 +234,16 @@ fun main(args: Array<String>) = runBlocking {
             File(downloaded, "Game_Data/Managed/Assembly-CSharp.dll").writeText("truncated")
             check(CachedGameSource.read(downloaded, 987) == null)
         }
+        test("custom script assembly downloads recover without a main Assembly-CSharp file") {
+            source(plan)
+            val managed = File(downloaded, "Game_Data/Managed")
+            check(File(managed, "Assembly-CSharp.dll").renameTo(File(managed, "Example.Gameplay.dll")))
+            File(managed, "Example.Saves.dll").writeBytes(cli())
+            check(CachedGameSource.read(downloaded, 987) != null)
+            check(CachedGameSource.find(File(root, "game"), 987, downloaded)?.directory == downloaded)
+            File(managed, "Example.Saves.dll").writeText("truncated")
+            check(CachedGameSource.read(downloaded, 987) == null)
+        }
 
         val metadataSource = File(root, "metadata/source").apply { mkdirs() }
         val managers = File(metadataSource, "globalgamemanagers").apply { writeBytes(serialized("2019.4.29f1", 24)) }

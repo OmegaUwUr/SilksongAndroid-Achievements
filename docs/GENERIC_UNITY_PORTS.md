@@ -1,10 +1,18 @@
-# Reusable Unity preparation and experimental compilation (revision 43)
+# Reusable Unity preparation and experimental compilation (revision 48)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
 app can download owned Mono Unity candidates, identify their actual dependencies,
 and compile/launch games that pass the shared capability checks. A dedicated game
 ID is no longer required for eligible classic-scene games.
+
+The development goal is broad reusable support across Unity games. See the
+[shared-tool plan](UNITY_PORTING_TOOL.md) for the capability layers and next
+priorities. Revision 48 supports custom script assembly names throughout discovery,
+source validation/recovery, audit, compilation and export; the generic route no
+longer requires a file named `Assembly-CSharp.dll`. Filename discovery remains a
+candidate classification, and full source/profile/content checks still decide
+whether a port can be compiled.
 
 ## User flow
 
@@ -45,7 +53,7 @@ retargeted in place. Assessment reports can be shared from the setup screen.
 | Component | Current implementation | What still requires a provider or adapter |
 | --- | --- | --- |
 | Exact Android engine / IL2CPP | Pinned **6000.0.50f1 / 6000.0.61f1**; automatic exact public release resolution for additional **stable 6000.0 patches**, with layout/device checks | Other engine families/streams, custom stamps and changed layouts; do not substitute a nearby release |
-| Managed game code | Owned Mono assemblies, Android engine/BCL replacements, reference and member resolution against rebuilt packages; portable framework facades | Desktop IL2CPP, conflicting desktop class libraries, missing managed SDKs, incompatible desktop APIs |
+| Managed game code | Owned Mono assembly sets with predefined or custom script names; Android engine/BCL replacements, reference and member resolution against rebuilt packages; portable framework facades | Desktop IL2CPP, conflicting desktop class libraries, missing managed SDKs, incompatible desktop APIs |
 | Assets | Linux/Windows 64-bit/macOS classic scene trees and bounded local UnityFS bundles with consistent source targets/versions, hash-pinned manifests, Vulkan checks and Android retargeting | Addressables, remote/cache/catalog/hash loading, unverified CRC/offset arguments, oversized bundles, D3D/Metal-only shaders, unsupported texture/platform features |
 | Native plugins | Import matching Android ARM64 plugins; inspect ELF, Android API note, page alignment, exports and dependency closure | Wrong SDK ABI, Windows/Linux binaries, missing Android implementations, static `__Internal` integrations |
 | Controls | Shared virtual Input System gamepad; reads Input System or legacy touchscreen events; physical controllers through the selected Android engine | Keyboard-only bindings, legacy gamepad/Rewired adaptations, game-specific actions |
@@ -131,9 +139,10 @@ content will run on Android. No Cult of the Lamb port or gameplay test was perfo
 
 ## Slime Rancher assessment
 
-The owner's Linux source report identifies Unity **2019.4.29f1**. It still needs
-an exact older-engine provider and actual game-code/content review; Linux source alone
-does not establish compatibility with Android.
+The owner's Linux source report identifies Unity **2019.4.29f1**. Revision 46
+reviewed the original code/bootstrap export, extracted the actual MonoManager
+registration and completed a host managed-to-C++ probe with the exact compiler.
+The Android native/player provider and game-specific paths remain unfinished.
 
 Revision 43 adds local UnityFS conversion and content inspection before other
 blockers, plus native-call evidence and original-code exports. It has synthetic
@@ -145,7 +154,7 @@ remaining work and files needed. The Unity 2019 engine provider is not enabled.
 | Reported requirement | Current interpretation |
 | --- | --- |
 | Unity 2019.4.29f1 | Engine/toolchain, Android player API and asset/runtime layout need a verified provider. The two Unity 6 providers cannot substitute for it. |
-| Missing ScriptingAssemblies/RuntimeInitializeOnLoads JSON | Registration layout is unverified for this older engine. Its provider must extract or regenerate correct metadata; no empty Unity 6 placeholder files are created. Registered modern providers still require their expected files. |
+| Missing ScriptingAssemblies/RuntimeInitializeOnLoads JSON | The reviewed MonoManager yields 74 assembly entries and 2,840 script references. The Android provider must still resolve actual content references and rebuild registration against Android modules; no empty Unity 6 placeholders are created. |
 | Mono.Posix, Mono.Data.Sqlite | Inspect the selected Android managed profile first. Its own surviving native bindings, missing replacement or member incompatibilities remain blockers; the source's entire cross-platform wrapper inventory is not an early pack shopping list. |
 | libc | Android provides Bionic libc. This does not prove compatibility with the Linux binding's structures, calling conventions, functions or API levels. A pack cannot replace the system libc. |
 | discord-rpc, rail_api | Reviewed presence/backend adapters or proven optional-feature paths are needed. Wrapper counts do not show which backend is active in the Steam build. These calls are not automatically stubbed or removed. |
@@ -156,7 +165,8 @@ The [NDK native API guide](https://developer.android.com/ndk/guides/stable_apis)
 describe Android's native libraries and POSIX differences. The game's legacy
 [Discord RPC library](https://github.com/discord/discord-rpc) uses desktop-oriented
 integration; adopting another Android-capable Discord API requires an adapter.
-No Slime Rancher conversion, rebuilt APK or gameplay test was performed here.
+The host conversion probe is documented separately; no Slime Rancher Android
+native build, rebuilt APK or gameplay test was performed here.
 
 ## Android plugin packs
 

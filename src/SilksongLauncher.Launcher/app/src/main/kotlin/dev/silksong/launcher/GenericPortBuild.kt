@@ -48,7 +48,7 @@ object GenericPortBuild {
             val report = assess(context, source, progress)
             val data = report.data ?: error("Choose complete game files first.")
             val version = report.version ?: error("The source engine version is unreadable.")
-            require(GameCompatibility.hasManagedHeader(File(data, "Managed/Assembly-CSharp.dll")))
+            GameCompatibility.monoAssemblies(data)
             val audit = File(Il2cppConverter.rootFor(context), "managed-port-audit.json")
             require(audit.length() in 1L..(32 * 1024 * 1024L))
             val json = JSONObject(audit.readText()); require(json.getInt("schema") == 2)
@@ -72,7 +72,7 @@ object GenericPortBuild {
         progress(PlayerImage.Progress("Inspecting the downloaded game", -1f))
         val initial = GenericPortAssessment.source(source)
         if (initial.data == null || initial.version == null ||
-            !GameCompatibility.hasManagedHeader(File(initial.data, "Managed/Assembly-CSharp.dll"))) return initial
+            !GameCompatibility.hasMonoAssemblies(initial.data)) return initial
         require("arm64-v8a" in Build.SUPPORTED_ABIS && context.packageManager.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL)) {
             "The common builder needs an ARM64 Android device with Vulkan."
         }
@@ -164,7 +164,7 @@ object GenericPortBuild {
             val managed = JSONObject(managedPath.readText())
             val checked = GenericPortAssessment.finish(assessment, context, managed, null)
             check(checked.blockers.isEmpty()) { checked.asText() }
-            if (!Il2cppConverter.isCurrent(unity, data, root)) Il2cppConverter.convert(unity, data, context, root, target).collect {
+            if (!Il2cppConverter.isCurrent(unity, data, root, target)) Il2cppConverter.convert(unity, data, context, root, target).collect {
                 send(PlayerImage.Progress(it.step, it.fraction, it.detail))
             }
             ClassicPlayerImage.build(unity, data, context, root, target).collect { send(it) }
