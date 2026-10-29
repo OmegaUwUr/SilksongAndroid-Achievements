@@ -173,7 +173,9 @@ object GameCompatibility {
             else if (!profile.hasPortAdapter && header.platform !in PortTarget.desktopPlatforms)
                 blockers += "This source platform needs a converter provider."
             if (profile.unityVersions.isEmpty() && !UnityDistribution.supports(header.version)) blockers += "No verified Android engine/toolchain is registered for Unity ${header.version}."
-            else if (profile.unityVersions.isEmpty()) notes += "A common Android engine provider is available for this version; run Download & prepare for the full dependency and shader checks."
+            else if (profile.unityVersions.isEmpty()) notes += if (UnityDistribution.isPinned(header.version))
+                "A pinned Android engine provider is available for this version; run Download & prepare for the full dependency and shader checks."
+                else "This stable Unity 6.0 patch is eligible for automatic exact-release resolution. Run Download & prepare to verify the runtime, dependencies and shaders; metadata discovery alone does not enable compilation."
             else if (header.version !in profile.unityVersions) blockers += "This Unity version does not match this game's registered engine/toolchain."
         }
         val managed = File(data, "Managed")

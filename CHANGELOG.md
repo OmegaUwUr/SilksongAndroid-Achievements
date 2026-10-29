@@ -2,6 +2,24 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.42 (candidate)
+
+- Resolves exact public stable Unity 6000.0 patch releases automatically using
+  Unity's official release/module metadata. Retains the two pinned component sets
+  and dedicated game guards; rejects fuzzy versions, changed archive layouts,
+  foreign downloads, prereleases and unsupported engine families/streams.
+- Verifies full archive sizes/checksums, selected runtime layout and device API/page
+  requirements. Fingerprints installed core files for offline reuse, stages before
+  publishing, preserves prior runtimes and reuses completed components after retry.
+- Keeps asset/shader/native/profile preparation mandatory before experimental
+  compilation. Unity 2019/2022, Addressables and missing platform adapters remain
+  unsupported. The first additional editor download may exceed 4 GB.
+
+Validation: 18 runtime checks, 52 generic source checks, 17 pack checks, 13 porting
+regression groups and the dedicated compatibility checks pass. All 106 launcher
+Kotlin sources type-check. Exact limits are in docs/AUTOMATIC_UNITY_RUNTIMES.md. No APK or
+on-device runtime/game build is performed by this change; APK assembly stays manual.
+
 ## 1.0.3-achievements.35 (candidate)
 
 - Adds per-game Steam service registration, isolated HK achievement IPC/schema/cache,

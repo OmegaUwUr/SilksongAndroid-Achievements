@@ -14,7 +14,7 @@ class PortTarget private constructor(val id: String, val unityVersion: String,
 
         fun classic(appId: Int, version: String, sourcePlatform: Int = 24): PortTarget {
             require(appId > 0 && appId !in listOf(1030300, 367520)) { "Use the dedicated adapter for this game." }
-            require(UnityDistribution.supports(version)) { "No verified Android component set for Unity $version." }
+            require(UnityDistribution.supports(version)) { "No supported engine-family provider for Unity $version." }
             require(sourcePlatform in desktopPlatforms) { "This serialized source platform needs a converter provider." }
             return PortTarget("steam-$appId", version, "GenericPortPatches.dll", "ondevice/generic-port-patches", true, sourcePlatform)
         }

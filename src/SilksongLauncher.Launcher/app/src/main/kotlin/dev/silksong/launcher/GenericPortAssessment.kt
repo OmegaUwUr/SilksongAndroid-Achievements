@@ -31,8 +31,9 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             else {
                 if (header.platform !in PortTarget.desktopPlatforms) blockers += "Source target ${header.platform} needs an asset converter provider."
                 else facts += "Source platform: ${GameCompatibility.platformName(header.platform)}. Every serialized file must match; usable Vulkan shaders are required. Direct3D/Metal shader conversion is not available."
-                if (!UnityDistribution.supports(header.version)) blockers += "Unity ${header.version} needs an engine/toolchain provider. Available verified component sets: ${UnityDistribution.versions().joinToString()}. Another engine version cannot safely substitute for it."
-                else facts += "Exact Android engine and IL2CPP components: downloadable automatically from Unity."
+                if (!UnityDistribution.supports(header.version)) blockers += "Unity ${header.version} needs an engine-family/toolchain provider. Pinned component sets: ${UnityDistribution.versions().joinToString()}; automatic exact-version resolution covers stable Unity 6000.0 patch releases. Another engine version cannot safely substitute for it."
+                else if (UnityDistribution.isPinned(header.version)) facts += "Exact Android engine and IL2CPP components: downloadable automatically from Unity (pinned component set)."
+                else facts += "Unity 6.0 runtime: resolve this exact public release automatically from Unity, verify its archives and check the installed layout before compilation. This is experimental runtime eligibility, not gameplay verification. The initial editor transfer can exceed 4 GB to verify its full published checksum."
             }
             if (!GameCompatibility.hasManagedHeader(File(data, "Managed/Assembly-CSharp.dll")) ||
                 File(data, "il2cpp_data/Metadata/global-metadata.dat").exists() ||

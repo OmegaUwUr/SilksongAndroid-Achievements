@@ -44,7 +44,7 @@ def main() -> None:
     creator = importlib.util.module_from_spec(spec); spec.loader.exec_module(creator)
     jars = list(Path(os.environ["KOTLIN_CHECK_JARS"]).glob("*.jar")) + list(Path(os.environ["STEAM_CHECK_JARS"]).glob("*.jar"))
     cp = os.pathsep.join(str(p) for p in jars if p.name not in ("check.jar", "launcher-check.jar", "javasteam-1.8.0.jar", "aapt2.jar") and not p.name.endswith("-sources.jar"))
-    names = ("GameProfile", "GameCompatibility", "PortTarget", "UnityDistribution", "PortDependencyAudit", "AndroidElf",
+    names = ("GameProfile", "GameCompatibility", "PortTarget", "UnityDistribution", "UnityReleaseCatalog", "PortDependencyAudit", "AndroidElf",
              "AndroidPluginPack", "PortSourceFingerprint", "GenericPortContext", "GenericPortAssessment", "NativePortRequirements",
              "BundledNativeLibraryCatalog", "BundledNativeLibraries")
     with tempfile.TemporaryDirectory(prefix="generic-port-") as temporary:

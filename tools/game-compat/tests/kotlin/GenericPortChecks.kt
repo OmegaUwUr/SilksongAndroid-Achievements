@@ -70,6 +70,18 @@ fun main(args: Array<String>) {
             for (id in listOf(0, 1030300, 367520)) check(runCatching { PortTarget.classic(id, "6000.0.50f1") }.isFailure)
             check(runCatching { PortTarget.classic(987, "2022.3.1f1") }.isFailure)
         }
+        test("automatic patch eligibility does not authorize a build or substitute a dedicated engine") {
+            header.writeBytes(serialized("6000.0.62f1"))
+            try {
+                val report = GenericPortAssessment.source(data)
+                check(report.blockers.isEmpty() && !report.canBuild && !report.profileVerified)
+                check(report.facts.any { "resolve this exact public release" in it })
+                PortTarget.classic(987, "6000.0.62f1").requireData(data)
+                check(runCatching { PortTarget.SILKSONG.requireData(data) }.isFailure)
+                for (version in listOf("2019.4.29f1", "2022.3.62f2", "6000.1.1f1", "6000.0.62b1"))
+                    check(runCatching { PortTarget.classic(987, version) }.isFailure)
+            } finally { header.writeBytes(serialized()) }
+        }
         test("desktop sources require their own validated target and full shader preparation") {
             for (platform in listOf(19, 2)) {
                 header.writeBytes(serialized(platform = platform))

@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 41)
+# Reusable Unity preparation and experimental compilation (revision 42)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -44,7 +44,7 @@ retargeted in place. Assessment reports can be shared from the setup screen.
 
 | Component | Current implementation | What still requires a provider or adapter |
 | --- | --- | --- |
-| Exact Android engine / IL2CPP | Automatic, integrity-checked Unity downloads for **6000.0.50f1** and **6000.0.61f1**, selected by version rather than game ID | Other Unity versions/families; do not substitute a nearby release |
+| Exact Android engine / IL2CPP | Pinned **6000.0.50f1 / 6000.0.61f1**; automatic exact public release resolution for additional **stable 6000.0 patches**, with layout/device checks | Other engine families/streams, custom stamps and changed layouts; do not substitute a nearby release |
 | Managed game code | Owned Mono assemblies, Android engine/BCL replacements, reference and member resolution against rebuilt packages; portable framework facades | Desktop IL2CPP, conflicting desktop class libraries, missing managed SDKs, incompatible desktop APIs |
 | Assets | Linux/Windows 64-bit/macOS classic scene trees with consistent source targets, hash-pinned generated manifests, Vulkan shader checks and Android retargeting | Generic Addressables/AssetBundles, D3D/Metal-only shaders, unsupported texture/platform features |
 | Native plugins | Import matching Android ARM64 plugins; inspect ELF, Android API note, page alignment, exports and dependency closure | Wrong SDK ABI, Windows/Linux binaries, missing Android implementations, static `__Internal` integrations |
@@ -58,6 +58,12 @@ it. Passing metadata checks cannot prove that plugin calling conventions, textur
 formats, graphics performance, audio, save behavior or all game paths work. Every
 new port needs device testing. No successful generic game conversion or gameplay
 has been observed in this workspace.
+
+Revision 42 adds [automatic exact-version runtime resolution](AUTOMATIC_UNITY_RUNTIMES.md)
+for stable Unity 6.0 patches. It validates official metadata and complete archive
+checksums, fingerprints installed files, preserves the previous runtime on failure,
+and still requires full preparation before compilation. The first automatic editor
+download may exceed 4 GB. Unity 2019/2022 and other streams remain provider work.
 
 Revision 37 removes the blanket Linux-only gate for generic classic sources. It
 does not translate Direct3D or Metal shader programs into Vulkan. Every serialized

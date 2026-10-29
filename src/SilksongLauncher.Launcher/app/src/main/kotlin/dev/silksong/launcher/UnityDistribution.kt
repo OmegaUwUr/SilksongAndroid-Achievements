@@ -28,7 +28,8 @@ internal data class UnityDistribution(
             ),
         )
         )
-        fun supports(version: String): Boolean = version in known
+        fun isPinned(version: String): Boolean = version in known
+        fun supports(version: String): Boolean = isPinned(version) || UnityReleaseCatalog.eligible(version)
         fun versions(): Set<String> = known.keys
         fun forTarget(target: PortTarget): UnityDistribution = known.getValue(target.unityVersion)
     }

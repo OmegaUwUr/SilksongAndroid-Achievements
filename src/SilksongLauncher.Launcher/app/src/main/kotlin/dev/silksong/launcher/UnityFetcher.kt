@@ -36,7 +36,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.DigestInputStream
 import java.security.MessageDigest
-import java.util.zip.InflaterInputStream
 import kotlin.coroutines.coroutineContext
 
 object UnityFetcher {
@@ -64,8 +63,13 @@ object UnityFetcher {
 
     /** True once both pieces are on disk. */
     fun isPresent(root: File, target: PortTarget = PortTarget.SILKSONG): Boolean =
-        versionMatches(root, target) && editorReady(File(root, "editor"), target) && inputSystemReady(root) &&
-            engineLibsIn(File(root, "android")) != null
+        versionMatches(root, target) && inputSystemReady(root) &&
+            if (UnityDistribution.isPinned(target.unityVersion))
+                editorReady(File(root, "editor"), target) && engineLibsIn(File(root, "android")) != null
+            else UnityRuntimeInstaller.ready(root, target.unityVersion) && runCatching {
+                UnityRuntimeInstaller.requireDevice(root, android.os.Build.VERSION.SDK_INT,
+                    android.system.Os.sysconf(android.system.OsConstants._SC_PAGESIZE)); true
+            }.getOrDefault(false)
 
     /**
      * Where the Android module's arm64 libraries ended up.
@@ -100,6 +104,23 @@ object UnityFetcher {
     fun fetch(root: File, downloads: Semaphore = Semaphore(1), target: PortTarget = PortTarget.SILKSONG): Flow<Progress> = channelFlow {
         if (target == PortTarget.HOLLOW_KNIGHT) require(root.path.replace('\\', '/').endsWith("/games/hollow-knight/unity")) {
             "Hollow Knight needs its own Unity download directory"
+        }
+        if (!UnityDistribution.isPinned(target.unityVersion)) {
+            require(target.generic) { "Dedicated game adapters require their pinned Unity components." }
+            downloads.withPermit {
+                UnityRuntimeInstaller.install(root, target.unityVersion, android.os.Build.VERSION.SDK_INT,
+                    android.system.Os.sysconf(android.system.OsConstants._SC_PAGESIZE)) { step, done, total ->
+                    trySend(Progress(step, done.toFloat() / total, mb(done, total)))
+                }
+            }
+            if (!inputSystemReady(root)) downloads.withPermit {
+                fetchInputSystem(root) { done, total -> trySend(Progress("Unity Input System", done.toFloat() / total, mb(done, total))) }
+            }
+            coroutineContext.ensureActive()
+            stageEngine(root, File(root.parentFile, "staging"))
+            File(root, "unity-version.txt").writeText(target.unityVersion)
+            send(Progress("Unity ${target.unityVersion}", 1f, "exact runtime installed; game validation still required"))
+            return@channelFlow
         }
         val distribution = UnityDistribution.forTarget(target)
         val versionOk = versionMatches(root, target)
@@ -415,69 +436,7 @@ object UnityFetcher {
      * deflate-compressed XML listing every file with its offset and length
      * within the heap that follows. Only one entry is wanted.
      */
-    private fun payloadOf(pkg: File): InputStream {
-        val raf = java.io.RandomAccessFile(pkg, "r")
-        try {
-            val header = ByteArray(28)
-            raf.readFully(header)
-            val buf = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.BIG_ENDIAN)
-            require(buf.int == 0x78617221) { "not a xar archive (bad magic)" }
-            val headerSize = buf.short.toInt() and 0xffff
-            buf.short // version
-            val tocCompressed = buf.long
-
-            raf.seek(headerSize.toLong())
-            val tocBytes = ByteArray(tocCompressed.toInt())
-            raf.readFully(tocBytes)
-            val toc = InflaterInputStream(tocBytes.inputStream())
-                .readBytes().toString(Charsets.UTF_8)
-
-            val heap = headerSize + tocCompressed
-            val (offset, length) = payloadExtent(toc)
-            raf.seek(heap + offset)
-            return BoundedStream(raf, length)
-        } catch (t: Throwable) {
-            raf.close()
-            throw t
-        }
-    }
-
-    /**
-     * Finds the payload's offset and length in the xar table of contents.
-     *
-     * The TOC is XML and each <file> holds its <data> block *before* its
-     * <name>, so searching forward from the name lands on the next file's
-     * data -- which in this package is a 599-byte install script, and is
-     * exactly the mistake that made the first attempt extract 12 KB of
-     * postinstall and nothing else. Each file element is therefore taken
-     * whole, and its own data read from within it.
-     *
-     * A .pkg can hold several component packages, each with a Payload; the
-     * largest is the one carrying the engine.
-     */
-    private fun payloadExtent(toc: String): Pair<Long, Long> {
-        var best: Pair<Long, Long>? = null
-        for (chunk in toc.split("<file ").drop(1)) {
-            if (!chunk.contains("<name>Payload</name>")) continue
-            val start = chunk.indexOf("<data>")
-            val end = chunk.indexOf("</data>", start + 1)
-            if (start < 0 || end < 0) continue
-            val data = chunk.substring(start, end)
-            val offset = tag(data, "offset") ?: continue
-            val length = tag(data, "length") ?: continue
-            if (best == null || length > best!!.second) best = offset to length
-        }
-        return best ?: throw java.io.IOException("no Payload in the .pkg table of contents")
-    }
-
-    private fun tag(xml: String, name: String): Long? {
-        val open = "<$name>"
-        val i = xml.indexOf(open)
-        if (i < 0) return null
-        val j = xml.indexOf("</$name>", i)
-        if (j < 0) return null
-        return xml.substring(i + open.length, j).trim().toLongOrNull()
-    }
+    private fun payloadOf(pkg: File): InputStream = UnityAndroidPackage.payloadOf(pkg)
 
     // ── extraction ─────────────────────────────────────────────────────────
 
@@ -571,28 +530,6 @@ object UnityFetcher {
             lastReport = seen
             onProgress(seen, total)
         }
-    }
-
-    /** A slice of a file, for reading one member out of an archive. */
-    private class BoundedStream(
-        private val raf: java.io.RandomAccessFile,
-        private var remaining: Long,
-    ) : InputStream() {
-        override fun read(): Int {
-            if (remaining <= 0) return -1
-            val b = raf.read()
-            if (b >= 0) remaining--
-            return b
-        }
-
-        override fun read(b: ByteArray, off: Int, len: Int): Int {
-            if (remaining <= 0) return -1
-            val n = raf.read(b, off, minOf(len.toLong(), remaining).toInt())
-            if (n > 0) remaining -= n
-            return n
-        }
-
-        override fun close() = raf.close()
     }
 
     private object NullOutputStream : java.io.OutputStream() {

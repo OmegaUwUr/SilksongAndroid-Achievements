@@ -92,6 +92,7 @@ object GenericPortBuild {
         if (!UnityFetcher.isPresent(unity, target)) UnityFetcher.fetch(unity, target = target).collect {
             progress(PlayerImage.Progress(it.step, it.fraction, it.detail))
         }
+        check(UnityFetcher.isPresent(unity, target)) { "The exact Unity runtime did not pass installation checks. Run preparation again." }
         // Resolve references again with the actual Android BCL/engine, not the desktop copies.
         PlayerImage.run(surgery, context, listOf("inspect-managed-port", initial.data.absolutePath, unity.absolutePath, managedPath.absolutePath))
         return GenericPortAssessment.finish(initial, context, json(managedPath), json(assetPath))

@@ -1,0 +1,33 @@
+{
+  "results": [
+    {
+      "version": "6000.0.62f1",
+      "shortRevision": "f99f05b3e950",
+      "downloads": [
+        {
+          "url": "https://download.unity3d.com/download_unity/f99f05b3e950/LinuxEditorInstaller/Unity-6000.0.62f1.tar.xz",
+          "type": "TAR_XZ",
+          "integrity": "md5-Zjk1OWM2YzEwZTg1YTc0OWQwMzJmNmQ1ZDIxZDBlN2Q=",
+          "downloadSize": {
+            "value": 4479517292,
+            "unit": "BYTE"
+          },
+          "platform": "LINUX",
+          "architecture": "X86_64",
+          "modules": [
+            {
+              "url": "https://download.unity3d.com/download_unity/f99f05b3e950/MacEditorTargetInstaller/UnitySetup-Android-Support-for-Editor-6000.0.62f1.pkg",
+              "type": "PKG",
+              "integrity": "md5-ZWFhZjMxYTBhOTQwMmI2MzIwNjZmMDIwZTUwZDJjYjY=",
+              "downloadSize": {
+                "value": 675236638,
+                "unit": "BYTE"
+              },
+              "id": "android"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

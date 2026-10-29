@@ -52,7 +52,11 @@ fun main() {
         check(runCatching { GameCompatibility.requireSilksongData(data) }.isFailure)
         info.writeText("Team Cherry\nHollow Knight Silksong\n")
         check(GameCompatibility.inspect(root, profile).basicChecksPassed)
-        check(!GameCompatibility.inspect(root, profile.copy(id="hollow-knight", title="Hollow Knight", steamAppId=367520)).basicChecksPassed)
+        val mislabeled = profile.copy(id="hollow-knight", title="Hollow Knight", steamAppId=367520)
+        check(!mislabeled.hasPortAdapter)
+        // A display-name edit retains the old product allowlist; test the actual HK identity requirement.
+        check(!GameCompatibility.inspect(root, mislabeled.copy(products=listOf("Hollow Knight"),
+            dataDirectories=listOf("Hollow Knight_Data"))).basicChecksPassed)
         val before = data.walkTopDown().filter { it.isFile }.associate { it.relativeTo(root).path to it.readBytes().toList() }
         check(!GameCompatibility.inspect(root, profile).asText().contains(root.absolutePath))
         val after = data.walkTopDown().filter { it.isFile }.associate { it.relativeTo(root).path to it.readBytes().toList() }

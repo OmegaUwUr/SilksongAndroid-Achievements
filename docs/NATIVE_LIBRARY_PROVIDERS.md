@@ -50,7 +50,9 @@ integration, proprietary codecs, Burst-generated game code, Steam/RAIL/Galaxy AP
 or Discord integration. Those need matching libraries and/or reviewed adapters.
 Android system libraries cannot be overridden through this bundle or a pack.
 
-The exact registered engines remain **6000.0.50f1** and **6000.0.61f1**. Slime
+The pinned engines remain **6000.0.50f1** and **6000.0.61f1**. Revision 42 additionally
+offers [automatic exact-release resolution](AUTOMATIC_UNITY_RUNTIMES.md) for stable
+6000.0 patches, subject to installed-layout/device and full game checks. Slime
 Rancher's **2019.4.29f1** still needs an engine/player/toolchain and registration
 provider, bundle/shader handling and platform integration. Cult of the Lamb also
 needs its Unity 2022 and content/platform adapters. A supplied SQLite library does

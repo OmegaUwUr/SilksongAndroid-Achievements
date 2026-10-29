@@ -1,6 +1,6 @@
 # Multi-game porting status
 
-Revision 41 is an **experimental source candidate without a new APK build here** stacked on the
+Revision 42 is an **experimental source candidate without a new APK build here** stacked on the
 porting-performance and personalized Silksong touch-control candidates.
 
 | Game | Candidate behavior | Input / current limits |
@@ -66,6 +66,13 @@ conflicts stop the merge, and all original preparation gates run again. This is
 native component integration, not a new engine/game adapter; Slime Rancher and
 Cult of the Lamb remain blocked by their other requirements. See the
 [native provider guide](NATIVE_LIBRARY_PROVIDERS.md).
+
+Revision 42 resolves additional public stable Unity **6000.0 patch releases** from
+Unity's official API, verifies the exact archives and runtime layout, and reuses
+completed components without a new APK version entry. It preserves the two pinned
+providers and all asset/plugin/profile guards. It does not enable Unity 2019/2022,
+other engine streams or generic bundle conversion. See the [automatic runtime guide](AUTOMATIC_UNITY_RUNTIMES.md),
+including the first-download bandwidth and remaining device checks.
 
 ## What changed after the inspection-only catalog
 
