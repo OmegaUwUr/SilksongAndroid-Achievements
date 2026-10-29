@@ -63,6 +63,12 @@ offline. The actual Slime Rancher source audit has no missing references/members
 Mono.Posix and two absent Android cluster modules remain unresolved. This does not
 implement its native build, player or backend adapters.
 
+Revision 50 adds [legacy script/type registration planning](UNITY_2019_REGISTRATION.md)
+to that shared preparation step. It resolves explicit source references against
+selected Android/game types and reads replacement-module initializers, preserving
+registration order and reporting missing providers. The writer, built-in virtual
+resource mapping, native link and Android player remain separate provider work.
+
 1. **Engine families:** complete providers for Unity 2022.3, 2021.3 and 2019.4.
    Each needs exact official components, its compiler/profile, native recipe,
    registration mapping and Android Java player integration. The existing Unity

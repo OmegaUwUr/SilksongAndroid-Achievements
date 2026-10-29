@@ -25,7 +25,7 @@ internal object PortReviewMetadata {
                 total += File(data, "Managed/$name").length(); require(total <= 256L * 1024 * 1024)
                 require(row.getInt("flags") in 0..65535 && hash.matches(row.getString("sha256")) && digest(File(data, "Managed/$name")) == row.getString("sha256"))
             }
-            facts += "Legacy registration: ${assemblies.length()} assembly entries and ${scripts.length()} script references read from MonoManager; ${initializers.length()} source initializers inspected. Modern JSON is not required to read this layout. The Android provider must still resolve script references and rebuild registration against the selected Android modules."
+            facts += "Legacy registration: ${assemblies.length()} assembly entries and ${scripts.length()} script references read from MonoManager; ${initializers.length()} source initializers inspected. Modern JSON is not required to read this layout. The Android provider must still rebuild registration against the selected Android modules; script binding is checked separately."
         }
         if (review != null) {
             require(appId == 433340 && review.getInt("schema") == 1 && review.getInt("appId") == appId &&

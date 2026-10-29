@@ -56,6 +56,7 @@ internal static class Program
             Console.Error.WriteLine("  inspect-portable-content <source-root> <source-target: 24|19|2> <report.json> — diagnostic report, including UnityFS content");
             Console.Error.WriteLine("  inspect-native-call-sites <source-root> <report.json> — metadata for reviewing native backend adapters");
             Console.Error.WriteLine("  inspect-legacy-registration <source-root> <report.json> — original Unity 2019 MonoManager data; does not enable a runtime");
+            Console.Error.WriteLine("  inspect-legacy-android-registration <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <report.json> — resolve loose-file script types and selected initializers; no registration rewrite or runtime approval");
             Console.Error.WriteLine("  inspect-managed-profile <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <report.json> — full member/dependency audit; does not register a runtime");
             Console.Error.WriteLine("  review-slime-rancher-source <source-root> <report.json> — exact Linux 1.4.3 source review");
             Console.Error.WriteLine("  disable-slime-rancher-discord <source-root> <new-Assembly-CSharp.dll> — disable optional desktop presence in a separate staged copy");
@@ -89,6 +90,7 @@ internal static class Program
                 "inspect-managed-port" when args.Length == 4 => ManagedPortAudit.Run(args[1], args[2], args[3]),
                 "inspect-native-call-sites" when args.Length == 3 => NativeCallEvidence.Run(args[1], args[2]),
                 "inspect-legacy-registration" when args.Length == 3 => LegacyRuntimeRegistration.Run(args[1], args[2]),
+                "inspect-legacy-android-registration" when args.Length == 5 => LegacyAndroidRegistration.Run(args[1], args[2], args[3], args[4]),
                 "inspect-managed-profile" when args.Length == 5 => ManagedPortAudit.RunProfile(args[1], args[2], args[3], args[4]),
                 "review-slime-rancher-source" when args.Length == 3 => SlimeRancherSourceAdapter.ReviewSource(args[1], args[2]),
                 "disable-slime-rancher-discord" when args.Length == 3 => SlimeRancherSourceAdapter.DisableOptionalDiscord(args[1], args[2]),

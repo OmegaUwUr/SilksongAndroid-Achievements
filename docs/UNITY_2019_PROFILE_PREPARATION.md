@@ -1,5 +1,10 @@
 # Unity 2019.4 component preparation — revision 49
 
+Revision 50 reuses these exact cached components and additionally runs the
+[legacy Android registration binding plan](UNITY_2019_REGISTRATION.md) during
+preparation. No component identity, installed-player ABI or compilation-cache
+recipe changes are needed for that read-only check.
+
 The common tool can now prepare exact compiler and managed-profile audit inputs
 for stable Unity 2019.4 releases while other requirements remain blocked. This
 removes the preparation loop in which backend errors prevented downloading the

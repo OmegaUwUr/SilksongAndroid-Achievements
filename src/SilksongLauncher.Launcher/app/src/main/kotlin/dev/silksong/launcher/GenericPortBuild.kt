@@ -106,6 +106,8 @@ object GenericPortBuild {
         // Check native declarations before fetching hundreds of megabytes of engine components.
         val managedPath = File(root, "managed-port-audit.json")
         val profileEvidence = File(root, "engine-profile-evidence.json").also { it.delete() }
+        val registrationPath = File(root, "legacy-android-registration.json").also { it.delete() }
+        var registrationFailure: String? = null
         val profile = if (UnityManagedProfile.supports(initial.version)) UnityProfileInstaller.root(profileCache(context), initial.version)
             .takeIf { UnityProfileInstaller.ready(it, initial.version) } else null
         if (profile == null) {
@@ -116,12 +118,25 @@ object GenericPortBuild {
             val receipt = UnityProfileInstaller.receiptHash(profile)
             PlayerImage.run(surgery, context, listOf("inspect-managed-profile", initial.data.absolutePath,
                 UnityProfileInstaller.bcl(profile).absolutePath, UnityProfileInstaller.engine(profile).absolutePath, managedPath.absolutePath))
+            progress(PlayerImage.Progress("Binding legacy scripts against Android assemblies", -1f))
+            try {
+                PlayerImage.run(surgery, context, listOf("inspect-legacy-android-registration", initial.data.absolutePath,
+                    UnityProfileInstaller.bcl(profile).absolutePath, UnityProfileInstaller.engine(profile).absolutePath, registrationPath.absolutePath))
+                check(registrationPath.length() in 1L..(32 * 1024 * 1024L)) { "Registration binding report is missing or exceeds its limit." }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                registrationPath.delete()
+                registrationFailure = "Legacy Android registration planning could not complete. This source needs a registration adapter or corrected inputs; the engine remains blocked. ${error.message.orEmpty().take(400)}"
+                LauncherLog.log("Legacy Android registration planning failed", error)
+            }
             check(binding == PortSourceFingerprint.bindings(initial.data) && receipt == UnityProfileInstaller.receiptHash(profile) && UnityProfileInstaller.ready(profile, initial.version)) {
                 "Source or exact engine profile changed during inspection. Prepare again."
             }
             profileEvidence.writeText(JSONObject().put("schema", 1).put("appId", context.appId).put("unityVersion", initial.version)
                 .put("recipe", UnityManagedProfile.RECIPE).put("bindingsSha256", binding)
                 .put("componentReceiptSha256", receipt).put("auditSha256", UnityReleaseCatalog.hash(managedPath.readBytes()))
+                .put("registrationAuditStatus", if (registrationFailure == null) "completed" else "unavailable")
+                .apply { if (registrationFailure == null) put("registrationAuditSha256", UnityReleaseCatalog.hash(registrationPath.readBytes())) }
                 .put("scope", "Exact compiler/Android managed-profile audit only. Native build, Android player, registration, backend and gameplay compatibility are not approved.").toString())
         }
         val callSites = File(root, "native-call-sites.json").also { it.delete() }
@@ -150,9 +165,11 @@ object GenericPortBuild {
                 initial.sourcePlatform.toString(), assetPath.absolutePath))
             json(assetPath)
         } else null
-        val withProfile = if (profile != null) initial.copy(facts = initial.facts.filterNot { it.startsWith("Exact Unity ${initial.version} compiler and Android managed-profile components can be downloaded separately") } +
+        val withProfile = if (profile != null) initial.copy(blockers = initial.blockers + listOfNotNull(registrationFailure),
+            facts = initial.facts.filterNot { it.startsWith("Exact Unity ${initial.version} compiler and Android managed-profile components can be downloaded separately") } +
             "Exact Unity ${initial.version} compiler and Android managed-profile components are installed and fully fingerprinted in the shared cache. Original game assemblies were audited against that Android profile; native/player integration remains blocked.") else initial
-        val preliminary = GenericPortAssessment.finish(withProfile, context, json(managedPath), content, legacy, review)
+        val preliminary = GenericPortAssessment.finish(withProfile, context, json(managedPath), content, legacy, review,
+            registrationPath.takeIf { profile != null && registrationFailure == null }?.let { json(it) })
         if (preliminary.blockers.isNotEmpty()) return preliminary
         val target = PortTarget.classic(context.appId, initial.version, initial.sourcePlatform!!)
         if (!UnityFetcher.isPresent(unity, target)) UnityFetcher.fetch(unity, target = target).collect {

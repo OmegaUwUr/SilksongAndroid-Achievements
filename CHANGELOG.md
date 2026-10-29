@@ -2,6 +2,37 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.50 (candidate)
+
+- Adds a shared, read-only Unity 2019.4 Android registration binding plan.
+  MonoManager script references resolve only through their explicit contained
+  loose-file paths. Script class/namespace/assembly identities must exist in the
+  selected Android BCL/engine or original managed package/game assembly. Original
+  pointer order, negative path IDs and source flags are retained.
+- Reads runtime initializers from the selected Android/game modules. Desktop
+  engine/framework binaries cannot fill missing providers; package assemblies
+  such as UnityEngine.UI retain their own managed audit requirements. Missing
+  registrations, malformed initializer shapes and unsupported bundle/virtual
+  paths remain visible requirements rather than being silently removed.
+- Runs this plan with the prepared exact profile, binds its report hash into
+  component/source evidence, checks source/content hashes when displaying results
+  and includes it in the review export. No modern registration JSON is fabricated
+  and no source assembly/content is rewritten.
+- Reuses revision-49 shared components offline. Existing scans, downloads,
+  installed players, native build caches and saves keep their identities. This
+  step does not enable the unfinished Unity 2019 native/player recipe.
+
+Validation: 161 C# cases, 70 generic source/component checks, 17 pack checks and
+33 persistence/update checks pass; all 115 production Kotlin files compile.
+Real exact archives were verified/installed and reused offline again. The owned
+Slime Rancher code/bootstrap export retains 74 registrations and 2,840 script
+references; its two cluster modules have no selected provider, and the referenced
+content was not included in that export. Two Android CoreModule initializers were
+read. The real C# report was accepted by production Kotlin validation, original
+source hashes remain unchanged, and no native/player/gameplay compatibility is
+claimed. No revision-50 APK or device test was performed; builds remain manual.
+See docs/UNITY_2019_REGISTRATION.md.
+
 ## 1.0.3-achievements.49 (candidate)
 
 - Adds a separate **Download engine profile & audit** action for stable Unity

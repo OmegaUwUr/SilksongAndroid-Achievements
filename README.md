@@ -16,6 +16,12 @@ components are shared across games and retained after app updates. This resolves
 deferred managed-profile inspection independently of unfinished native/player and
 backend adapters. See [Unity 2019 profile preparation](docs/UNITY_2019_PROFILE_PREPARATION.md).
 
+Revision 50 adds source-bound **legacy Android registration planning**: MonoManager
+script references are matched to explicit loose files and selected Android/game
+types, and initializers are read from replacement modules. Missing references and
+providers remain blocked. Cached revision-49 engine inputs are reused. See
+[the binding checks and remaining provider work](docs/UNITY_2019_REGISTRATION.md).
+
 This is a community project based on **jakobkhansen's SilksongAndroid**, with
 additional SteamSync and achievement features. It is not an official Team Cherry
 or Valve release.

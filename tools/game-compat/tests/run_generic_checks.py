@@ -46,7 +46,7 @@ def main() -> None:
     jars.sort(key=lambda p: (not p.name.startswith("json-"), p.name))  # Real JSON before Android's host stubs.
     cp = os.pathsep.join(str(p) for p in jars if p.name not in ("check.jar", "launcher-check.jar", "javasteam-1.8.0.jar", "aapt2.jar") and not p.name.endswith("-sources.jar"))
     names = ("GameProfile", "GameCompatibility", "PortTarget", "UnityDistribution", "UnityReleaseCatalog", "UnityManagedProfile", "PortDependencyAudit", "AndroidElf",
-             "AndroidPluginPack", "PortSourceFingerprint", "PortReviewMetadata", "GenericPortContext", "GenericPortAssessment", "NativePortRequirements",
+             "AndroidPluginPack", "PortSourceFingerprint", "PortReviewMetadata", "LegacyRegistrationBindings", "GenericPortContext", "GenericPortAssessment", "NativePortRequirements",
              "BundledNativeLibraryCatalog", "BundledNativeLibraries", "PortEvidenceExport")
     with tempfile.TemporaryDirectory(prefix="generic-port-") as temporary:
         directory = Path(temporary)
@@ -92,6 +92,7 @@ def main() -> None:
                         str(Path(__file__).parent / "kotlin/GenericPortChecks.kt"),
                         str(Path(__file__).parent / "kotlin/BundledLibraryChecks.kt"),
                         str(Path(__file__).parent / "kotlin/PortEvidenceExportChecks.kt"),
+                        str(Path(__file__).parent / "kotlin/LegacyRegistrationBindingChecks.kt"),
                         str(Path(__file__).parent / "kotlin/NativePortRequirementChecks.kt")], check=True)
         subprocess.run(["java", "-cp", str(out) + os.pathsep + cp, "dev.silksong.launcher.GenericPortChecksKt",
                         str(directory), creator.bindings(managed.parent)], check=True)

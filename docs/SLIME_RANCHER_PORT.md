@@ -1,5 +1,13 @@
 # Slime Rancher port work — revision 46
 
+Revision 50 adds a shared [Android registration binding plan](UNITY_2019_REGISTRATION.md).
+Against the supplied code/bootstrap-only export, it retains all 2,840 PPtrs and
+reports their absent content: 2,828 target `globalgamemanagers.assets`, and 12
+target the built-in virtual path `Library/unity default resources`. The two cluster
+registrations still lack an Android provider. Two initializers were inspected in
+the actual replacement Android CoreModule. These findings do not resolve or
+rewrite the missing registrations and do not establish a playable port.
+
 Revision 49 adds an app action to prepare the exact compiler/Android managed
 profile independently of unfinished backend adapters. The complete official
 archives were verified again and installed by the production Kotlin provider;

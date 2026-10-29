@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 49)
+# Reusable Unity preparation and experimental compilation (revision 50)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -20,6 +20,13 @@ and verifies its exact compiler, AOT BCL/configuration and Android managed modul
 into a shared persistent cache, then performs the full managed audit despite other
 blockers. This does not enable a Unity 2019 native/player recipe. See
 [the profile preparation flow and actual-source result](UNITY_2019_PROFILE_PREPARATION.md).
+
+Revision 50 also runs the [legacy Android registration binding check](UNITY_2019_REGISTRATION.md)
+against installed 2019.4 profiles. It resolves MonoManager's explicit loose-file
+script references, checks types against selected providers and inventories selected
+initializers. Its source-bound plan is exported for review; it does not rewrite
+registration or enable a legacy native build. Existing cached components are
+reused without a new download or compiler run.
 
 ## User flow
 

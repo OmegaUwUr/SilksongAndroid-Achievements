@@ -11,6 +11,7 @@ fun main(args: Array<String>) {
     nativeRequirementChecks(::test)
     bundledLibraryChecks(::test)
     portEvidenceExportChecks(::test)
+    legacyRegistrationBindingChecks(::test)
     val fixture = File(args[0])
     test("Python and Android reserve the same public system library names") {
         check(File(fixture, "system-libraries.txt").readLines().toSet() == NativePortRequirements.androidSystemLibraries)

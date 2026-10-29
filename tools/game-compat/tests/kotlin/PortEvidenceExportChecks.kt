@@ -43,6 +43,19 @@ fun portEvidenceExportChecks(test: (String, () -> Unit) -> Unit) {
             val original = assembly.readBytes(); assembly.appendText("changed")
             try { check(runCatching { write(ByteArrayOutputStream()) }.isFailure) } finally { assembly.writeBytes(original); refresh() }
         }
+        test("porting export includes legacy Android binding plans with manifest fingerprints") {
+            val plan = File(reports, "legacy-android-registration.json").apply { writeText("binding plan fixture") }
+            try {
+                val bytes = ByteArrayOutputStream(); write(bytes)
+                val files = mutableMapOf<String, ByteArray>()
+                ZipInputStream(bytes.toByteArray().inputStream()).use { zip -> while (true) {
+                    val entry = zip.nextEntry ?: break; files[entry.name] = zip.readBytes(); zip.closeEntry()
+                } }
+                check(String(files.getValue("reports/legacy-android-registration.json")) == plan.readText())
+                val rows = JSONObject(String(files.getValue("manifest.json"))).getJSONArray("files")
+                check((0 until rows.length()).any { rows.getJSONObject(it).getString("path") == "reports/legacy-android-registration.json" })
+            } finally { plan.delete() }
+        }
         test("porting export retains custom script names and binds the complete assembly set") {
             val custom = File(assembly.parentFile, "Example.Gameplay.dll")
             check(assembly.renameTo(custom))

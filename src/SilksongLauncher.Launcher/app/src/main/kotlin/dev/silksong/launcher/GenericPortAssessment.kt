@@ -64,7 +64,8 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
         }
 
         fun finish(initial: GenericPortAssessment, context: GenericPortContext, managed: JSONObject,
-            assets: JSONObject?, legacyRegistration: JSONObject? = null, sourceReview: JSONObject? = null): GenericPortAssessment {
+            assets: JSONObject?, legacyRegistration: JSONObject? = null, sourceReview: JSONObject? = null,
+            androidRegistration: JSONObject? = null): GenericPortAssessment {
             val blockers = initial.blockers.toMutableList(); val facts = initial.facts.toMutableList()
             if (legacyRegistration != null || sourceReview != null) try {
                 val details = PortReviewMetadata.read(initial.data!!, initial.version!!, initial.sourcePlatform!!,
@@ -73,6 +74,12 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
                 facts += details.facts
             } catch (error: Exception) {
                 blockers += "Additional source adapter evidence was rejected: ${error.message}"
+            }
+            if (androidRegistration != null) try {
+                val details = LegacyRegistrationBindings.read(initial.data!!, initial.version!!, initial.sourcePlatform!!, androidRegistration)
+                facts += details.facts; blockers += details.blockers
+            } catch (error: Exception) {
+                blockers += "Legacy Android binding plan was rejected: ${error.message}"
             }
             fun strings(json: JSONObject, key: String): List<String> {
                 val array = json.getJSONArray(key)
