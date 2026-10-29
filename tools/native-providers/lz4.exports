@@ -1,0 +1,10 @@
+{
+  global: LZ4_*; LZ4F_*;
+  local:
+    LZ4_decompress_fast;
+    LZ4_decompress_fast_continue;
+    LZ4_decompress_fast_usingDict;
+    LZ4_decompress_fast_withPrefix64k;
+    LZ4_uncompress;
+    *;
+};

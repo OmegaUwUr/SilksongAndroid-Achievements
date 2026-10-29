@@ -61,6 +61,7 @@ android {
         getByName("main") {
             jniLibs.srcDir(layout.buildDirectory.dir("mono/jniLibs"))
             assets.srcDir(layout.buildDirectory.dir("mono/assets"))
+            assets.srcDir(layout.buildDirectory.dir("portable-native/assets"))
         }
     }
 }
@@ -418,3 +419,26 @@ val stageCredits by tasks.registering(Sync::class) {
     into(layout.projectDirectory.dir("src/main/assets/credits"))
 }
 tasks.named("preBuild") { dependsOn(stageCredits) }
+
+// Real open-source Android C libraries, built separately from the game's proprietary code.
+val buildPortableNativeLibraries by tasks.registering {
+    val sources = rootProject.file("../../tools/native-providers")
+    val output = layout.buildDirectory.dir("portable-native")
+    inputs.files(fileTree(sources) { include("*.py", "*.json", "*.txt", "*.exports") })
+    outputs.dir(output.map { it.dir("assets") })
+    doLast {
+        val sdk = android.sdkDirectory
+        val nativeRoot = output.get().asFile
+        exec {
+            commandLine("python3", File(sources, "build.py"),
+                "--ndk", File(sdk, "ndk/27.2.12479018"),
+                "--cmake", File(sdk, "cmake/3.22.1/bin/cmake"),
+                "--work", File(nativeRoot, "work"), "--cache", File(nativeRoot, "downloads"),
+                "--output", File(nativeRoot, "assets/native-providers"), "--jobs", "2")
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn(buildPortableNativeLibraries) }
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(buildPortableNativeLibraries)
+}

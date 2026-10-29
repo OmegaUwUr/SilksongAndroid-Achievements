@@ -2,6 +2,23 @@
 
 This repository builds on the work of the people and projects below. The entries explain where code, dependencies, artwork, or feature ideas are used. Existing copyright and license notices remain in [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
 
+## Included native libraries (revision 41)
+
+| Upstream authors/project | Included component |
+| --- | --- |
+| [D. Richard Hipp and SQLite contributors](https://sqlite.org/) | SQLite 3.54.1; public-domain C database library |
+| [Yann Collet and LZ4 contributors](https://github.com/lz4/lz4) | LZ4 1.10.0; BSD-2-Clause library code |
+| [Yann Collet, Meta and Zstandard contributors](https://github.com/facebook/zstd) | Zstandard 1.5.7; BSD license option |
+| [Xiph.Org Foundation and Ogg/Vorbis contributors](https://xiph.org/) | libogg 1.3.6 and libvorbis/libvorbisfile/libvorbisenc 1.3.7; original BSD notices retained |
+| [PNG Development Group, Cosmin Truta and libpng contributors](https://github.com/pnggroup/libpng) | libpng 1.6.59; original PNG license retained |
+
+The build recipe, source/hash validation, source-bound pack integration and game
+process loading were developed with **ChatGPT (OpenAI)**. The upstream people
+above authored the libraries. Their complete notices and component provenance
+ship in the APK under `native-providers/` and accompany generic built packages.
+No game code or proprietary middleware is supplied by this bundle. See the
+[native provider guide](docs/NATIVE_LIBRARY_PROVIDERS.md).
+
 ## Original Android project
 
 **[jakobkhansen](https://github.com/jakobkhansen) and the [SilksongAndroid contributors](https://github.com/jakobkhansen/SilksongAndroid/graphs/contributors)** — [SilksongAndroid](https://github.com/jakobkhansen/SilksongAndroid).

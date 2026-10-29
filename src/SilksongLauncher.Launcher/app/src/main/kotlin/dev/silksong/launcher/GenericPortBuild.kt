@@ -36,6 +36,24 @@ object GenericPortBuild {
         withLock(context) { assess(context, source, progress) }
     }
 
+    suspend fun addIncludedLibraries(context: GenericPortContext, source: File,
+        progress: suspend (PlayerImage.Progress) -> Unit): GenericPortAssessment = withContext(Dispatchers.IO) {
+        withLock(context) {
+            val report = assess(context, source, progress)
+            val data = report.data ?: error("Choose complete game files first.")
+            val version = report.version ?: error("The source engine version is unreadable.")
+            require(GameCompatibility.hasManagedHeader(File(data, "Managed/Assembly-CSharp.dll")))
+            val audit = File(Il2cppConverter.rootFor(context), "managed-port-audit.json")
+            require(audit.length() in 1L..(32 * 1024 * 1024L))
+            val json = JSONObject(audit.readText()); require(json.getInt("schema") == 2)
+            val imports = json.getJSONArray("nativeImports"); require(imports.length() <= 100000)
+            val names = (0 until imports.length()).map { imports.getJSONObject(it).getString("library") }
+            progress(PlayerImage.Progress("Adding included Android libraries", -1f))
+            BundledNativeLibraries.installMissing(context, data, version, names)
+            assess(context, source, progress)
+        }
+    }
+
     private suspend fun <T> withLock(context: GenericPortContext, action: suspend () -> T): T =
         RandomAccessFile(File(context.filesDir, "port.lock"), "rw").use { handle ->
             val lock = try { handle.channel.tryLock() } catch (_: OverlappingFileLockException) { null }
@@ -135,6 +153,7 @@ object GenericPortBuild {
             UnityFetcher.ensureEngineStaged(unity, engine)
             NativeBuild.build(unity, tools, root, context.assets, install = engine).collect { send(PlayerImage.Progress(it.step, it.fraction, it.detail)) }
             AndroidPluginPack.verified(context, target.unityVersion, data).values.forEach { it.first.copyTo(File(engine, it.first.name), overwrite = true) }
+            BundledNativeLibraries.copyNotices(context, File(pending, "third-party/included-native-libraries"))
             coroutineContext.ensureActive()
             File(pending, ".built").writeText(signature(context))
             if (pkg.exists()) check(pkg.renameTo(previous)) { "Could not preserve the previous working build." }

@@ -9,6 +9,7 @@ fun main(args: Array<String>) {
     var cases = 0
     fun test(name: String, body: () -> Unit) { body(); cases++; println("PASS: $name") }
     nativeRequirementChecks(::test)
+    bundledLibraryChecks(::test)
     val fixture = File(args[0])
     test("Python and Android reserve the same public system library names") {
         check(File(fixture, "system-libraries.txt").readLines().toSet() == NativePortRequirements.androidSystemLibraries)

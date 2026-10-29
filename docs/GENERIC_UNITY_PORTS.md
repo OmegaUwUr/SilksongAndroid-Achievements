@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 40)
+# Reusable Unity preparation and experimental compilation (revision 41)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -146,6 +146,12 @@ integration; adopting another Android-capable Discord API requires an adapter.
 No Slime Rancher conversion, rebuilt APK or gameplay test was performed here.
 
 ## Android plugin packs
+
+Revision 41 adds an [included native library bundle](NATIVE_LIBRARY_PROVIDERS.md).
+It contains real SQLite/LZ4/Zstd/Ogg/Vorbis/PNG implementations. After preparation,
+**Add included libraries** can add matching missing components to a game-bound
+pack without a separate SDK download on the phone. This does not implement Unity
+2019/2022 providers, bundle/shader conversion, Mono runtime ABI adapters or store APIs.
 
 The app does not ship arbitrary FMOD/Wwise/CRI/AVPro binaries or desktop DLL
 substitutes. Supply licensed Android binaries matching the exact game's managed

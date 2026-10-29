@@ -45,7 +45,8 @@ def main() -> None:
     jars = list(Path(os.environ["KOTLIN_CHECK_JARS"]).glob("*.jar")) + list(Path(os.environ["STEAM_CHECK_JARS"]).glob("*.jar"))
     cp = os.pathsep.join(str(p) for p in jars if p.name not in ("check.jar", "launcher-check.jar", "javasteam-1.8.0.jar", "aapt2.jar") and not p.name.endswith("-sources.jar"))
     names = ("GameProfile", "GameCompatibility", "PortTarget", "UnityDistribution", "PortDependencyAudit", "AndroidElf",
-             "AndroidPluginPack", "PortSourceFingerprint", "GenericPortContext", "GenericPortAssessment", "NativePortRequirements")
+             "AndroidPluginPack", "PortSourceFingerprint", "GenericPortContext", "GenericPortAssessment", "NativePortRequirements",
+             "BundledNativeLibraryCatalog", "BundledNativeLibraries")
     with tempfile.TemporaryDirectory(prefix="generic-port-") as temporary:
         directory = Path(temporary)
         valid = elf(); (directory / "valid.so").write_bytes(valid)
@@ -88,6 +89,7 @@ def main() -> None:
         subprocess.run(["java", "-cp", cp, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect",
                         "-jvm-target", "17", "-classpath", cp, "-d", str(out), *[str(SRC / (name + ".kt")) for name in names],
                         str(Path(__file__).parent / "kotlin/GenericPortChecks.kt"),
+                        str(Path(__file__).parent / "kotlin/BundledLibraryChecks.kt"),
                         str(Path(__file__).parent / "kotlin/NativePortRequirementChecks.kt")], check=True)
         subprocess.run(["java", "-cp", str(out) + os.pathsep + cp, "dev.silksong.launcher.GenericPortChecksKt",
                         str(directory), creator.bindings(managed.parent)], check=True)

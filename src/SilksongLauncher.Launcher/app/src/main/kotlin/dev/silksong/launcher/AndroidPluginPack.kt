@@ -23,13 +23,14 @@ object AndroidPluginPack {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    fun install(context: GenericPortContext, version: String, data: File, source: InputStream) {
+    fun install(context: GenericPortContext, version: String, data: File, source: InputStream, checkpoint: () -> Unit = {}) {
         val zip = File(context.cacheDir, "android-plugins.zip")
         val pending = File(context.filesDir, "android-plugins.next")
         try {
             source.use { input -> zip.outputStream().use { output ->
                 var total = 0L; val bytes = ByteArray(65536)
                 while (true) { val count = input.read(bytes); if (count < 0) break
+                    checkpoint()
                     total += count; require(total <= LIMIT) { "Plugin pack exceeds 512 MiB." }; output.write(bytes, 0, count) }
             } }
             pending.deleteRecursively(); check(pending.mkdirs())
@@ -68,6 +69,7 @@ object AndroidPluginPack {
                     archive.getInputStream(entry).use { input -> file.outputStream().use { output ->
                         val bytes = ByteArray(65536); var written = 0L
                         while (true) { val count = input.read(bytes); if (count < 0) break
+                            checkpoint()
                             written += count; require(written <= entry.size); output.write(bytes, 0, count) }
                         require(written == entry.size)
                     } }
@@ -76,6 +78,7 @@ object AndroidPluginPack {
                 }
                 File(pending, "manifest.json").writeText(manifest.toString())
             }
+            checkpoint()
             val current = directory(context); val previous = File(context.filesDir, "android-plugins.previous")
             // Recover an interrupted two-rename publish before replacing anything.
             if (!current.exists() && previous.exists()) check(previous.renameTo(current))

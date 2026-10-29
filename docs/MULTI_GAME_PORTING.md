@@ -1,6 +1,6 @@
 # Multi-game porting status
 
-Revision 40 is an **experimental source candidate without a new APK build here** stacked on the
+Revision 41 is an **experimental source candidate without a new APK build here** stacked on the
 porting-performance and personalized Silksong touch-control candidates.
 
 | Game | Candidate behavior | Input / current limits |
@@ -57,6 +57,15 @@ native imports and member APIs; deferred or missing profiles cannot authorize a
 compile. Legacy missing registration JSON is reported as an unverified engine
 layout, not evidence of a damaged source. Unity 2019.4.29f1, bundles and platform
 integrations still need providers; see the [Slime assessment](GENERIC_UNITY_PORTS.md#slime-rancher-assessment).
+
+Revision 41 supplies eight actual open-source Android ARM64 libraries for database,
+compression, audio-container/codec and PNG bindings. They are built and validated
+as APK assets; eligible declarations can opt into a game-bound pack through
+**Add included libraries**. Existing imports are preserved, dependent-build
+conflicts stop the merge, and all original preparation gates run again. This is
+native component integration, not a new engine/game adapter; Slime Rancher and
+Cult of the Lamb remain blocked by their other requirements. See the
+[native provider guide](NATIVE_LIBRARY_PROVIDERS.md).
 
 ## What changed after the inspection-only catalog
 

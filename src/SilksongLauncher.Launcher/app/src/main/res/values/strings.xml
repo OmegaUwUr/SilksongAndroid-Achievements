@@ -214,6 +214,7 @@ FPS: %2$s</string>
     <string name="generic_port_choose">Choose local game source</string>
     <string name="generic_port_prepare">Prepare / check again</string>
     <string name="generic_port_import">Import Android plugin pack</string>
+    <string name="generic_port_included">Add included libraries</string>
     <string name="generic_port_compile">Compile experimental port</string>
     <string name="generic_port_cancelled">Cancelled. Completed downloads can resume; the previous build is preserved.</string>
     <string name="generic_port_compiled">Experimental port compiled. Test graphics, sound, controls and saves on this device before sharing.</string>

@@ -8,7 +8,7 @@ import java.util.Locale
 /** Capability decisions from source bytes and Android components, independent of a game's title. */
 data class GenericPortAssessment(val data: File?, val version: String?, val facts: List<String>, val blockers: List<String>,
     val verified: Boolean = false, val sourceTreeSha256: String? = null, val sourcePlatform: Int? = null,
-    val profileVerified: Boolean = false) {
+    val profileVerified: Boolean = false, val includedLibraries: List<String> = emptyList()) {
     val canBuild get() = verified && profileVerified && sourceTreeSha256 != null && data != null && version != null &&
         sourcePlatform in PortTarget.desktopPlatforms && blockers.isEmpty()
     fun asText(): String = (listOf("Experimental Unity port assessment", "") + facts + "" +
@@ -89,6 +89,7 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
                 val unresolved = info.needed - plugins.keys - system
                 if (unresolved.isNotEmpty()) blockers += "$name has missing native dependencies: ${unresolved.joinToString()}"
             }
+            if (plugins.isNotEmpty()) facts += "Android libraries in this game's pack: ${plugins.keys.sorted().joinToString()}."
             val imports = managed.getJSONArray("nativeImports")
             require(imports.length() <= 100000)
             val native = mutableListOf<NativePortRequirements.Import>()
@@ -101,6 +102,9 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             val requirements = NativePortRequirements.inspect(native, pluginFiles.map { it.name }, plugins.mapValues { it.value.second.exports }, pendingProfile)
             blockers += requirements.blockers
             facts += requirements.facts
+            val included = try { BundledNativeLibraries.available(context, native.map { it.library }, plugins.keys) }
+                catch (_: Exception) { blockers += "The included native library bundle is unavailable or invalid. Install a complete APK build and prepare again."; emptyList() }
+            if (included.isNotEmpty()) facts += "Included Android libraries available: ${included.joinToString()}. Use Add included libraries, then recheck compatibility. Other engine, managed API and platform requirements still apply."
             if (assets != null) {
                 require(assets.getInt("schemaVersion") == 1 && Regex("[a-f0-9]{64}").matches(assets.getString("sourceTreeSha256")))
                 val census = assets.getJSONObject("census")
@@ -113,7 +117,7 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             facts += "Native declarations include unused wrapper methods. Runtime reachability is unverified; requirements stay blocked until a reviewed Android path or replacement exists. Passing metadata/export checks does not establish gameplay compatibility."
             return initial.copy(facts = facts.distinct(), blockers = blockers.distinct(), verified = assets != null || initial.verified,
                 sourceTreeSha256 = assets?.getString("sourceTreeSha256") ?: initial.sourceTreeSha256,
-                profileVerified = profileChecked && diagnostics.isEmpty())
+                profileVerified = profileChecked && diagnostics.isEmpty(), includedLibraries = included)
         }
     }
 }

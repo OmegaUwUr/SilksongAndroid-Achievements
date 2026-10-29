@@ -26,6 +26,7 @@ class GenericPortSetupActivity : Activity() {
     private lateinit var compile: Button
     private lateinit var play: Button
     private lateinit var cancel: Button
+    private lateinit var included: Button
     private val actions = mutableListOf<Button>()
 
     override fun onCreate(state: Bundle?) {
@@ -42,6 +43,12 @@ class GenericPortSetupActivity : Activity() {
         action(R.string.generic_port_choose) { pick(71, Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
         action(R.string.generic_port_prepare) { prepare() }
         action(R.string.generic_port_import) { pick(72, Intent(Intent.ACTION_OPEN_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE)) }
+        included = action(R.string.generic_port_included) { operation {
+            val selected = source ?: error(getString(R.string.generic_port_start))
+            assessment = null
+            val report = GenericPortBuild.addIncludedLibraries(port, selected) { update(it) }
+            assessment = report; status.text = report.asText(); prefs.edit().putString("report", report.asText()).apply()
+        } }
         compile = action(R.string.generic_port_compile) { build() }
         play = action(R.string.game_page_play) { launch() }
         body.addView(Switch(this).apply {
@@ -64,6 +71,7 @@ class GenericPortSetupActivity : Activity() {
     private fun refresh() {
         actions.forEach { it.isEnabled = !busy }
         compile.isEnabled = !busy && assessment?.canBuild == true
+        included.isEnabled = !busy && assessment?.includedLibraries?.isNotEmpty() == true
         play.isEnabled = !busy && GenericPortBuild.isReady(port)
         cancel.visibility = if (busy) View.VISIBLE else View.GONE
         progress.visibility = if (busy) View.VISIBLE else View.GONE

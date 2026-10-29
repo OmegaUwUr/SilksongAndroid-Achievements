@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import dev.silksong.launcher.GenericPortBuild;
 import dev.silksong.launcher.GenericPortContext;
+import dev.silksong.launcher.BundledNativeLibraries;
 import java.io.File;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileLock;
@@ -31,6 +32,7 @@ public final class GenericPortActivity extends GameActivity {
             if (runtimeLock == null || buildLock == null || getIntent().getIntExtra("app_id", 0) != port.getAppId() ||
                 GenericPortContext.active(getBaseContextForSelection()).getAppId() != port.getAppId() || !GenericPortBuild.isReady(port))
                 throw new IllegalStateException("The selected port is not ready, changed, or is being rebuilt");
+            BundledNativeLibraries.preloadForGame(port, new File(getFilesDir(), "pkg/lib/arm64"));
             super.onCreate(state);
         } catch (Exception error) {
             android.util.Log.e("GenericPort", "Launch stopped before Unity initialization", error);
