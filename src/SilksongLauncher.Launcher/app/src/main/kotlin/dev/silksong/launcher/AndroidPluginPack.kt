@@ -12,6 +12,8 @@ object AndroidPluginPack {
     private const val LIMIT = 512L * 1024 * 1024
     private val name = Regex("lib[A-Za-z0-9_+.-]{1,100}\\.so")
     private val reserved = setOf("libunity.so", "libmain.so", "libil2cpp.so", "libsteam_api.so", "libsteam_api64.so")
+    internal fun allowedLibraryName(filename: String): Boolean = name.matches(filename) && filename !in reserved &&
+        filename !in NativePortRequirements.androidSystemLibraries
     private fun directory(context: GenericPortContext) = File(context.filesDir, "android-plugins")
     private fun sha(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -57,7 +59,7 @@ object AndroidPluginPack {
                 val seen = mutableSetOf<String>(); var total = 0L
                 for (index in 0 until libraries.length()) {
                     val row = libraries.getJSONObject(index); val filename = row.getString("file")
-                    require(name.matches(filename) && filename !in reserved && seen.add(filename)) { "Invalid or reserved plugin filename." }
+                    require(allowedLibraryName(filename) && seen.add(filename)) { "Invalid or reserved plugin filename; engine, Steam and Android system libraries cannot be replaced." }
                     val expected = row.getString("sha256"); require(Regex("[a-f0-9]{64}").matches(expected))
                     val entry = archive.getEntry(filename) ?: error("Plugin file is missing: $filename")
                     require(entry.size in 1L..(256L * 1024 * 1024))
@@ -98,7 +100,7 @@ object AndroidPluginPack {
         val seen = mutableSetOf<String>(); var exportCount = 0; var exportCharacters = 0
         return (0 until libraries.length()).associate { index ->
             val row = libraries.getJSONObject(index); val filename = row.getString("file")
-            require(name.matches(filename) && filename !in reserved && seen.add(filename))
+            require(allowedLibraryName(filename) && seen.add(filename))
             val library = File(root, filename)
             require(library.length() in 1L..(256L * 1024 * 1024) && sha(library) == row.getString("sha256")) { "Imported plugin changed: $filename" }
             val info = AndroidElf.inspect(library)

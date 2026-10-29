@@ -5,7 +5,14 @@ import java.util.Locale
 /** Metadata requirements, not reachability analysis or a native compatibility layer. */
 object NativePortRequirements {
     data class Import(val assembly: String, val library: String, val entryPoint: String)
-    enum class Kind { WINDOWS_API, DESKTOP_INPUT, STEAM, GALAXY, BURST, STATIC, BINDING, PLUGIN }
+    enum class Kind { WINDOWS_API, ANDROID_SYSTEM, RUNTIME_PROFILE, DESKTOP_INPUT, STEAM, GALAXY, RAIL, DISCORD, BURST, STATIC, BINDING, PLUGIN }
+    // Public NDK libraries, supplied by Android. libc++_shared and sqlite3 are not OS providers here.
+    val androidSystemLibraries = setOf("libc.so", "libm.so", "libdl.so", "liblog.so", "libandroid.so", "libz.so", "libEGL.so",
+        "libGLESv2.so", "libGLESv3.so", "libvulkan.so", "libOpenSLES.so", "libaaudio.so", "libmediandk.so", "libjnigraphics.so")
+
+    private val runtimeAssemblies = setOf("Microsoft.CSharp", "Mono.Security", "Mono.Posix", "Mono.Data.Sqlite", "I18N")
+    fun runtimeAssembly(name: String): Boolean = name in runtimeAssemblies ||
+        name.startsWith("I18N.")
     data class Requirement(val kind: Kind, val libraries: List<String>, val assemblies: List<String>,
         val declaredEntryPoints: Int, val files: List<String>, val detail: String) {
         fun asText(): String {
@@ -53,6 +60,10 @@ object NativePortRequirements {
             return Route("binding:$library", Kind.BINDING, library)
         val base = stem(library)
         val lower = base.lowercase(Locale.ROOT)
+        val androidName = (if (library.startsWith("lib")) library else "lib$library").let { if (it.endsWith(".so")) it else "$it.so" }
+        if (androidName in androidSystemLibraries)
+            return Route("android:$androidName", Kind.ANDROID_SYSTEM, androidName)
+        if (lower == "monoposixhelper") return Route("mono-runtime", Kind.RUNTIME_PROFILE, library)
         if (lower in windows || lower.startsWith("api-ms-win-") || windowsRuntime.matches(lower))
             return Route("windows", Kind.WINDOWS_API, lower)
         if (lower in setOf("rewired_directinput", "rewired_windowsgaminginput", "dinput", "dinput8", "xinput") ||
@@ -62,6 +73,8 @@ object NativePortRequirements {
             return Route("steam", Kind.STEAM, lower)
         if (lower in setOf("galaxy", "galaxy64", "galaxycsharpglue"))
             return Route("galaxy", Kind.GALAXY, lower)
+        if (lower in setOf("rail_api", "rail_api64")) return Route("rail", Kind.RAIL, lower)
+        if (lower in setOf("discord-rpc", "discord_rpc")) return Route("discord-rpc", Kind.DISCORD, lower)
         if (lower.startsWith("_burst_generated") || lower.startsWith("burst_generated"))
             return Route("burst", Kind.BURST, lower)
         if (library.endsWith(".dll", true) || library.endsWith(".dylib", true) || library.endsWith(".cpl", true) ||
@@ -76,16 +89,19 @@ object NativePortRequirements {
     }
 
     fun inspect(imports: Collection<Import>, nativeFiles: Collection<String>,
-        androidExports: Map<String, Set<String>>): Report {
+        androidExports: Map<String, Set<String>>, pendingProfileAssemblies: Set<String> = emptySet()): Report {
+        require(pendingProfileAssemblies.all(::runtimeAssembly)) { "Unexpected assembly deferred for Android profile selection." }
         val groups = linkedMapOf<String, Group>()
         val declaredStems = mutableSetOf<String>()
         for (item in imports) {
-            val route = route(item.library)
+            declaredStems += stem(item.library)
+            if (item.assembly in pendingProfileAssemblies) continue
+            val route = if (runtimeAssembly(item.assembly)) Route("profile:${item.assembly}", Kind.RUNTIME_PROFILE, item.library)
+                else route(item.library)
             val group = groups.getOrPut(route.key) { Group(route) }
             group.libraries += route.library
             group.assemblies += item.assembly
             group.symbols += route.library to item.entryPoint
-            declaredStems += stem(item.library)
         }
         for (file in nativeFiles.distinct().sorted()) {
             val route = route(file)
@@ -98,13 +114,18 @@ object NativePortRequirements {
         }
         val requirements = mutableListOf<Requirement>()
         val facts = mutableListOf<String>()
+        if (pendingProfileAssemblies.isNotEmpty()) facts += "Android managed profile selection is pending for ${pendingProfileAssemblies.sorted().take(12).joinToString()}. Their desktop platform declarations are deferred, not approved for compilation. A full profile audit is required."
         for (group in groups.values) {
             val route = group.route
             val detail = when (route.kind) {
                 Kind.WINDOWS_API -> "Windows system APIs need a reviewed Android/managed adapter. Android plugin packs cannot provide Windows OS libraries."
+                Kind.ANDROID_SYSTEM -> "Android already supplies this public system library. Linux/glibc bindings still need symbol, Android API and ABI review; a plugin pack must not replace it."
+                Kind.RUNTIME_PROFILE -> "Mono runtime bindings need a matching Android managed profile and native ABI. The selected profile must replace this desktop framework, or a reviewed adapter must rebuild it. A plugin pack alone cannot establish compatibility."
                 Kind.DESKTOP_INPUT -> "Desktop controller backends need a reviewed Android Rewired/Input System adapter. Supplying a renamed .so does not implement DirectInput, Windows Gaming Input or XInput."
                 Kind.STEAM -> "Steamworks and encrypted-ticket calls need a per-game API adapter with this game's App ID and API coverage. The Hollow Knight/Silksong shim cannot be reused."
                 Kind.GALAXY -> "GOG Galaxy bindings need a reviewed store/backend adapter. Verify which provider this Steam build uses; wrapper declarations alone do not establish runtime use."
+                Kind.RAIL -> "RAIL integration needs a reviewed backend adapter and exact Android binding support. Verify whether this game's Steam build uses this backend; wrapper counts alone do not establish runtime use."
+                Kind.DISCORD -> "Legacy Discord RPC needs an Android presence adapter or a reviewed optional-feature path. A matching library name alone does not adapt its desktop IPC integration."
                 Kind.BURST -> "Burst-generated desktop machine code needs rebuilding for Android ARM64 from compatible source or a verified provider. A library rename is insufficient."
                 Kind.STATIC -> "Static native imports need an Android integration or managed adapter; an external plugin pack cannot provide __Internal symbols."
                 Kind.BINDING -> "Desktop library names, versioned SONAMEs and explicit paths need a reviewed Android binding adapter. Importing a similarly named .so is insufficient."

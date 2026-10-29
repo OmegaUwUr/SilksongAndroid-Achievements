@@ -12,6 +12,8 @@ from pathlib import Path
 import re
 import zipfile
 
+SYSTEM_LIBRARIES = {"libc.so", "libm.so", "libdl.so", "liblog.so", "libandroid.so", "libz.so", "libEGL.so",
+                    "libGLESv2.so", "libGLESv3.so", "libvulkan.so", "libOpenSLES.so", "libaaudio.so", "libmediandk.so", "libjnigraphics.so"}
 
 def bindings(data: Path) -> str:
     files = sorted((data / "Managed").glob("*.dll"), key=lambda p: p.name.encode("utf-16-be"))
@@ -32,7 +34,7 @@ def create(data: Path, app_id: int, version: str, libraries: list[Path], output:
         raise ValueError("Use a generic Steam App ID and an exact Unity version")
     if not 1 <= len(libraries) <= 32 or len({p.name for p in libraries}) != len(libraries):
         raise ValueError("Provide 1–32 uniquely named Android libraries")
-    reserved = {"libunity.so", "libmain.so", "libil2cpp.so", "libsteam_api.so", "libsteam_api64.so"}
+    reserved = {"libunity.so", "libmain.so", "libil2cpp.so", "libsteam_api.so", "libsteam_api64.so"} | SYSTEM_LIBRARIES
     for library in libraries:
         if not re.fullmatch(r"lib[A-Za-z0-9_+.-]{1,100}\.so", library.name) or library.name in reserved:
             raise ValueError("Invalid or reserved library filename: " + library.name)

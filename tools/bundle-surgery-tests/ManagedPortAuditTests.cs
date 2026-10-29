@@ -7,6 +7,119 @@ namespace BundleSurgery.Tests;
 public sealed class ManagedPortAuditTests
 {
     [Fact]
+    public void Provisional_framework_imports_are_retained_for_the_later_profile_audit()
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game()) game.Write(Path.Combine(fixture.Data, "Managed/Assembly-CSharp.dll"));
+        fixture.Native("Mono.Posix", "libc", Path.Combine(fixture.Data, "Managed"));
+        var report = ManagedPortAudit.Inspect(fixture.Data, null);
+        Assert.Equal(2, report.Schema);
+        Assert.False(report.AndroidProfileChecked);
+        Assert.Equal(new[] { "Mono.Posix" }, report.PendingProfileAssemblies);
+        Assert.Equal("libc", Assert.Single(report.NativeImports).Library);
+    }
+
+    [Theory]
+    [InlineData("Mono.Posix")]
+    [InlineData("Mono.Data.Sqlite")]
+    public void Selected_Android_framework_replaces_the_desktop_import_inventory(string name)
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game()) game.Write(Path.Combine(fixture.Data, "Managed/Assembly-CSharp.dll"));
+        fixture.Native(name, "msvcrt", Path.Combine(fixture.Data, "Managed"));
+        fixture.Sdk("Ready", fixture.Engine, name);
+        var report = ManagedPortAudit.Inspect(fixture.Data, fixture.Unity);
+        Assert.True(report.AndroidProfileChecked);
+        Assert.Empty(report.PendingProfileAssemblies);
+        Assert.Empty(report.NativeImports);
+        Assert.Empty(report.Diagnostics);
+    }
+
+    [Fact]
+    public void Native_calls_from_the_selected_framework_are_audited_instead_of_silently_trusted()
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game()) game.Write(Path.Combine(fixture.Data, "Managed/Assembly-CSharp.dll"));
+        fixture.Native("Mono.Posix", "msvcrt", Path.Combine(fixture.Data, "Managed"));
+        fixture.Native("Mono.Posix", "AndroidProvider", fixture.Engine);
+        var report = ManagedPortAudit.Inspect(fixture.Data, fixture.Unity);
+        Assert.Equal("AndroidProvider", Assert.Single(report.NativeImports).Library);
+        Assert.Empty(report.Diagnostics);
+    }
+
+    [Fact]
+    public void Supplied_framework_bindings_are_followed_when_the_original_DLL_was_not_present()
+    {
+        using var fixture = new MetadataFixture();
+        fixture.GameCallingSdk("Ready", "Mono.Posix");
+        fixture.Native("Mono.Posix", "AndroidProvider", fixture.Engine);
+        var report = ManagedPortAudit.Inspect(fixture.Data, fixture.Unity);
+        Assert.Equal("AndroidProvider", Assert.Single(report.NativeImports).Library);
+    }
+
+    [Theory]
+    [InlineData("Mono.Posix")]
+    [InlineData("Mono.Data.Sqlite")]
+    public void Unreplaced_Mono_frameworks_require_a_managed_profile_provider(string name)
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game()) game.Write(Path.Combine(fixture.Data, "Managed/Assembly-CSharp.dll"));
+        fixture.Native(name, "libc", Path.Combine(fixture.Data, "Managed"));
+        var report = ManagedPortAudit.Inspect(fixture.Data, fixture.Unity);
+        Assert.True(report.AndroidProfileChecked);
+        Assert.Empty(report.PendingProfileAssemblies);
+        Assert.Single(report.NativeImports);
+        Assert.Contains(report.Diagnostics, value => value.StartsWith(name + ": desktop framework implementation"));
+    }
+
+    [Fact]
+    public void Game_native_calls_cannot_claim_the_framework_deferral()
+    {
+        using var fixture = new MetadataFixture();
+        fixture.Native("Assembly-CSharp", "MonoPosixHelper", Path.Combine(fixture.Data, "Managed"));
+        var report = ManagedPortAudit.Inspect(fixture.Data, null);
+        Assert.Empty(report.PendingProfileAssemblies);
+        Assert.Equal("Assembly-CSharp", Assert.Single(report.NativeImports).Assembly);
+    }
+
+    [Fact]
+    public void Requested_but_missing_Android_profile_produces_diagnostics()
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game()) game.Write(Path.Combine(fixture.Data, "Managed/Assembly-CSharp.dll"));
+        Directory.Delete(fixture.Engine, true);
+        var report = ManagedPortAudit.Inspect(fixture.Data, fixture.Unity);
+        Assert.True(report.AndroidProfileChecked);
+        Assert.Contains(report.Diagnostics, value => value.Contains("Android component directory is missing"));
+    }
+
+    [Fact]
+    public void Audit_JSON_carries_an_explicit_profile_stage()
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game()) game.Write(Path.Combine(fixture.Data, "Managed/Assembly-CSharp.dll"));
+        fixture.Native("Mono.Posix", "libc", Path.Combine(fixture.Data, "Managed"));
+        var output = Path.Combine(fixture.Overrides, "audit.json");
+        Assert.Equal(0, ManagedPortAudit.Run(fixture.Data, "-", output));
+        using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(output));
+        Assert.Equal(2, json.RootElement.GetProperty("schema").GetInt32());
+        Assert.False(json.RootElement.GetProperty("androidProfileChecked").GetBoolean());
+        Assert.Equal("Mono.Posix", Assert.Single(json.RootElement.GetProperty("pendingProfileAssemblies").EnumerateArray()).GetString());
+    }
+
+    [Fact]
+    public void Game_member_calls_are_checked_against_the_selected_framework_not_the_old_source()
+    {
+        using var fixture = new MetadataFixture();
+        fixture.Sdk("DesktopOnly", Path.Combine(fixture.Data, "Managed"), "Mono.Posix");
+        fixture.Sdk("AndroidOnly", fixture.Engine, "Mono.Posix");
+        fixture.GameCallingSdk("DesktopOnly", "Mono.Posix");
+        var report = ManagedPortAudit.Inspect(fixture.Data, fixture.Unity, fixture.Overrides);
+        Assert.Empty(report.Diagnostics);
+        Assert.Contains(report.MissingMembers, value => value.Contains("DesktopOnly"));
+    }
+
+    [Fact]
     public void Desktop_core_libraries_are_reported_before_they_can_enter_IL2CPP()
     {
         using var fixture = new MetadataFixture();
@@ -148,16 +261,24 @@ public sealed class ManagedPortAuditTests
         internal AssemblyDefinition Game() {
             var game = New("Assembly-CSharp"); game.MainModule.Types.Add(new TypeDefinition("Game", "Entry", TypeAttributes.Public, game.MainModule.TypeSystem.Object)); return game;
         }
-        internal void Sdk(string methodName, string destination) {
-            using var sdk = New("PluginSdk"); var module = sdk.MainModule;
+        internal void Native(string name, string library, string destination) {
+            using var assembly = New(name); var module = assembly.MainModule;
+            var type = new TypeDefinition("Sdk", "Native", TypeAttributes.Public, module.TypeSystem.Object); module.Types.Add(type);
+            var native = new ModuleReference(library); module.ModuleReferences.Add(native);
+            type.Methods.Add(new MethodDefinition("Ready", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.PInvokeImpl,
+                module.TypeSystem.Void) { PInvokeInfo = new PInvokeInfo(PInvokeAttributes.CallConvCdecl, "Fixture_Ready", native) });
+            assembly.Write(Path.Combine(destination, name + ".dll"));
+        }
+        internal void Sdk(string methodName, string destination, string name = "PluginSdk") {
+            using var sdk = New(name); var module = sdk.MainModule;
             var type = new TypeDefinition("Sdk", "Api", TypeAttributes.Public, module.TypeSystem.Object); module.Types.Add(type);
             var method = new MethodDefinition(methodName, MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
             method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret)); type.Methods.Add(method);
-            sdk.Write(Path.Combine(destination, "PluginSdk.dll"));
+            sdk.Write(Path.Combine(destination, name + ".dll"));
         }
-        internal void GameCallingSdk(string name) {
+        internal void GameCallingSdk(string name, string assembly = "PluginSdk") {
             using var game = Game(); var module = game.MainModule;
-            var scope = new AssemblyNameReference("PluginSdk", new Version(4, 0, 0, 0)); module.AssemblyReferences.Add(scope);
+            var scope = new AssemblyNameReference(assembly, new Version(4, 0, 0, 0)); module.AssemblyReferences.Add(scope);
             var api = new TypeReference("Sdk", "Api", module, scope);
             var call = new MethodReference(name, module.TypeSystem.Void, api) { HasThis = false };
             var method = new MethodDefinition("Start", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);

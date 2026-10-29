@@ -93,4 +93,48 @@ internal fun nativeRequirementChecks(test: (String, () -> Unit) -> Unit) {
         check(result.requirements.single().declaredEntryPoints == 20)
         check("(+8 more)" in result.blockers.single() && "(+14 more)" in result.blockers.single())
     }
+    test("public Android libraries are provided by the OS and cannot be resolved by replacement packs") {
+        val imports = listOf(imported("libc", "memcpy"), imported("libc.so", "memcpy"), imported("m", "sin"), imported("libdl.so", "dlopen"))
+        val result = report(imports, plugins = mapOf("libc.so" to setOf("memcpy"), "libm.so" to setOf("sin"), "libdl.so" to setOf("dlopen")))
+        check(result.requirements.size == 3 && result.requirements.all { it.kind == NativePortRequirements.Kind.ANDROID_SYSTEM })
+        check(result.blockers.all { "Android already supplies" in it && "ABI review" in it })
+    }
+    test("glibc versioned SONAMEs are not mistaken for compatible Bionic bindings") {
+        val result = report(listOf(imported("libc.so.6", "gnu_get_libc_version")))
+        check(result.requirements.single().kind == NativePortRequirements.Kind.BINDING)
+    }
+    test("Mono platform wrappers are grouped as framework ABI work instead of missing game plugins") {
+        val imports = listOf(imported("libc", assembly = "Mono.Posix"), imported("msvcrt", assembly = "Mono.Posix"),
+            imported("MonoPosixHelper", assembly = "Mono.Posix"), imported("intl", assembly = "Mono.Posix"))
+        val result = report(imports, plugins = mapOf("libMonoPosixHelper.so" to setOf("Ready")))
+        check(result.requirements.single().kind == NativePortRequirements.Kind.RUNTIME_PROFILE)
+        check(result.requirements.single().assemblies == listOf("Mono.Posix"))
+    }
+    test("early framework declarations are deferred without approving them") {
+        val imports = listOf(imported("libc", assembly = "Mono.Posix"), imported("rail_api", assembly = "Assembly-CSharp"))
+        val result = NativePortRequirements.inspect(imports, emptyList(), emptyMap(), setOf("Mono.Posix"))
+        check(result.requirements.single().kind == NativePortRequirements.Kind.RAIL)
+        check("deferred, not approved" in result.facts.single())
+        check(runCatching { NativePortRequirements.inspect(imports, emptyList(), emptyMap(), setOf("Assembly-CSharp")) }.isFailure)
+    }
+    test("game imports cannot be hidden by a similarly named framework awaiting selection") {
+        val imports = listOf(imported("MonoPosixHelper", assembly = "Assembly-CSharp"))
+        val result = NativePortRequirements.inspect(imports, emptyList(), emptyMap(), setOf("Mono.Posix"))
+        check(result.requirements.single().kind == NativePortRequirements.Kind.RUNTIME_PROFILE)
+        check(result.requirements.single().assemblies == listOf("Assembly-CSharp"))
+    }
+    test("SQLite in a Mono framework needs profile review while independent SQLite remains a plugin") {
+        val result = report(listOf(imported("sqlite3", assembly = "Mono.Data.Sqlite"), imported("sqlite3", assembly = "GameDatabase")))
+        check(result.requirements.map { it.kind }.toSet() == setOf(NativePortRequirements.Kind.RUNTIME_PROFILE, NativePortRequirements.Kind.PLUGIN))
+        check("libsqlite3.so" !in NativePortRequirements.androidSystemLibraries)
+    }
+    test("legacy Discord RPC and RAIL need reviewed platform integrations even with matching exports") {
+        val imports = listOf(imported("discord-rpc"), imported("rail_api"))
+        val result = report(imports, plugins = mapOf("libdiscord-rpc.so" to setOf("Ready"), "librail_api.so" to setOf("Ready")))
+        check(result.requirements.map { it.kind }.toSet() == setOf(NativePortRequirements.Kind.DISCORD, NativePortRequirements.Kind.RAIL))
+    }
+    test("the Android pack filename policy reserves OS libraries and permits separately bundled runtimes") {
+        for (name in NativePortRequirements.androidSystemLibraries) check(!AndroidPluginPack.allowedLibraryName(name))
+        for (name in listOf("libsqlite3.so", "libc++_shared.so", "libMonoPosixHelper.so")) check(AndroidPluginPack.allowedLibraryName(name))
+    }
 }

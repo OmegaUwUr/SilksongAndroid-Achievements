@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 39)
+# Reusable Unity preparation and experimental compilation (revision 40)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -81,6 +81,21 @@ versioned SONAMEs need a binding adapter rather than an invented `.so` suffix.
 Unknown dynamically loaded files cannot be cleared by a matching pack name alone.
 No unused assembly, native declaration or desktop branch is automatically removed.
 
+Revision 40 separates Android system libraries and Mono profile bindings from
+ordinary plugin packs. Android supplies the public NDK libraries, including
+`libc.so`; Linux/glibc imports still need API/symbol/ABI review. These OS libraries
+cannot be imported as pack replacements. `libc++_shared.so` and separately built
+`libsqlite3.so` remain eligible pack files subject to the existing checks.
+
+Managed audit schema 2 records `androidProfileChecked` and
+`pendingProfileAssemblies`. The initial audit retains Mono platform declarations
+but defers their requirements while the Android profile is unresolved. It cannot
+authorize compilation. The full audit replaces eligible desktop framework DLLs
+with the selected component's assemblies, follows referenced Mono frameworks even
+when the original DLL was absent, and checks the selected assemblies' native
+imports. Remaining native bindings or incompatible member APIs remain blockers.
+Matching framework filenames alone do not approve their native ABI.
+
 ## Cult of the Lamb assessment
 
 The owner's Windows source report identifies Unity **2022.3.62f2**, bundles and
@@ -108,6 +123,28 @@ and [platform-specific native plug-ins](https://docs.unity.com/en-us/engine/6000
 Neither a matching engine version nor a complete export list proves that desktop
 content will run on Android. No Cult of the Lamb port or gameplay test was performed.
 
+## Slime Rancher assessment
+
+The owner's Linux source report identifies Unity **2019.4.29f1**. It still needs
+an exact older-engine provider and bundle/shader handling; Linux source alone
+does not establish compatibility with Android.
+
+| Reported requirement | Current interpretation |
+| --- | --- |
+| Unity 2019.4.29f1 | Engine/toolchain, Android player API and asset/runtime layout need a verified provider. The two Unity 6 providers cannot substitute for it. |
+| Missing ScriptingAssemblies/RuntimeInitializeOnLoads JSON | Registration layout is unverified for this older engine. Its provider must extract or regenerate correct metadata; no empty Unity 6 placeholder files are created. Registered modern providers still require their expected files. |
+| Mono.Posix, Mono.Data.Sqlite | Inspect the selected Android managed profile first. Its own surviving native bindings, missing replacement or member incompatibilities remain blockers; the source's entire cross-platform wrapper inventory is not an early pack shopping list. |
+| libc | Android provides Bionic libc. This does not prove compatibility with the Linux binding's structures, calling conventions, functions or API levels. A pack cannot replace the system libc. |
+| discord-rpc, rail_api | Reviewed presence/backend adapters or proven optional-feature paths are needed. Wrapper counts do not show which backend is active in the Steam build. These calls are not automatically stubbed or removed. |
+| Steam/encrypted tickets | Per-game API coverage and identity remain required. |
+
+The [NDK native API guide](https://developer.android.com/ndk/guides/stable_apis) and
+[Bionic status](https://android.googlesource.com/platform/bionic/+/main/docs/status.md)
+describe Android's native libraries and POSIX differences. The game's legacy
+[Discord RPC library](https://github.com/discord/discord-rpc) uses desktop-oriented
+integration; adopting another Android-capable Discord API requires an adapter.
+No Slime Rancher conversion, rebuilt APK or gameplay test was performed here.
+
 ## Android plugin packs
 
 The app does not ship arbitrary FMOD/Wwise/CRI/AVPro binaries or desktop DLL
@@ -130,7 +167,7 @@ bound to the App ID, exact Unity version and a SHA-256 fingerprint of all source
 managed DLLs. A game update changes that fingerprint and requires a matching pack.
 Exports/dependencies and hashes are checked again before installation. A pack must
 contain `manifest.json` plus 1–32 uniquely named `.so` files, at most 512 MiB total.
-Engine libraries and Steam bridge libraries cannot be overridden through a pack.
+Engine libraries, Steam bridge libraries and public Android system libraries cannot be overridden through a pack.
 Java/AAR packages, managed SDK replacements and static native integrations need a
 reviewed code provider; they cannot be added as arbitrary runtime files.
 

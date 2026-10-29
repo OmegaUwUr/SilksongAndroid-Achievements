@@ -10,6 +10,9 @@ fun main(args: Array<String>) {
     fun test(name: String, body: () -> Unit) { body(); cases++; println("PASS: $name") }
     nativeRequirementChecks(::test)
     val fixture = File(args[0])
+    test("Python and Android reserve the same public system library names") {
+        check(File(fixture, "system-libraries.txt").readLines().toSet() == NativePortRequirements.androidSystemLibraries)
+    }
     test("Android ARM64 ELF identifies functions, dependencies, API and page alignment") {
         val info = AndroidElf.inspect(File(fixture, "valid.so"))
         check(info.exports == setOf("Test_Ready") && info.needed == setOf("libc++_shared.so"))
@@ -49,6 +52,12 @@ fun main(args: Array<String>) {
         test("basic Unity detection does not authorize compilation before full preparation") {
             val report = GenericPortAssessment.source(root)
             check(report.blockers.isEmpty() && !report.canBuild && !report.verified)
+        }
+        test("asset verification cannot authorize compilation before Android profile verification") {
+            val preliminary = GenericPortAssessment(data, "6000.0.50f1", emptyList(), emptyList(),
+                verified = true, sourceTreeSha256 = "a".repeat(64), sourcePlatform = 24)
+            check(!preliminary.canBuild)
+            check(preliminary.copy(profileVerified = true).canBuild)
         }
         test("generic targets reuse the exact registered engine without a game-specific ID") {
             val target = PortTarget.classic(987, "6000.0.50f1")
@@ -98,6 +107,21 @@ fun main(args: Array<String>) {
                 check(result.blockers.any { "AssetBundles/Addressables" in it })
                 check(!result.canBuild && !UnityDistribution.supports("2022.3.62f2"))
             } finally { aa.delete(); header.writeBytes(serialized()) }
+        }
+        test("legacy missing registration JSON is an engine layout issue and is never fabricated") {
+            val files = listOf("ScriptingAssemblies.json", "RuntimeInitializeOnLoads.json").map { File(data, it) }
+            val content = files.map { it.readBytes() }
+            files.forEach { it.delete() }; header.writeBytes(serialized("2019.4.29f1"))
+            try {
+                val legacy = GenericPortAssessment.source(data)
+                check(!legacy.canBuild && legacy.blockers.any { "2019.4.29f1" in it })
+                check(legacy.facts.any { "Runtime registration layout is unverified" in it })
+                check(legacy.blockers.none { "ScriptingAssemblies.json" in it || "RuntimeInitializeOnLoads.json" in it })
+                check(files.none { it.exists() })
+                header.writeBytes(serialized())
+                val modern = GenericPortAssessment.source(data)
+                check(modern.blockers.count { "ScriptingAssemblies.json" in it || "RuntimeInitializeOnLoads.json" in it } == 2)
+            } finally { files.zip(content).forEach { (file, bytes) -> file.writeBytes(bytes) }; header.writeBytes(serialized()) }
         }
         test("desktop IL2CPP is rejected before compilation") {
             val metadata = write("il2cpp_data/Metadata/global-metadata.dat", byteArrayOf(1))

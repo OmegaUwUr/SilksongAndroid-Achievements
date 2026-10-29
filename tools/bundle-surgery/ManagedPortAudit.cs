@@ -8,7 +8,8 @@ internal static class ManagedPortAudit
 {
     internal sealed record Import(string Assembly, string Library, string EntryPoint);
     internal sealed record Report(int Schema, string[] Assemblies, Import[] NativeImports,
-        string[] MissingAssemblies, string[] MissingMembers, string[] DesktopApis, string[] Diagnostics);
+        string[] MissingAssemblies, string[] MissingMembers, string[] DesktopApis, string[] Diagnostics,
+        bool AndroidProfileChecked, string[] PendingProfileAssemblies);
 
     internal static int Run(string data, string unity, string output, string? overrides = null)
     {
@@ -29,9 +30,11 @@ internal static class ManagedPortAudit
         var desktop = new SortedSet<string>(StringComparer.Ordinal);
         var members = new SortedSet<string>(StringComparer.Ordinal);
         var diagnostics = new List<string>();
+        var pendingProfile = new SortedSet<string>(StringComparer.Ordinal);
         var managed = Path.Combine(data, "Managed");
         var gameFiles = Directory.Exists(managed) ? Directory.GetFiles(managed, "*.dll") : [];
         var replacements = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var replacementFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var available = new HashSet<string>(gameFiles.Select(Path.GetFileNameWithoutExtension)!, StringComparer.OrdinalIgnoreCase);
         var resolutionDirectories = new List<string>();
         if (unity is not null)
@@ -43,33 +46,43 @@ internal static class ManagedPortAudit
                 if (!Directory.Exists(directory)) { diagnostics.Add("Android component directory is missing: " + Path.GetFileName(directory)); continue; }
                 resolutionDirectories.Add(directory);
                 foreach (var file in Directory.GetFiles(directory, "*.dll"))
-                { var name = Path.GetFileNameWithoutExtension(file); available.Add(name); replacements.Add(name); }
+                { var name = Path.GetFileNameWithoutExtension(file); available.Add(name); replacements.Add(name); replacementFiles.TryAdd(name, file); }
             }
         }
         if (overrides is not null) {
             resolutionDirectories.Add(overrides);
             if (Directory.Exists(overrides)) foreach (var path in Directory.GetFiles(overrides, "*.dll"))
-            { var name = Path.GetFileNameWithoutExtension(path); available.Add(name); replacements.Add(name); }
+            { var name = Path.GetFileNameWithoutExtension(path); available.Add(name); replacements.Add(name); replacementFiles.TryAdd(name, path); }
         }
         resolutionDirectories.Add(managed);
         using var resolver = new InspectedResolver(resolutionDirectories);
-        foreach (var path in gameFiles.OrderBy(p => p, StringComparer.Ordinal))
+        var queue = new Queue<string>(gameFiles.OrderBy(p => p, StringComparer.Ordinal));
+        var queued = new HashSet<string>(gameFiles.Select(Path.GetFileNameWithoutExtension)!, StringComparer.OrdinalIgnoreCase);
+        while (queue.TryDequeue(out var path))
         {
             var name = Path.GetFileNameWithoutExtension(path);
+            var providedFramework = NativeFramework(name) && replacementFiles.TryGetValue(name, out _);
             // These are replaced by matching Android modules/BCL, not ported as desktop binaries.
             var provisionalEngine = unity is null && (name.StartsWith("UnityEngine", StringComparison.Ordinal) ||
                 name is "mscorlib" or "netstandard" or "System" || name.StartsWith("System.", StringComparison.Ordinal));
-            if (replacements.Contains(name) || provisionalEngine || name == "Unity.InputSystem") continue;
+            if (replacements.Contains(name) && !providedFramework || provisionalEngine || name == "Unity.InputSystem") continue;
             try
             {
-                using var assembly = AssemblyDefinition.ReadAssembly(path, new ReaderParameters {
+                using var assembly = AssemblyDefinition.ReadAssembly(providedFramework ? replacementFiles[name] : path, new ReaderParameters {
                     ReadingMode = ReadingMode.Deferred, ReadSymbols = false, AssemblyResolver = resolver });
-                if (unity is not null && IsFramework(name) && !PortableFacade(assembly, replacements))
+                // Retain the declarations, but do not mistake a desktop Mono facade's
+                // entire platform inventory for required game plugins before profile selection.
+                if (unity is null && IsFramework(name)) pendingProfile.Add(name);
+                if (unity is not null && IsFramework(name) && !providedFramework && !PortableFacade(assembly, replacements))
                     diagnostics.Add(name + ": desktop framework implementation has no Android profile replacement. It cannot be mixed into the IL2CPP class library.");
                 if (assembly.MainModule.Types.Any(t => t.FullName is "System.Object" or "System.String" or "System.ValueType"))
                     diagnostics.Add(name + ": an additional core class library would conflict with the selected Android profile.");
                 foreach (var reference in assembly.MainModule.AssemblyReferences)
                 {
+                    // A supplied Mono assembly still needs its own native-binding audit.
+                    // Follow it even when the original source omitted that framework DLL.
+                    if (unity is not null && NativeFramework(reference.Name) && replacementFiles.TryGetValue(reference.Name, out var supplied) && queued.Add(reference.Name))
+                        queue.Enqueue(supplied);
                     if (reference.Name is "System.Windows.Forms" or "PresentationFramework" or "WindowsBase" or "System.Drawing")
                         desktop.Add(name + " -> " + reference.Name);
                     if (unity is not null && !available.Contains(reference.Name)) missing.Add(name + " -> " + reference.Name);
@@ -108,9 +121,10 @@ internal static class ManagedPortAudit
             catch (Exception error) { diagnostics.Add(Path.GetFileName(path) + ": " + error.GetType().Name); }
         }
         if (!gameFiles.Any(p => Path.GetFileName(p) == "Assembly-CSharp.dll")) diagnostics.Add("Assembly-CSharp.dll is missing.");
-        return new Report(1, gameFiles.Select(Path.GetFileName).OfType<string>().Order().ToArray(),
+        return new Report(2, gameFiles.Select(Path.GetFileName).OfType<string>().Order().ToArray(),
             imports.Distinct().OrderBy(i => i.Library).ThenBy(i => i.EntryPoint).ToArray(),
-            missing.ToArray(), members.Take(1000).ToArray(), desktop.ToArray(), diagnostics.ToArray());
+            missing.ToArray(), members.Take(1000).ToArray(), desktop.ToArray(), diagnostics.ToArray(),
+            unity is not null, pendingProfile.ToArray());
     }
 
     internal static int RuntimeInitializers(string packages, string unity, string output)
@@ -145,8 +159,11 @@ internal static class ManagedPortAudit
         foreach (var type in types) { yield return type; foreach (var nested in Types(type.NestedTypes)) yield return nested; }
     }
 
-    private static bool IsFramework(string name) => name is "mscorlib" or "netstandard" or "System" or "Microsoft.CSharp" or "Mono.Security" or "I18N" ||
+    private static bool IsFramework(string name) => name is "mscorlib" or "netstandard" or "System" or "Microsoft.CSharp" or "Mono.Security" or "Mono.Posix" or "Mono.Data.Sqlite" or "I18N" ||
         name.StartsWith("System.", StringComparison.Ordinal) || name.StartsWith("I18N.", StringComparison.Ordinal);
+
+    private static bool NativeFramework(string name) => name is "Microsoft.CSharp" or "Mono.Security" or "Mono.Posix" or "Mono.Data.Sqlite" or "I18N" ||
+        name.StartsWith("I18N.", StringComparison.Ordinal);
 
     // A facade only forwards types to the selected Android profile. It supplies no second implementation.
     private static bool PortableFacade(AssemblyDefinition assembly, ISet<string> provided) =>

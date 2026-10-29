@@ -7,8 +7,9 @@ import java.util.Locale
 
 /** Capability decisions from source bytes and Android components, independent of a game's title. */
 data class GenericPortAssessment(val data: File?, val version: String?, val facts: List<String>, val blockers: List<String>,
-    val verified: Boolean = false, val sourceTreeSha256: String? = null, val sourcePlatform: Int? = null) {
-    val canBuild get() = verified && sourceTreeSha256 != null && data != null && version != null &&
+    val verified: Boolean = false, val sourceTreeSha256: String? = null, val sourcePlatform: Int? = null,
+    val profileVerified: Boolean = false) {
+    val canBuild get() = verified && profileVerified && sourceTreeSha256 != null && data != null && version != null &&
         sourcePlatform in PortTarget.desktopPlatforms && blockers.isEmpty()
     fun asText(): String = (listOf("Experimental Unity port assessment", "") + facts + "" +
         if (canBuild) listOf("Ready to compile an experimental port. Gameplay still needs device testing.",
@@ -45,7 +46,11 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
                             input.read(bytes) == 7 && String(bytes, Charsets.US_ASCII) in listOf("UnityFS", "UnityRa", "UnityWe") }) })
                 blockers += "This game uses AssetBundles/Addressables. Their catalog, platform paths and shaders need an adapter; the generic classic-scene converter cannot copy them unchanged."
             if (!File(data, "level0").isFile) blockers += "A classic scene tree starting with level0 is required."
-            for (file in listOf("ScriptingAssemblies.json", "RuntimeInitializeOnLoads.json", "Resources/unity_builtin_extra", "Managed/UnityEngine.UI.dll"))
+            val registration = listOf("ScriptingAssemblies.json", "RuntimeInitializeOnLoads.json").filter { !File(data, it).isFile }
+            if (registration.isNotEmpty() && header != null && !UnityDistribution.supports(header.version))
+                facts += "Runtime registration layout is unverified for this engine. This source has no ${registration.joinToString()}; its engine provider must extract or regenerate the correct registration metadata. Missing modern JSON files alone do not establish an incomplete source."
+            else for (file in registration) blockers += "The current common runtime needs $file. This source requires an adapter to provide or rebuild it."
+            for (file in listOf("Resources/unity_builtin_extra", "Managed/UnityEngine.UI.dll"))
                 if (!File(data, file).isFile) blockers += "The current common runtime needs $file. This source requires an adapter to provide or rebuild it."
             if (File(data, "Plugins").walkTopDown().any { it.isFile && it.extension.lowercase(Locale.ROOT) in listOf("jar", "aar", "winmd") })
                 blockers += "Java/AAR or Windows Runtime plugin files need a managed/Java provider. A native .so pack cannot install them."
@@ -61,20 +66,22 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
                 require(array.length() <= 10000) { "Audit is too large." }
                 return (0 until array.length()).map { array.getString(it) }
             }
-            require(managed.getInt("schema") == 1)
+            require(managed.getInt("schema") == 2) { "Update the bundled managed audit tool and run preparation again." }
+            val profileChecked = managed.getBoolean("androidProfileChecked")
+            val pendingProfile = strings(managed, "pendingProfileAssemblies").toSet()
+            require(!profileChecked || pendingProfile.isEmpty()) { "Full profile audit cannot contain deferred assemblies." }
             val missing = strings(managed, "missingAssemblies")
             if (missing.isNotEmpty()) blockers += "Unresolved managed references: ${missing.take(40).joinToString()}. Supply matching Android-compatible managed dependencies through a reviewed adapter."
             val members = strings(managed, "missingMembers")
             if (members.isNotEmpty()) blockers += "Android managed API mismatches: ${members.take(30).joinToString()}. This source needs a managed adapter before IL2CPP conversion."
-            val desktop = strings(managed, "desktopApis")
+            val desktop = strings(managed, "desktopApis").filterNot { !profileChecked && it.substringBefore(" -> ") in pendingProfile }
             if (desktop.isNotEmpty()) blockers += "Desktop API references need an Android code-path review or replacement: ${desktop.take(30).joinToString()}. Declared references do not prove these methods execute on Android."
             val diagnostics = strings(managed, "diagnostics")
             if (diagnostics.isNotEmpty()) blockers += "Managed metadata could not be verified: ${diagnostics.take(20).joinToString()}"
             val plugins = try { AndroidPluginPack.verified(context, initial.version!!, initial.data!!) }
                 catch (error: Exception) { blockers += "Imported Android plugin pack was rejected: ${error.message}"; emptyMap() }
             val pageSize = android.system.Os.sysconf(android.system.OsConstants._SC_PAGESIZE)
-            val system = setOf("libc.so", "libm.so", "libdl.so", "liblog.so", "libandroid.so", "libz.so", "libEGL.so",
-                "libGLESv2.so", "libGLESv3.so", "libvulkan.so", "libOpenSLES.so", "libaaudio.so", "libmediandk.so", "libjnigraphics.so")
+            val system = NativePortRequirements.androidSystemLibraries
             for ((name, pair) in plugins) {
                 val info = pair.second
                 if (info.androidApi > Build.VERSION.SDK_INT) blockers += "$name requires Android API ${info.androidApi}."
@@ -91,7 +98,7 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             }
             // Plugins can be loaded dynamically without a P/Invoke declaration. Never silently drop an unknown plugin.
             val pluginFiles = File(initial.data, "Plugins").walkTopDown().filter { it.isFile && PortDependencyAudit.nativeLibrary(it.name) }.toList()
-            val requirements = NativePortRequirements.inspect(native, pluginFiles.map { it.name }, plugins.mapValues { it.value.second.exports })
+            val requirements = NativePortRequirements.inspect(native, pluginFiles.map { it.name }, plugins.mapValues { it.value.second.exports }, pendingProfile)
             blockers += requirements.blockers
             facts += requirements.facts
             if (assets != null) {
@@ -105,7 +112,8 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             } else if (!initial.verified) facts += "Scene and shader conversion has not been validated yet."
             facts += "Native declarations include unused wrapper methods. Runtime reachability is unverified; requirements stay blocked until a reviewed Android path or replacement exists. Passing metadata/export checks does not establish gameplay compatibility."
             return initial.copy(facts = facts.distinct(), blockers = blockers.distinct(), verified = assets != null || initial.verified,
-                sourceTreeSha256 = assets?.getString("sourceTreeSha256") ?: initial.sourceTreeSha256)
+                sourceTreeSha256 = assets?.getString("sourceTreeSha256") ?: initial.sourceTreeSha256,
+                profileVerified = profileChecked && diagnostics.isEmpty())
         }
     }
 }

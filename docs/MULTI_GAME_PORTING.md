@@ -1,6 +1,6 @@
 # Multi-game porting status
 
-Revision 39 is an **experimental source candidate without a new APK build here** stacked on the
+Revision 40 is an **experimental source candidate without a new APK build here** stacked on the
 porting-performance and personalized Silksong touch-control candidates.
 
 | Game | Candidate behavior | Input / current limits |
@@ -48,6 +48,15 @@ blocked until reviewed binding/provider work exists. The Unity 2022 engine,
 Addressables, audio/store/input and Burst work is described in the
 [Cult assessment](GENERIC_UNITY_PORTS.md#cult-of-the-lamb-assessment); this revision
 does not enable compiling or playing that game.
+
+Revision 40 addresses the owner's Slime Rancher assessment. Public Android native
+libraries are no longer described as downloadable game plugins, and packs cannot
+replace them. Initial Mono framework declarations are deferred until the exact
+Android profile is selected. The full audit checks the selected framework's
+native imports and member APIs; deferred or missing profiles cannot authorize a
+compile. Legacy missing registration JSON is reported as an unverified engine
+layout, not evidence of a damaged source. Unity 2019.4.29f1, bundles and platform
+integrations still need providers; see the [Slime assessment](GENERIC_UNITY_PORTS.md#slime-rancher-assessment).
 
 ## What changed after the inspection-only catalog
 

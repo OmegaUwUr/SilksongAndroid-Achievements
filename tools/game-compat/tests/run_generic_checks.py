@@ -49,6 +49,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="generic-port-") as temporary:
         directory = Path(temporary)
         valid = elf(); (directory / "valid.so").write_bytes(valid)
+        (directory / "system-libraries.txt").write_text("\n".join(sorted(creator.SYSTEM_LIBRARIES)) + "\n")
         x86 = valid.copy(); struct.pack_into("<H", x86, 18, 62); (directory / "x86.so").write_bytes(x86)
         linux = valid.copy(); linux[512:640] = linux[512:640].replace(b".note.android.ident", b".note.nonandr.ident")
         (directory / "linux.so").write_bytes(linux)
@@ -75,6 +76,14 @@ def main() -> None:
             raise AssertionError("Dedicated adapter ID accepted")
         except ValueError:
             pass
+        for name in creator.SYSTEM_LIBRARIES:
+            library = directory / name; library.write_bytes(valid)
+            rejected = directory / "reserved-system.zip"
+            try:
+                creator.create(managed.parent, 987, "6000.0.50f1", [library], rejected)
+                raise AssertionError("An Android system library was accepted: " + name)
+            except ValueError:
+                assert not rejected.exists()
         out = directory / "checks.jar"
         subprocess.run(["java", "-cp", cp, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect",
                         "-jvm-target", "17", "-classpath", cp, "-d", str(out), *[str(SRC / (name + ".kt")) for name in names],
@@ -82,7 +91,7 @@ def main() -> None:
                         str(Path(__file__).parent / "kotlin/NativePortRequirementChecks.kt")], check=True)
         subprocess.run(["java", "-cp", str(out) + os.pathsep + cp, "dev.silksong.launcher.GenericPortChecksKt",
                         str(directory), creator.bindings(managed.parent)], check=True)
-        print("PASS: 3 pack-creation checks; replacements only, binding fingerprint, no overwrite/dedicated ID bypass")
+        print(f"PASS: {3 + len(creator.SYSTEM_LIBRARIES)} pack-creation checks; binding fingerprint, no overwrite/dedicated ID bypass, system-library rejection")
 
 
 if __name__ == "__main__":
