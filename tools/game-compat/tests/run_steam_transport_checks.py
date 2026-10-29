@@ -23,10 +23,13 @@ object TokenStore { data class Credentials(val accountName: String, val refreshT
 ''')
     out = tmp / "checks.jar"
     sources = [SRC / (name + ".kt") for name in (
-        "SteamSession", "SteamCrypto", "SteamLoginIdentity", "SteamManifestInventory",
+        "SteamSession", "SteamContentTransport", "SteamCrypto", "SteamLoginIdentity", "SteamManifestInventory",
         "SteamLibraryRules", "SteamBaseDepots", "PortDependencyAudit")]
     subprocess.run(["java", "-cp", cp, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect",
                     "-jvm-target", "17", "-classpath", cp, "-d", str(out), *map(str, sources), str(fixtures),
-                    str(Path(__file__).parent / "kotlin/SteamTransportChecks.kt")], check=True, timeout=90)
+                    str(Path(__file__).parent / "kotlin/SteamTransportChecks.kt"),
+                    str(Path(__file__).parent / "kotlin/SteamContentRetryChecks.kt")], check=True, timeout=90)
     subprocess.run(["java", "-cp", str(out) + os.pathsep + cp, "dev.silksong.launcher.SteamTransportChecksKt"],
+                   check=True, timeout=60)
+    subprocess.run(["java", "-cp", str(out) + os.pathsep + cp, "dev.silksong.launcher.SteamContentRetryChecksKt"],
                    check=True, timeout=60)

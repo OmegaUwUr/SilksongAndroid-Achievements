@@ -71,8 +71,8 @@ Source reuse does not bypass the full checks required for a new port build.
 
 ## Validation
 
-`tools/game-compat/tests/run_persistence_checks.py` compiles all 110 production
-Kotlin files, exercises 28 real filesystem/cache/update paths, and compiles the two
+`tools/game-compat/tests/run_persistence_checks.py` now compiles all 112 production
+Kotlin files, exercises 32 real filesystem/cache/update/source-evidence paths, and compiles the two
 production Java launch adapters against those Kotlin entry points. It uses Android
 API 35 and the configured JavaSteam dependencies; Unity hosting is an explicit
 API fixture. Test archives/ELF files contain metadata only and are never executed.
@@ -89,7 +89,10 @@ these checks. The existing suites also pass: 41 Steam library/dependency checks,
 57 generic preparation/export checks and 17 plugin-pack checks. All Android
 resource XML parses and referenced resource names resolve.
 
-No revision-44 APK, device upgrade or gameplay was tested here. Manually build
+Revision 47 also isolates stale builder cleanup and bounds failed Steam content
+retries; see [download/build recovery](STEAM_DOWNLOAD_RECOVERY.md).
+
+No revision-47 APK, device upgrade or gameplay was tested here. Manually build
 **Build APK** on `feat/unity-game-catalog` and install over the current app. Verify
 the saved library on a cold start, resume a stopped scan, switch accounts, and
 launch existing Hollow Knight/generic builds through the update without a source

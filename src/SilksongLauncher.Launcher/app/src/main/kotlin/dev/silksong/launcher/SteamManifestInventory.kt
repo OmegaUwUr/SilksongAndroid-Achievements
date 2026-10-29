@@ -30,6 +30,7 @@ class SteamManifestInventory(private val session: SteamSession) : AutoCloseable 
                 !it.useAsProxy && it.type in listOf("CDN", "SteamCache") && (it.allowedAppIds.isEmpty() || appId in it.allowedAppIds)
             }.sortedBy { it.weightedLoad }.take(3)
             for (advertised in eligible) {
+                session.requireDownloadTransport()
                 try {
                     val server = if (advertised.protocol == Server.ConnectionProtocol.HTTPS) advertised
                         else Server.fromHostAndPort(requireNotNull(advertised.vHost ?: advertised.host), 443)
@@ -46,6 +47,7 @@ class SteamManifestInventory(private val session: SteamSession) : AutoCloseable 
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { /* Try the next authorized HTTPS endpoint; no tokens are logged. */ }
             }
+            session.requireDownloadTransport()
             error("Steam manifest unavailable. Retry before downloading the game.")
         }
     }

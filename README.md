@@ -71,6 +71,11 @@ or Valve release.
   **Export porting files for review** provides original code/startup metadata for
   adapter work. [Slime Rancher status and source collection](docs/SLIME_RANCHER_PORT.md)
   explains what is still missing; this does not enable the game to compile.
+- **Download and build recovery (revision 47 candidate):** spaces Steam CDN retries
+  across download workers, reports repeated network failures and keeps downloaded
+  data for retry. Stale builders are stopped through their own service connection;
+  tool runs from different game screens serialize. See
+  [download/build recovery and validation](docs/STEAM_DOWNLOAD_RECOVERY.md).
 - **Slime Rancher source review (revision 46 candidate):** reads actual legacy
   MonoManager registration, records the reviewed Steam boundary and provides an
   exact-source tool for disabling optional Discord desktop presence. Includes an

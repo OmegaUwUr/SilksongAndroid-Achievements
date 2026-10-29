@@ -31,6 +31,7 @@ import `in`.dragonbra.javasteam.steam.handlers.steamuser.LogOnDetails
 import `in`.dragonbra.javasteam.steam.handlers.steamuser.SteamUser
 import `in`.dragonbra.javasteam.steam.handlers.steamuser.callback.LoggedOnCallback
 import `in`.dragonbra.javasteam.steam.steamclient.SteamClient
+import `in`.dragonbra.javasteam.steam.steamclient.configuration.SteamConfiguration
 import `in`.dragonbra.javasteam.steam.steamclient.callbackmgr.CallbackManager
 import `in`.dragonbra.javasteam.steam.steamclient.callbackmgr.CallbackMsg
 import `in`.dragonbra.javasteam.steam.steamclient.callbacks.ConnectedCallback
@@ -50,7 +51,8 @@ class SteamSession : Closeable {
         SteamCrypto.install()
     }
 
-    private val client = SteamClient()
+    private val contentTransport = SteamContentTransport()
+    private val client = SteamClient(SteamConfiguration.create(Consumer { it.withHttpClient(contentTransport.httpClient) }))
     private val closed = AtomicBoolean(false)
     private val contentLock = Any()
     private val contentClient = lazy { Client(client) }
@@ -68,6 +70,7 @@ class SteamSession : Closeable {
         check(!closed.get() && !client.configuration.httpClient.dispatcher.executorService.isShutdown) {
             "The Steam download connection was closed. Retry the operation to open a new session."
         }
+        contentTransport.retry.requireAvailable()
     }
 
     private val loginIdentity = SteamLoginIdentity.allocate()

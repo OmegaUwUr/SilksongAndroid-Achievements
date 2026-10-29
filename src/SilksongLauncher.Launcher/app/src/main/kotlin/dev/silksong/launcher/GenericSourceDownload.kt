@@ -110,6 +110,7 @@ object GenericSourceDownload {
                                 // indefinitely. A disposed executor cannot recover by retrying.
                                 session.requireDownloadTransport()
                             }
+                            session.requireDownloadTransport()
                         }
                         failure.get()?.let { throw java.io.IOException("Steam source download failed: " + SteamDownloadDiagnostics.describe(it), it) }
                     } finally { LogManager.removeListener(DepotFetcher.logForwarder) }

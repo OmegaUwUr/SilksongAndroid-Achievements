@@ -229,6 +229,14 @@ empty registration placeholders are installed.
 
 ## Validation
 
+The later revision-46 device export was reviewed for revision 47: all 100 listed
+file sizes/hashes pass, the managed fingerprint is unchanged, and the exported
+legacy registration and content reports contain no diagnostics. The new log shows
+rapid CDN DNS retries and package-wide stale-builder cleanup; revision 47 addresses
+those paths as described in [download/build recovery](STEAM_DOWNLOAD_RECOVERY.md).
+It contains no Android player/gameplay result and does not remove the remaining
+engine, registration, input or Steam adapter requirements above.
+
 The source tests use synthetic serialized files, bundles and managed assemblies.
 They do not execute game code, Android engines or native plugins. Run:
 

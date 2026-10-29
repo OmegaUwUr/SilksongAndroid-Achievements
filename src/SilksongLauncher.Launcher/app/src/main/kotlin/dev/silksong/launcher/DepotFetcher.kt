@@ -265,9 +265,10 @@ object DepotFetcher {
                         if (!producer.isActive) throw java.util.concurrent.CancellationException()
                         session.requireDownloadTransport()
                     }
+                    session.requireDownloadTransport()
                 }
 
-                failure.get()?.let { throw RuntimeException("depot download failed: $it", it) }
+                failure.get()?.let { throw java.io.IOException("Steam download failed: " + SteamDownloadDiagnostics.describe(it), it) }
                 validateSource(installDir)
                 if (!target.hasSource(installDir))
                     throw RuntimeException("Steam downloaded ${target.title}, but this release does not match its supported Linux source. No port was started.")

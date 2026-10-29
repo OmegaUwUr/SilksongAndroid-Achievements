@@ -2,6 +2,32 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.47 (candidate)
+
+- Addresses the supplied revision-46 log's 719 rapid Steam CDN DNS failures.
+  Shares exponential backoff between a session's content workers and stops after
+  12 consecutive transport/service failures with an actionable retry message.
+  A fully consumed successful response restores normal parallel downloads.
+  Cancellation stays responsive, CDN authentication is preserved, and sign-in,
+  discovery and other sessions have independent state. Existing verified download
+  data is retained for retry; the app does not replace Android's DNS resolver.
+- Removes package-wide background-process termination and its permission.
+  Stale builders receive a quit message over their own existing service binding,
+  without creating a new service. Occupied, unreachable slots are skipped.
+  Tool runs from different game screens serialize so cleanup cannot mistake an
+  active preparation for a stale process.
+- Verifies all 100 manifest-listed files in the new Slime Rancher export. The
+  source fingerprint is unchanged, its device registration report has no errors,
+  and its content report still has 313 shaders and zero layout/content errors.
+  This does not complete its Android engine or game-specific adapters.
+
+Validation: 20 real JavaSteam/OkHttp transport and retry checks, 6 complete
+MonoRuntime lifecycle checks with simulated Android boundaries, and 32 persistent
+cache/update/source-evidence checks pass. All 112 production Kotlin files and both
+Java launch adapters compile against the configured APIs. No APK, Android process,
+native player, live Steam download or gameplay test was run. APK assembly stays
+manual. See docs/STEAM_DOWNLOAD_RECOVERY.md.
+
 ## 1.0.3-achievements.46 (candidate)
 
 - Reviews the supplied, hash-verified Slime Rancher Linux 1.4.3 export. Adds
