@@ -27,6 +27,7 @@ class GenericPortSetupActivity : Activity() {
     private lateinit var play: Button
     private lateinit var cancel: Button
     private lateinit var included: Button
+    private lateinit var engineProfile: Button
     private val actions = mutableListOf<Button>()
 
     override fun onCreate(state: Bundle?) {
@@ -44,6 +45,13 @@ class GenericPortSetupActivity : Activity() {
         action(R.string.generic_port_refresh_source) { download(refresh = true) }
         action(R.string.generic_port_choose) { pick(71, Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
         action(R.string.generic_port_prepare) { prepare() }
+        engineProfile = action(R.string.generic_port_engine_profile) { operation {
+            val selected = source ?: error(getString(R.string.generic_port_start))
+            assessment = null
+            val report = GenericPortBuild.prepareEngineProfile(port, selected) { update(it) }
+            assessment = report; status.text = report.asText(); prefs.edit().putString("report", report.asText()).apply()
+        } }
+        body.addView(libraryText(getString(R.string.generic_port_engine_profile_explain)))
         action(R.string.generic_port_import) { pick(72, Intent(Intent.ACTION_OPEN_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE)) }
         included = action(R.string.generic_port_included) { operation {
             val selected = source ?: error(getString(R.string.generic_port_start))
@@ -86,6 +94,7 @@ class GenericPortSetupActivity : Activity() {
         actions.forEach { it.isEnabled = !busy }
         compile.isEnabled = !busy && assessment?.canBuild == true
         included.isEnabled = !busy && assessment?.includedLibraries?.isNotEmpty() == true
+        engineProfile.isEnabled = !busy && source != null && UnityManagedProfile.supports(assessment?.version.orEmpty())
         play.isEnabled = !busy && GenericPortBuild.isReady(port)
         cancel.visibility = if (busy) View.VISIBLE else View.GONE
         progress.visibility = if (busy) View.VISIBLE else View.GONE

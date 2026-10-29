@@ -2,6 +2,36 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.49 (candidate)
+
+- Adds a separate **Download engine profile & audit** action for stable Unity
+  2019.4 sources. Exact compiler/configuration files, the Unity AOT class library
+  and Android managed modules can now be prepared while backend/content/native
+  requirements are still blocked. This component provider does not enable a
+  native build, player lifecycle or script-registration recipe.
+- Resolves the exact official release, verifies full editor/Android archive
+  lengths and published checksums, reads legacy ODC CPIO as data, and fingerprints
+  every selected installed file. Selected editor trees are collected across the
+  complete archive, including non-contiguous entries. No installer/editor runs.
+- Stores components in an app-wide, per-version cache shared between games.
+  Completed installations reuse offline and survive APK updates. Locks, atomic
+  publication, verified-stage resume and previous-copy recovery preserve existing
+  data on cancellation/failure. Modified or added files invalidate readiness.
+- Runs the full original managed reference/member/native audit against those
+  Android components when available. Exports include source-bound profile evidence.
+  Build eligibility now also explicitly requires a registered native engine
+  family, even if a metadata/profile report otherwise passes.
+
+Validation: 12 profile-installer, 18 existing automatic-runtime, 62 generic and
+17 pack checks pass; 33 persistence checks pass alongside compilation of all
+114 production Kotlin files and both Java launch adapters. The actual complete
+2019.4.29f1 archives were verified, installed by the production Kotlin code and
+reused offline: 70 AOT BCL DLLs and 58 Android DLLs. The production C# audit of the
+owned Slime Rancher export reports no missing references/members, with Mono.Posix
+and two cluster modules still unresolved. Original source bytes are unchanged.
+No revision-49 APK, legacy compiler/native player execution or gameplay test was
+performed. Builds remain manual. See docs/UNITY_2019_PROFILE_PREPARATION.md.
+
 ## 1.0.3-achievements.48 (candidate)
 
 - Broadens the common Unity-to-Android tool to Mono games whose script assemblies

@@ -213,6 +213,8 @@ FPS: %2$s</string>
     <string name="generic_port_setup">Prepare port</string>
     <string name="generic_port_choose">Choose local game source</string>
     <string name="generic_port_prepare">Prepare / check again</string>
+    <string name="generic_port_engine_profile">Download engine profile &amp; audit</string>
+    <string name="generic_port_engine_profile_explain">For Unity 2019.4 sources, this optional step downloads the exact compiler and Android managed profile for a full audit, even when other adapters are missing. The first download is about 2–3 GB. Components are shared across games and retained after app updates. Native player compilation still requires its own provider.</string>
     <string name="generic_port_import">Import Android plugin pack</string>
     <string name="generic_port_included">Add included libraries</string>
     <string name="generic_port_compile">Compile experimental port</string>

@@ -45,7 +45,7 @@ def main() -> None:
     jars = list(Path(os.environ["KOTLIN_CHECK_JARS"]).glob("*.jar")) + list(Path(os.environ["STEAM_CHECK_JARS"]).glob("*.jar"))
     jars.sort(key=lambda p: (not p.name.startswith("json-"), p.name))  # Real JSON before Android's host stubs.
     cp = os.pathsep.join(str(p) for p in jars if p.name not in ("check.jar", "launcher-check.jar", "javasteam-1.8.0.jar", "aapt2.jar") and not p.name.endswith("-sources.jar"))
-    names = ("GameProfile", "GameCompatibility", "PortTarget", "UnityDistribution", "UnityReleaseCatalog", "PortDependencyAudit", "AndroidElf",
+    names = ("GameProfile", "GameCompatibility", "PortTarget", "UnityDistribution", "UnityReleaseCatalog", "UnityManagedProfile", "PortDependencyAudit", "AndroidElf",
              "AndroidPluginPack", "PortSourceFingerprint", "PortReviewMetadata", "GenericPortContext", "GenericPortAssessment", "NativePortRequirements",
              "BundledNativeLibraryCatalog", "BundledNativeLibraries", "PortEvidenceExport")
     with tempfile.TemporaryDirectory(prefix="generic-port-") as temporary:

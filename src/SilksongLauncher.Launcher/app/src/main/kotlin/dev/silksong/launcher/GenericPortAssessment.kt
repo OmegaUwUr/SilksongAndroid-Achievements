@@ -9,7 +9,7 @@ import java.util.Locale
 data class GenericPortAssessment(val data: File?, val version: String?, val facts: List<String>, val blockers: List<String>,
     val verified: Boolean = false, val sourceTreeSha256: String? = null, val sourcePlatform: Int? = null,
     val profileVerified: Boolean = false, val includedLibraries: List<String> = emptyList()) {
-    val canBuild get() = verified && profileVerified && sourceTreeSha256 != null && data != null && version != null &&
+    val canBuild get() = verified && profileVerified && sourceTreeSha256 != null && data != null && version != null && UnityDistribution.supports(version) &&
         sourcePlatform in PortTarget.desktopPlatforms && blockers.isEmpty()
     fun asText(): String = (listOf("Experimental Unity port assessment", "") + facts + "" +
         if (canBuild) listOf("Ready to compile an experimental port. Gameplay still needs device testing.",
@@ -31,7 +31,10 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             else {
                 if (header.platform !in PortTarget.desktopPlatforms) blockers += "Source target ${header.platform} needs an asset converter provider."
                 else facts += "Source platform: ${GameCompatibility.platformName(header.platform)}. Every serialized file must match; usable Vulkan shaders are required. Direct3D/Metal shader conversion is not available."
-                if (!UnityDistribution.supports(header.version)) blockers += "Unity ${header.version} needs an engine-family/toolchain provider. Pinned component sets: ${UnityDistribution.versions().joinToString()}; automatic exact-version resolution covers stable Unity 6000.0 patch releases. Another engine version cannot safely substitute for it."
+                if (UnityManagedProfile.supports(header.version)) {
+                    facts += "Exact Unity ${header.version} compiler and Android managed-profile components can be downloaded separately with Download engine profile. This allows a full profile audit while backend adapters are still blocked. The first transfer is about 2–3 GB; components are shared between games and retained across app updates."
+                    blockers += "Unity ${header.version} still needs the legacy Android native-build, player-lifecycle and script-registration provider. Preparing its exact compiler/managed profile does not enable the Unity 6 native recipe or authorize compilation."
+                } else if (!UnityDistribution.supports(header.version)) blockers += "Unity ${header.version} needs an engine-family/toolchain provider. Pinned component sets: ${UnityDistribution.versions().joinToString()}; automatic exact-version resolution covers stable Unity 6000.0 patch releases. Another engine version cannot safely substitute for it."
                 else if (UnityDistribution.isPinned(header.version)) facts += "Exact Android engine and IL2CPP components: downloadable automatically from Unity (pinned component set)."
                 else facts += "Unity 6.0 runtime: resolve this exact public release automatically from Unity, verify its archives and check the installed layout before compilation. This is experimental runtime eligibility, not gameplay verification. The initial editor transfer can exceed 4 GB to verify its full published checksum."
             }
@@ -87,6 +90,7 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             val desktop = strings(managed, "desktopApis").filterNot { !profileChecked && it.substringBefore(" -> ") in pendingProfile }
             if (desktop.isNotEmpty()) blockers += "Desktop API references need an Android code-path review or replacement: ${desktop.take(30).joinToString()}. Declared references do not prove these methods execute on Android."
             val diagnostics = strings(managed, "diagnostics")
+            if (profileChecked) facts += "Android managed profile audit completed: ${missing.size} missing assembly references, ${members.size} API/member mismatches and ${diagnostics.size} metadata/profile diagnostics. Surviving native bindings and runtime integration still need their own adapters."
             if (diagnostics.isNotEmpty()) blockers += "Managed metadata could not be verified: ${diagnostics.take(20).joinToString()}"
             if (managed.has("bundleLoadingIssues")) blockers += strings(managed, "bundleLoadingIssues").take(30)
             val plugins = try { AndroidPluginPack.verified(context, initial.version!!, initial.data!!) }

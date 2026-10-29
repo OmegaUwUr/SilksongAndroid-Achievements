@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 48)
+# Reusable Unity preparation and experimental compilation (revision 49)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -13,6 +13,13 @@ source validation/recovery, audit, compilation and export; the generic route no
 longer requires a file named `Assembly-CSharp.dll`. Filename discovery remains a
 candidate classification, and full source/profile/content checks still decide
 whether a port can be compiled.
+
+Revision 49 separates exact older-engine component preparation from build approval.
+After inspecting a Unity 2019.4 source, **Download engine profile & audit** downloads
+and verifies its exact compiler, AOT BCL/configuration and Android managed modules
+into a shared persistent cache, then performs the full managed audit despite other
+blockers. This does not enable a Unity 2019 native/player recipe. See
+[the profile preparation flow and actual-source result](UNITY_2019_PROFILE_PREPARATION.md).
 
 ## User flow
 

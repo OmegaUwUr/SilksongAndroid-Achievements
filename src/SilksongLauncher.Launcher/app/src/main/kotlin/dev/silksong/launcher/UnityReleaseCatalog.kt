@@ -14,16 +14,27 @@ internal object UnityReleaseCatalog {
     private const val MAX_METADATA = 1024 * 1024
     // The native recipe, package defines and registration format currently implement this engine family.
     fun eligible(version: String): Boolean = Regex("6000\\.0\\.(0|[1-9][0-9]{0,3})f[1-9][0-9]?").matches(version)
+    // Component inspection is separate from the native/player build provider.
+    fun profileEligible(version: String): Boolean = Regex("2019\\.4\\.(0|[1-9][0-9]{0,3})f[1-9][0-9]?").matches(version)
 
     data class Archive(val url: String, val bytes: Long, val algorithm: String, val digest: String) {
         val identity get() = "$url|$bytes|$algorithm|$digest"
     }
     data class Release(val version: String, val changeset: String, val editor: Archive, val android: Archive) {
-        val identity get() = hash("unity-6.0-auto-1|$version|$changeset|${editor.identity}|${android.identity}".toByteArray())
+        val identity get() = hash("${if (profileEligible(version)) "unity-2019.4-profile-1" else "unity-6.0-auto-1"}|$version|$changeset|${editor.identity}|${android.identity}".toByteArray())
     }
 
     fun parse(version: String, text: String): Release {
         require(eligible(version)) { "Unity $version needs a different engine-family build provider." }
+        return parseExact(version, text)
+    }
+
+    fun parseProfile(version: String, text: String): Release {
+        require(profileEligible(version)) { "Unity $version has no managed-profile component provider." }
+        return parseExact(version, text)
+    }
+
+    private fun parseExact(version: String, text: String): Release {
         require(text.toByteArray(Charsets.UTF_8).size <= MAX_METADATA) { "Unity release metadata is too large." }
         val rows = JSONObject(text).getJSONArray("results")
         require(rows.length() <= 25)
@@ -67,8 +78,17 @@ internal object UnityReleaseCatalog {
     }
 
     fun resolve(version: String, cache: File, checkpoint: () -> Unit = {}): Release {
-        checkpoint()
         require(eligible(version))
+        return resolveExact(version, cache, checkpoint, ::parse)
+    }
+
+    fun resolveProfile(version: String, cache: File, checkpoint: () -> Unit = {}): Release {
+        require(profileEligible(version))
+        return resolveExact(version, cache, checkpoint, ::parseProfile)
+    }
+
+    private fun resolveExact(version: String, cache: File, checkpoint: () -> Unit, parse: (String, String) -> Release): Release {
+        checkpoint()
         if (cache.isFile && cache.length() in 1..MAX_METADATA.toLong()) {
             runCatching { parse(version, cache.readText()) }.getOrNull()?.let { return it }
         }

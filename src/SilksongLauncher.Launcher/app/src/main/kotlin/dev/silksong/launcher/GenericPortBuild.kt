@@ -31,6 +31,27 @@ object GenericPortBuild {
         withLock(context) { assess(context, source, progress) }
     }
 
+    private fun profileCache(context: GenericPortContext): File =
+        File(context.sharedExternalFilesDir ?: error("Shared engine storage is unavailable."), "unity-managed-profiles")
+
+    suspend fun prepareEngineProfile(context: GenericPortContext, source: File,
+        progress: suspend (PlayerImage.Progress) -> Unit): GenericPortAssessment = withContext(Dispatchers.IO) {
+        withLock(context) {
+            val initial = GenericPortAssessment.source(source)
+            val version = initial.version ?: error("Choose readable original game files first.")
+            require(initial.data != null && GameCompatibility.hasMonoAssemblies(initial.data)) { "Choose complete original Mono files first." }
+            require(UnityManagedProfile.supports(version)) { "This engine version has no separate managed-profile component provider." }
+            val cache = profileCache(context)
+            check((context.sharedExternalFilesDir?.usableSpace ?: 0) > 3 * GB) { "Free at least 3 GB before preparing the exact engine profile." }
+            channelFlow<PlayerImage.Progress> {
+                UnityProfileInstaller.install(cache, version) { step, done, total ->
+                    trySend(PlayerImage.Progress(step, if (total > 0) done.toFloat() / total else -1f))
+                }
+            }.collect { progress(it) }
+            assess(context, source, progress)
+        }
+    }
+
     suspend fun exportEvidence(context: GenericPortContext, source: File, output: java.io.OutputStream,
         progress: suspend (PlayerImage.Progress) -> Unit) = withContext(Dispatchers.IO) {
         withLock(context) {
@@ -84,7 +105,25 @@ object GenericPortBuild {
         val surgery = PlayerImage.stageSurgery(root, context.assets)
         // Check native declarations before fetching hundreds of megabytes of engine components.
         val managedPath = File(root, "managed-port-audit.json")
-        PlayerImage.run(surgery, context, listOf("inspect-managed-port", initial.data!!.absolutePath, "-", managedPath.absolutePath))
+        val profileEvidence = File(root, "engine-profile-evidence.json").also { it.delete() }
+        val profile = if (UnityManagedProfile.supports(initial.version)) UnityProfileInstaller.root(profileCache(context), initial.version)
+            .takeIf { UnityProfileInstaller.ready(it, initial.version) } else null
+        if (profile == null) {
+            PlayerImage.run(surgery, context, listOf("inspect-managed-port", initial.data.absolutePath, "-", managedPath.absolutePath))
+        } else {
+            progress(PlayerImage.Progress("Auditing the exact Android managed profile", -1f))
+            val binding = PortSourceFingerprint.bindings(initial.data)
+            val receipt = UnityProfileInstaller.receiptHash(profile)
+            PlayerImage.run(surgery, context, listOf("inspect-managed-profile", initial.data.absolutePath,
+                UnityProfileInstaller.bcl(profile).absolutePath, UnityProfileInstaller.engine(profile).absolutePath, managedPath.absolutePath))
+            check(binding == PortSourceFingerprint.bindings(initial.data) && receipt == UnityProfileInstaller.receiptHash(profile) && UnityProfileInstaller.ready(profile, initial.version)) {
+                "Source or exact engine profile changed during inspection. Prepare again."
+            }
+            profileEvidence.writeText(JSONObject().put("schema", 1).put("appId", context.appId).put("unityVersion", initial.version)
+                .put("recipe", UnityManagedProfile.RECIPE).put("bindingsSha256", binding)
+                .put("componentReceiptSha256", receipt).put("auditSha256", UnityReleaseCatalog.hash(managedPath.readBytes()))
+                .put("scope", "Exact compiler/Android managed-profile audit only. Native build, Android player, registration, backend and gameplay compatibility are not approved.").toString())
+        }
         val callSites = File(root, "native-call-sites.json").also { it.delete() }
         progress(PlayerImage.Progress("Inspecting native backend call sites", -1f))
         PlayerImage.run(surgery, context, listOf("inspect-native-call-sites", initial.data.absolutePath, callSites.absolutePath))
@@ -111,7 +150,9 @@ object GenericPortBuild {
                 initial.sourcePlatform.toString(), assetPath.absolutePath))
             json(assetPath)
         } else null
-        val preliminary = GenericPortAssessment.finish(initial, context, json(managedPath), content, legacy, review)
+        val withProfile = if (profile != null) initial.copy(facts = initial.facts.filterNot { it.startsWith("Exact Unity ${initial.version} compiler and Android managed-profile components can be downloaded separately") } +
+            "Exact Unity ${initial.version} compiler and Android managed-profile components are installed and fully fingerprinted in the shared cache. Original game assemblies were audited against that Android profile; native/player integration remains blocked.") else initial
+        val preliminary = GenericPortAssessment.finish(withProfile, context, json(managedPath), content, legacy, review)
         if (preliminary.blockers.isNotEmpty()) return preliminary
         val target = PortTarget.classic(context.appId, initial.version, initial.sourcePlatform!!)
         if (!UnityFetcher.isPresent(unity, target)) UnityFetcher.fetch(unity, target = target).collect {

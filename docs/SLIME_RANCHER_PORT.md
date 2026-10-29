@@ -1,5 +1,14 @@
 # Slime Rancher port work — revision 46
 
+Revision 49 adds an app action to prepare the exact compiler/Android managed
+profile independently of unfinished backend adapters. The complete official
+archives were verified again and installed by the production Kotlin provider;
+its full audit of the owned source confirms the profile findings below. Use
+**Prepare / check again → Download engine profile & audit**, then inspect the new
+report. Components are shared between games and retained across app updates.
+The native build/player and backend work remains unfinished. See
+[profile preparation and validation](UNITY_2019_PROFILE_PREPARATION.md).
+
 **Slime Rancher is not a working Android port in this revision.** The owner supplied
 `porting-source-433340.zip`: original Linux **1.4.3** managed files and bootstrap
 metadata from Unity **2019.4.29f1**. All 98 manifest-listed file sizes/hashes were

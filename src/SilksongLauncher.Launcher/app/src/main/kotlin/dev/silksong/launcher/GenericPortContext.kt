@@ -25,6 +25,7 @@ class GenericPortContext private constructor(base: Context, val appId: Int) : Co
     }
     private val directory get() = "games/steam-$appId"
     val sharedFilesDir: File get() = baseContext.filesDir
+    val sharedExternalFilesDir: File? get() = baseContext.getExternalFilesDir(null)
     private fun dir(parent: File, child: String = directory) = File(parent, child).apply {
         check(isDirectory || mkdirs()) { "Cannot create game storage." }
     }

@@ -15,7 +15,7 @@ only when every required layer has an implementation and its checks pass.
 
 | Layer | Reusable unit | Current boundary |
 | --- | --- | --- |
-| Engine | Exact-version components plus a reviewed family recipe, managed profile, registration and Android player lifecycle | Stable Unity 6000.0 patches; other streams need complete providers |
+| Engine | Exact-version components plus a reviewed family recipe, managed profile, registration and Android player lifecycle | Stable Unity 6000.0 build path; Unity 2019.4 has a separate audit-component provider, while its native/player recipe remains unfinished |
 | Managed code | Full assembly inventory, metadata/reference/member audit and Android BCL/engine/package substitution | Original Mono IL is required; desktop IL2CPP machine code cannot enter this compiler path |
 | Content | Converters for serialized files, local bundles, catalogs and their loading contracts | Classic scenes and bounded local UnityFS; consistent source target/version and usable Vulkan shader data |
 | Native middleware | SDK/version-specific Android ARM64 providers with exact bindings and dependency closure | Missing desktop implementations cannot be replaced by matching filenames |
@@ -55,6 +55,13 @@ This removes a shared limitation. It does not add an engine family, supply missi
 native SDKs or establish gameplay compatibility.
 
 ## Next development priorities
+
+Revision 49 adds [shared Unity 2019.4 profile preparation](UNITY_2019_PROFILE_PREPARATION.md):
+exact compiler/managed components can be downloaded and audited even when another
+capability blocks compilation. All selected files are fingerprinted and reused
+offline. The actual Slime Rancher source audit has no missing references/members;
+Mono.Posix and two absent Android cluster modules remain unresolved. This does not
+implement its native build, player or backend adapters.
 
 1. **Engine families:** complete providers for Unity 2022.3, 2021.3 and 2019.4.
    Each needs exact official components, its compiler/profile, native recipe,

@@ -61,6 +61,13 @@ fun main(args: Array<String>) {
             check(!preliminary.canBuild)
             check(preliminary.copy(profileVerified = true).canBuild)
         }
+        test("a completed older-engine profile audit cannot authorize the Unity 6 native recipe") {
+            val preliminary = GenericPortAssessment(data, "2019.4.29f1", emptyList(), emptyList(),
+                verified = true, sourceTreeSha256 = "a".repeat(64), sourcePlatform = 24, profileVerified = true)
+            check(UnityManagedProfile.supports(preliminary.version!!))
+            check(!preliminary.canBuild && !UnityDistribution.supports(preliminary.version))
+            check(runCatching { PortTarget.classic(987, preliminary.version) }.isFailure)
+        }
         test("generic targets reuse the exact registered engine without a game-specific ID") {
             val target = PortTarget.classic(987, "6000.0.50f1")
             check(target.generic && target.id == "steam-987")

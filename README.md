@@ -11,6 +11,11 @@ engine-family, content, input and middleware support across games. Revision 48
 adds custom script assembly layouts to the common path, including Mono projects
 without `Assembly-CSharp.dll`. See the [tool scope and development priorities](docs/UNITY_PORTING_TOOL.md).
 
+Revision 49 adds **Download engine profile & audit** for Unity 2019.4: exact audit
+components are shared across games and retained after app updates. This resolves
+deferred managed-profile inspection independently of unfinished native/player and
+backend adapters. See [Unity 2019 profile preparation](docs/UNITY_2019_PROFILE_PREPARATION.md).
+
 This is a community project based on **jakobkhansen's SilksongAndroid**, with
 additional SteamSync and achievement features. It is not an official Team Cherry
 or Valve release.

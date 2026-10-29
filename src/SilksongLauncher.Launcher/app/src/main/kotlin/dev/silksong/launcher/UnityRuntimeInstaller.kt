@@ -156,9 +156,11 @@ internal object UnityRuntimeInstaller {
         progress(count)
     }
 
-    internal fun extractEditor(input: InputStream, destination: File, checkpoint: () -> Unit) {
-        val prefixes = listOf("Editor/Data/il2cpp/", "Editor/Data/MonoBleedingEdge/lib/mono/unityaot-linux/")
-        val entered = BooleanArray(2); val left = BooleanArray(2)
+    internal fun extractEditor(input: InputStream, destination: File, checkpoint: () -> Unit,
+        prefixes: List<String> = listOf("Editor/Data/il2cpp/", "Editor/Data/MonoBleedingEdge/lib/mono/unityaot-linux/"),
+        scanWholeArchive: Boolean = false) {
+        require(prefixes.isNotEmpty())
+        val entered = BooleanArray(prefixes.size); val left = BooleanArray(prefixes.size)
         TarArchiveInputStream(XZCompressorInputStream(input.buffered(65536))).use { tar ->
             val writer = Extractor(destination, checkpoint)
             while (true) {
@@ -169,7 +171,7 @@ internal object UnityRuntimeInstaller {
                     entered[inside] = true
                     if (entry.isFile) writer.write(name, entry.size, tar)
                 }
-                if (prefixes.indices.all { entered[it] && left[it] }) break
+                if (!scanWholeArchive && prefixes.indices.all { entered[it] && left[it] }) break
             }
         }
     }
