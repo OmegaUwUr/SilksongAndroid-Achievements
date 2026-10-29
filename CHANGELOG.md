@@ -2,6 +2,34 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.46 (candidate)
+
+- Reviews the supplied, hash-verified Slime Rancher Linux 1.4.3 export. Adds
+  source-bound backend facts and a Unity 2019 MonoManager reader to preparation
+  and future exports. Reads the real assembly flags, script references and source
+  initializers instead of fabricating modern registration JSON.
+- Adds an explicit developer adapter that disables seven optional Discord desktop
+  presence imports in a separate staged assembly. Requires the exact reviewed
+  source and full managed fingerprint; preserves the original and refuses changed
+  signatures, other games and output overwrites. Preparation reports its availability
+  without applying it or clearing native/runtime blockers.
+- Adds an explicit exact-profile member audit and refuses unprovided desktop
+  engine modules. The reviewed Android profile reports no missing game members;
+  Mono.Posix and two cluster modules still need selection/registration handling.
+- Adds a reproducible host conversion probe with exact-component checks and an
+  assembly dependency plan that retains game/Android roots and encoding providers.
+  The unmodified legacy compiler produces 548 C++ files and 20,204,840 metadata
+  bytes from 93 staged assemblies. This is not a native player/gameplay test.
+
+The supplied device report has 313 shaders, no missing Vulkan data and zero
+content/layout problems. Validation includes the actual export's legacy metadata
+and staged optional-feature patch, 124 C# cases, 32 persistence/source-evidence
+checks, 57 generic checks and 17 pack checks. All 111 production Kotlin files and
+both Java launch adapters compile against the configured APIs. APK assembly stays
+manual. Android linking, player lifecycle, script binding remapping, input and
+Steam integration remain unfinished; Slime Rancher is not enabled for compilation.
+See docs/SLIME_RANCHER_PORT.md for the host probe result and remaining boundaries.
+
 ## 1.0.3-achievements.45 (candidate)
 
 - Replaces the permissive serialized-file probe that can misclassify opaque GI

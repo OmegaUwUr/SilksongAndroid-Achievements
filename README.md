@@ -71,6 +71,11 @@ or Valve release.
   **Export porting files for review** provides original code/startup metadata for
   adapter work. [Slime Rancher status and source collection](docs/SLIME_RANCHER_PORT.md)
   explains what is still missing; this does not enable the game to compile.
+- **Slime Rancher source review (revision 46 candidate):** reads actual legacy
+  MonoManager registration, records the reviewed Steam boundary and provides an
+  exact-source tool for disabling optional Discord desktop presence. Includes an
+  exact-profile audit and a host IL2CPP probe. The Android engine/player, native
+  integration, input and Steam adapters remain gated; see [review and probe scope](docs/SLIME_RANCHER_PORT.md).
 - **Included Android native libraries (revision 41 candidate):** eight real ARM64 C
   libraries cover SQLite, LZ4, Zstandard, Ogg/Vorbis and PNG. Preparation identifies
   matching declarations; **Add included libraries** creates a game-bound pack and

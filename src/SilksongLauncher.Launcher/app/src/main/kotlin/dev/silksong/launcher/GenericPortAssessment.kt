@@ -58,8 +58,16 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
         }
 
         fun finish(initial: GenericPortAssessment, context: GenericPortContext, managed: JSONObject,
-            assets: JSONObject?): GenericPortAssessment {
+            assets: JSONObject?, legacyRegistration: JSONObject? = null, sourceReview: JSONObject? = null): GenericPortAssessment {
             val blockers = initial.blockers.toMutableList(); val facts = initial.facts.toMutableList()
+            if (legacyRegistration != null || sourceReview != null) try {
+                val details = PortReviewMetadata.read(initial.data!!, initial.version!!, initial.sourcePlatform!!,
+                    context.appId, legacyRegistration, sourceReview)
+                if (details.registrationRead) facts.removeAll { it.startsWith("Runtime registration layout is unverified for this engine.") }
+                facts += details.facts
+            } catch (error: Exception) {
+                blockers += "Additional source adapter evidence was rejected: ${error.message}"
+            }
             fun strings(json: JSONObject, key: String): List<String> {
                 val array = json.getJSONArray(key)
                 require(array.length() <= 10000) { "Audit is too large." }

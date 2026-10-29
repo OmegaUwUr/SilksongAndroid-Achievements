@@ -24,6 +24,22 @@ internal static class ManagedPortAudit
     }
 
     internal static Report Inspect(string data, string? unity, string? overrides = null)
+        => InspectSelected(data, unity is null ? null : new[] {
+            Path.Combine(unity, "editor/Editor/Data/MonoBleedingEdge/lib/mono/unityaot-linux"),
+            Path.Combine(unity, "android/Variations/il2cpp/Managed") }, overrides);
+
+    // Explicit developer audit of a provider recipe. This does not register an
+    // engine family, select a nearest-version component, or authorize a build.
+    internal static int RunProfile(string data, string bcl, string engine, string output)
+    {
+        SourceAdapterFiles.RequireRegular(Path.Combine(bcl, "mscorlib.dll"), 128 * 1024 * 1024);
+        SourceAdapterFiles.RequireRegular(Path.Combine(engine, "UnityEngine.CoreModule.dll"), 128 * 1024 * 1024);
+        var report = InspectSelected(data, new[] { bcl, engine }, null, inspectMembers: true);
+        SourceAdapterFiles.WriteReport(data, output, report);
+        return 0;
+    }
+
+    private static Report InspectSelected(string data, string[]? profileDirectories, string? overrides, bool inspectMembers = false)
     {
         var imports = new List<Import>();
         var missing = new SortedSet<string>(StringComparer.Ordinal);
@@ -38,11 +54,9 @@ internal static class ManagedPortAudit
         var replacementFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var available = new HashSet<string>(gameFiles.Select(Path.GetFileNameWithoutExtension)!, StringComparer.OrdinalIgnoreCase);
         var resolutionDirectories = new List<string>();
-        if (unity is not null)
+        if (profileDirectories is not null)
         {
-            foreach (var directory in new[] {
-                Path.Combine(unity, "editor/Editor/Data/MonoBleedingEdge/lib/mono/unityaot-linux"),
-                Path.Combine(unity, "android/Variations/il2cpp/Managed") })
+            foreach (var directory in profileDirectories)
             {
                 if (!Directory.Exists(directory)) { diagnostics.Add("Android component directory is missing: " + Path.GetFileName(directory)); continue; }
                 resolutionDirectories.Add(directory);
@@ -64,17 +78,20 @@ internal static class ManagedPortAudit
             var name = Path.GetFileNameWithoutExtension(path);
             var providedFramework = NativeFramework(name) && replacementFiles.TryGetValue(name, out _);
             // These are replaced by matching Android modules/BCL, not ported as desktop binaries.
-            var provisionalEngine = unity is null && (name.StartsWith("UnityEngine", StringComparison.Ordinal) ||
+            var provisionalEngine = profileDirectories is null && (name.StartsWith("UnityEngine", StringComparison.Ordinal) ||
                 name is "mscorlib" or "netstandard" or "System" || name.StartsWith("System.", StringComparison.Ordinal));
             if (replacements.Contains(name) && !providedFramework || provisionalEngine || name == "Unity.InputSystem") continue;
+            if (profileDirectories is not null && name.StartsWith("UnityEngine.", StringComparison.Ordinal) &&
+                name.EndsWith("Module", StringComparison.Ordinal) && !replacements.Contains(name))
+                diagnostics.Add(name + ": desktop engine module has no selected Android replacement. Do not copy it unchanged into the player.");
             try
             {
                 using var assembly = AssemblyDefinition.ReadAssembly(providedFramework ? replacementFiles[name] : path, new ReaderParameters {
                     ReadingMode = ReadingMode.Deferred, ReadSymbols = false, AssemblyResolver = resolver });
                 // Retain the declarations, but do not mistake a desktop Mono facade's
                 // entire platform inventory for required game plugins before profile selection.
-                if (unity is null && IsFramework(name)) pendingProfile.Add(name);
-                if (unity is not null && IsFramework(name) && !providedFramework && !PortableFacade(assembly, replacements))
+                if (profileDirectories is null && IsFramework(name)) pendingProfile.Add(name);
+                if (profileDirectories is not null && IsFramework(name) && !providedFramework && !PortableFacade(assembly, replacements))
                     diagnostics.Add(name + ": desktop framework implementation has no Android profile replacement. It cannot be mixed into the IL2CPP class library.");
                 if (assembly.MainModule.Types.Any(t => t.FullName is "System.Object" or "System.String" or "System.ValueType"))
                     diagnostics.Add(name + ": an additional core class library would conflict with the selected Android profile.");
@@ -82,11 +99,11 @@ internal static class ManagedPortAudit
                 {
                     // A supplied Mono assembly still needs its own native-binding audit.
                     // Follow it even when the original source omitted that framework DLL.
-                    if (unity is not null && NativeFramework(reference.Name) && replacementFiles.TryGetValue(reference.Name, out var supplied) && queued.Add(reference.Name))
+                    if (profileDirectories is not null && NativeFramework(reference.Name) && replacementFiles.TryGetValue(reference.Name, out var supplied) && queued.Add(reference.Name))
                         queue.Enqueue(supplied);
                     if (reference.Name is "System.Windows.Forms" or "PresentationFramework" or "WindowsBase" or "System.Drawing")
                         desktop.Add(name + " -> " + reference.Name);
-                    if (unity is not null && !available.Contains(reference.Name)) missing.Add(name + " -> " + reference.Name);
+                    if (profileDirectories is not null && !available.Contains(reference.Name)) missing.Add(name + " -> " + reference.Name);
                 }
                 foreach (var type in Types(assembly.MainModule.Types))
                 foreach (var method in type.Methods)
@@ -104,7 +121,7 @@ internal static class ManagedPortAudit
                             desktop.Add(name + " -> " + call.DeclaringType.FullName + "." + call.Name);
                     }
                 }
-                if (unity is not null && overrides is not null)
+                if (profileDirectories is not null && (overrides is not null || inspectMembers))
                 {
                     foreach (var reference in assembly.MainModule.GetTypeReferences())
                     {
@@ -124,10 +141,11 @@ internal static class ManagedPortAudit
             catch (Exception error) { diagnostics.Add(Path.GetFileName(path) + ": " + error.GetType().Name); }
         }
         if (!gameFiles.Any(p => Path.GetFileName(p) == "Assembly-CSharp.dll")) diagnostics.Add("Assembly-CSharp.dll is missing.");
+        if (members.Count > 1000) diagnostics.Add("Managed member report was truncated; " + (members.Count - 1000) + " additional mismatches remain. This audit is not complete.");
         return new Report(2, gameFiles.Select(Path.GetFileName).OfType<string>().Order().ToArray(),
             imports.Distinct().OrderBy(i => i.Library).ThenBy(i => i.EntryPoint).ToArray(),
             missing.ToArray(), members.Take(1000).ToArray(), desktop.ToArray(), diagnostics.ToArray(),
-            unity is not null, pendingProfile.ToArray(), bundleIssues.ToArray());
+            profileDirectories is not null, pendingProfile.ToArray(), bundleIssues.ToArray());
     }
 
     internal static int RuntimeInitializers(string packages, string unity, string output)

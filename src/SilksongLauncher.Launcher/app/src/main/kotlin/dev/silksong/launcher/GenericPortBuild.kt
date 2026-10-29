@@ -89,6 +89,19 @@ object GenericPortBuild {
         progress(PlayerImage.Progress("Inspecting native backend call sites", -1f))
         PlayerImage.run(surgery, context, listOf("inspect-native-call-sites", initial.data.absolutePath, callSites.absolutePath))
         fun json(file: File): JSONObject { require(file.length() in 1L..(32 * 1024 * 1024L)); return JSONObject(file.readText()) }
+        val legacyPath = File(root, "legacy-runtime-registration.json").also { it.delete() }
+        val reviewPath = File(root, "slime-source-review.json").also { it.delete() }
+        suspend fun additional(command: String, output: File): JSONObject? = try {
+            PlayerImage.run(surgery, context, listOf(command, initial.data.absolutePath, output.absolutePath))
+            json(output)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (error: Exception) { LauncherLog.log("Additional source review did not complete: $command", error); null }
+        val legacy = if (initial.version.startsWith("2019.")) {
+            progress(PlayerImage.Progress("Reading legacy runtime registration", -1f))
+            additional("inspect-legacy-registration", legacyPath)
+        } else null
+        val review = if (context.appId == 433340 && initial.version == "2019.4.29f1")
+            additional("review-slime-rancher-source", reviewPath) else null
         // Content inspection is read-only and independent of engine/native eligibility. Report
         // real shader/bundle failures even when another requirement currently blocks compilation.
         val assetPath = File(root, "classic-inventory.json").also { it.delete() }
@@ -98,7 +111,7 @@ object GenericPortBuild {
                 initial.sourcePlatform.toString(), assetPath.absolutePath))
             json(assetPath)
         } else null
-        val preliminary = GenericPortAssessment.finish(initial, context, json(managedPath), content)
+        val preliminary = GenericPortAssessment.finish(initial, context, json(managedPath), content, legacy, review)
         if (preliminary.blockers.isNotEmpty()) return preliminary
         val target = PortTarget.classic(context.appId, initial.version, initial.sourcePlatform!!)
         if (!UnityFetcher.isPresent(unity, target)) UnityFetcher.fetch(unity, target = target).collect {
@@ -107,7 +120,7 @@ object GenericPortBuild {
         check(UnityFetcher.isPresent(unity, target)) { "The exact Unity runtime did not pass installation checks. Run preparation again." }
         // Resolve references again with the actual Android BCL/engine, not the desktop copies.
         PlayerImage.run(surgery, context, listOf("inspect-managed-port", initial.data.absolutePath, unity.absolutePath, managedPath.absolutePath))
-        return GenericPortAssessment.finish(initial, context, json(managedPath), json(assetPath))
+        return GenericPortAssessment.finish(initial, context, json(managedPath), json(assetPath), legacy, review)
     }
 
     fun build(context: GenericPortContext, source: File): Flow<PlayerImage.Progress> = channelFlow {

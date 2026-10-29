@@ -19,6 +19,31 @@ public sealed class ManagedPortAuditTests
         Assert.Equal("libc", Assert.Single(report.NativeImports).Library);
     }
 
+    [Fact]
+    public void Unprovided_desktop_engine_modules_cannot_be_copied_into_the_selected_Android_player()
+    {
+        using var fixture = new MetadataFixture();
+        using (var game = fixture.Game()) game.Write(Path.Combine(fixture.Data, "Managed/Assembly-CSharp.dll"));
+        fixture.Sdk("DesktopOnly", Path.Combine(fixture.Data, "Managed"), "UnityEngine.ClusterInputModule");
+        Assert.Contains(ManagedPortAudit.Inspect(fixture.Data, fixture.Unity).Diagnostics,
+            value => value.StartsWith("UnityEngine.ClusterInputModule: desktop engine module"));
+    }
+
+    [Fact]
+    public void Explicit_profile_audit_checks_members_without_needing_a_rebuilt_package_override()
+    {
+        using var fixture = new MetadataFixture();
+        fixture.Sdk("AndroidOnly", fixture.Engine);
+        fixture.Sdk("Ready", fixture.Engine, "UnityEngine.CoreModule");
+        fixture.GameCallingSdk("DesktopOnly");
+        var output = Path.Combine(fixture.Overrides, "profile.json");
+        var bcl = Path.Combine(fixture.Unity, "editor/Editor/Data/MonoBleedingEdge/lib/mono/unityaot-linux");
+        Assert.Equal(0, ManagedPortAudit.RunProfile(fixture.Data, bcl, fixture.Engine, output));
+        using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(output));
+        Assert.True(json.RootElement.GetProperty("androidProfileChecked").GetBoolean());
+        Assert.Contains(json.RootElement.GetProperty("missingMembers").EnumerateArray(), row => row.GetString()!.Contains("DesktopOnly"));
+    }
+
     [Theory]
     [InlineData("Mono.Posix")]
     [InlineData("Mono.Data.Sqlite")]

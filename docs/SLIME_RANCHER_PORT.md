@@ -1,17 +1,108 @@
-# Slime Rancher port work — revision 45
+# Slime Rancher port work — revision 46
 
-**Slime Rancher is not a working Android port in this revision.** Its owner's
-assessment identifies Linux Mono files from Unity **2019.4.29f1**. The workspace
-does not contain those game assemblies, startup metadata or content. No game-specific
-backend selection, real-game shaders, conversion or gameplay have been verified.
+**Slime Rancher is not a working Android port in this revision.** The owner supplied
+`porting-source-433340.zip`: original Linux **1.4.3** managed files and bootstrap
+metadata from Unity **2019.4.29f1**. All 98 manifest-listed file sizes/hashes were
+verified before inspection. Game files and generated game C++/metadata are not
+committed. No game or Android code was executed.
+
+## Findings from the actual source
+
+| Item | Reviewed result |
+| --- | --- |
+| Managed source | 92 original DLLs; binding fingerprint `c708a2fc699ca7665206d54a44c01413f5d7cbb171458a19a2bf997794d22fd8` |
+| Identity | Monomi Park / Slime Rancher / 1.4.3 / Linux / Unity 2019.4.29f1 |
+| Supplied device content report | 313 shaders; zero missing Vulkan shaders; zero content/layout diagnostics |
+| Legacy MonoManager | 74 assembly entries, original flags 2/16, 2,840 script references |
+| Source runtime initializers | Two private static methods in the original UnityEngine.CoreModule; replacement Android modules must supply their own registration |
+| Steam boundary | 45 game-facing Steamworks method references, including callback/delegate wrappers |
+| Achievements | 57 local achievement enum names; source calls SetAchievement/StoreStats after stats initialization |
+| DLC | Steam provider enumerates licensed/installed DLC; explicit IDs 982310 and 1079180 |
+| RAIL | RailManager/RailDirector contain only constructors; no direct calls into the rail namespace from game code outside those wrappers |
+| Storage/input | FileStorageProvider uses Application.persistentDataPath; the game uses InControl and legacy Steam controller/keyboard paths |
+
+RAIL evidence is a review of this exact build, not a general reachability proof.
+Steam still needs real per-game ownership/stats/callback/DLC support and an Android
+controller/keyboard path. No other game's Steam shim or App ID is substituted.
+
+Preparation now reads legacy registration and exact-build review facts and includes
+them in future source exports. These reports are verified against the current
+bootstrap/managed hashes. They do not remove engine/native/profile blockers.
+
+## Optional Discord adapter
+
+`disable-slime-rancher-discord` disables the seven reviewed **void** desktop RPC
+imports in a separate assembly. This explicitly turns off optional Discord desktop
+presence; it does not return invented authentication, ownership or store results.
+The command requires the exact original main/firstpass/bootstrap hashes and the
+full 92-DLL binding fingerprint. It reopens the output and verifies the disabled
+methods. A changed source/signature, a different game, an in-place output or an
+existing output is refused. The original source stays intact.
+
+The adapter was applied successfully to the supplied owned assembly. It is a
+developer staging command: the app's assessment reports availability and does not
+silently rewrite the source or mark the remaining adapters complete.
+
+```sh
+dotnet BundleSurgery.dll disable-slime-rancher-discord /original/SlimeRancher_Data \
+  /new/staging/Assembly-CSharp.dll
+```
+
+## Exact profile and actual-game code generation
+
+The complete official archives below were downloaded/verified again for the actual
+source audit. The selected legacy `unityaot` profile and Android IL2CPP managed
+modules report no missing game assembly/member references. The audit correctly
+retains these unresolved desktop-component diagnostics:
+
+- `Mono.Posix`: no selected Android profile implementation.
+- `UnityEngine.ClusterInputModule` and `UnityEngine.ClusterRendererModule`: no
+  selected Android module. Desktop engine copies cannot be retained unchanged.
+
+This is not blanket approval of native calls inside framework wrappers. The host
+probe excludes unprovided desktop components and reports the two outstanding
+engine-registration entries rather than repairing them without script evidence.
+
+Feeding every framework DLL into the legacy converter first failed in metadata
+generation on `System.ServiceModel.Configuration.ChannelEndpointElement`. A
+diagnostic-only compiler copy identified that reference; the original compiler was
+restored and verified. Selecting the referenced assembly set instead allowed the
+**unmodified** exact converter to complete: the first 87-assembly probe produced
+**541 C++ files** and **20,004,264 metadata bytes**. This first diagnostic selection
+did not include dynamically loaded I18N encoding providers. The committed planner
+retains those providers explicitly: the full reproducible probe converts **93
+assemblies**, producing **548 C++ files** and **20,204,840 metadata bytes**.
+
+`LegacyAssemblyPlan` retains all supplied game/Android roots, registered framework
+roots, transitive assembly references and I18N encoding providers. It excludes
+unreferenced frameworks and never falls back to unprovided desktop implementations.
+Dynamic framework loading remains a review boundary. This plan does not register
+an engine family or authorize an APK/player build.
+
+Use already verified component directories, the built surgery tool and a .NET 8
+SDK; the probe downloads nothing:
+
+```sh
+python tools/game-compat/probe_slime_il2cpp.py /original/SlimeRancher_Data \
+  --editor /verified/editor-root --android /verified/android-root \
+  --dotnet-sdk /dotnet-8-sdk --surgery /tools/BundleSurgery.dll \
+  --output /new/slime-codegen-probe
+```
+
+The probe creates a new directory, records exact inputs/hashes, applies only the
+explicit Discord optional-feature path to a staged copy, and writes its success
+report only after complete metadata exists. Original game/component files remain
+unchanged. No generated game sources/metadata should be committed to this project.
 
 ## GI content report and revision 45 fix
 
-The owner's latest assessment counts **313 shaders** and reports the same file
+The earlier assessment counted **313 shaders** and reported the same file
 twice: `GI/level3/9e/9e3c39eae4c93b38bfd19160ca9e8c83.ecm`, once as
 `UNREADABLE_SERIALIZED_FILE` and again as `CONTENT_INSPECTION_FAILED`. The report
 does not establish whether that particular file is serialized, opaque or damaged;
-its original bytes have not been supplied.
+its original bytes have not been supplied. The subsequently supplied revision-45
+export now reports that file as pass-through and has zero content diagnostics,
+confirming that the updated device scan no longer reports the failure.
 
 The pinned asset library's permissive probe reproducibly accepts an ordinary
 letter string after a small format value as serialized content, even with invalid
@@ -58,8 +149,9 @@ fails, supply that original `.ecm` file alongside the original-code export below
   uses exact source fingerprints and rejects changed files, unsafe names, symlinks
   and oversized selections. It excludes saves, Steam credentials, media and engines.
 
-These are reusable pipeline changes. They do not implement Slime Rancher's Steam,
-RAIL, Discord or legacy input adapters, nor a Unity 2019 runtime provider.
+These reusable pipeline changes and the exact-source optional Discord adapter do
+not implement the remaining Steam/RAIL/input integration or a Unity 2019 Android
+runtime provider.
 
 ## Exact engine investigation
 
@@ -80,7 +172,9 @@ self-authored `PortSmoke.Add(int,int)` assembly, compiled against the exact
 **3,411,772 bytes** of `global-metadata.dat`. The first attempt stopped because the
 selective extraction lacked `MonoBleedingEdge/etc`; adding the exact official tree
 fixed that failure. No placeholder configuration or game assemblies were used.
-**No native build, game conversion or Android execution was performed.**
+That original smoke test performed no native build, game conversion or Android
+execution. The later actual-game host conversion is recorded above; native
+linking and Android execution remain untested.
 
 Reproduce against already verified component files with:
 
@@ -101,12 +195,12 @@ Unity 2019 is still excluded from `UnityDistribution.supports` until that recipe
 is implemented and validated. Host C++ generation does not verify native linking,
 the Android-hosted runtime, player lifecycle or scene/runtime registration.
 
-## Supply the exact game code for the remaining adapters
+## Review exports and remaining validation
 
-After manually rebuilding the launcher, open Slime Rancher's **Prepare port** page
-and choose **Export porting files for review**. Save and attach
-`porting-source-433340.zip`. The app re-inspects the source and includes the content,
-managed-dependency and native-call reports. Export does not upload anything.
+The original code and bootstrap export has now been supplied and reviewed; it is
+not necessary to request that same export again. Future exports from **Prepare
+port → Export porting files for review** also include the legacy-registration and
+source-review reports. Export does not upload anything.
 
 Without a new APK, Python 3.10+ can collect the original game's managed code and
 startup metadata directly from a PC installation:
@@ -123,12 +217,15 @@ It does not perform the app's C# content/call-site inspection; its original mana
 files provide the inputs for that review. A Windows source and the downloaded
 Linux source can differ, so retain the manifest's exact source target/version.
 
-The next game-specific work needs the exported assemblies to identify startup/store
-selection, actual Steam API signatures, optional-presence behavior and input setup.
-Startup metadata is needed to implement the older registration layout. Actual
-content is then needed to validate shaders and bundle loading; a device run is
-required to verify graphics, input, audio, saves and Steam behavior. No success
-stubs, borrowed App IDs or empty registration placeholders are installed.
+The source review now identifies startup/backend selection, API signatures,
+optional-presence behavior and input requirements. Remaining work is the Android
+native recipe/player lifecycle, registration remapping against actual MonoScript
+content, and the game-specific Steam/callback/DLC and controller/keyboard adapters.
+The ZIP contains bootstrap metadata and content reports, not the full scene and
+bundle bytes: the 2,840 referenced scripts cannot all be resolved from that export
+alone. Actual content and a device run are required to validate the resulting
+player, graphics, input, audio, saves and Steam behavior. No borrowed App IDs or
+empty registration placeholders are installed.
 
 ## Validation
 
@@ -145,10 +242,14 @@ The Kotlin runner requires the compiler/Android/dependency folders described in
 its header. This host's normal .NET SDK CLI crashes reading process-start metadata;
 production C# and the test sources were compiled with the SDK's Roslyn compiler
 and run through a direct reflection runner instead. No test implementation was
-substituted. Revision 45 reruns the full C# suite: **104 cases** pass. Earlier
-revision-43 checks cover **57 generic Kotlin checks**, **17 plugin-pack checks**,
-**30 Python checks** and all **107 production Kotlin files** then present. Revision
-44 adds the persistence/update regression coverage and raises the production
-Kotlin count to 110; see [persistent game data](PERSISTENT_GAME_DATA.md). Revision
-45 changes C# content inspection only. No revision-45 APK or real Slime Rancher
-port was built.
+substituted. Revision 46 passes **124 C# cases**, **32 persistence/source-evidence
+checks**, **57 generic Kotlin checks** and **17 plugin-pack checks**. All **111
+production Kotlin files** compile against the configured Android/Steam dependencies,
+and both Java child launch adapters compile against the production Kotlin entry
+points with an explicit Unity hosting API fixture. The actual owned export passes
+source review, MonoManager extraction, staged optional Discord adaptation and the
+93-assembly/548-C++ host conversion probe. All 98 manifest-listed original files
+remain unchanged. Earlier Python collector coverage is recorded in revision 43;
+the new host probe was exercised end to end. See [persistent game data](PERSISTENT_GAME_DATA.md)
+for update/cache behavior. No revision-46 APK, Android native link, actual-game
+content conversion or gameplay test was performed.

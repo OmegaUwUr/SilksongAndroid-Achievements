@@ -235,6 +235,43 @@ fun main(args: Array<String>) = runBlocking {
             check(CachedGameSource.read(downloaded, 987) == null)
         }
 
+        val metadataSource = File(root, "metadata/source").apply { mkdirs() }
+        val managers = File(metadataSource, "globalgamemanagers").apply { writeBytes(serialized("2019.4.29f1", 24)) }
+        val managedFile = File(metadataSource, "Managed/Assembly-CSharp.dll").apply { parentFile.mkdirs(); writeBytes(cli()) }
+        fun metadataHash(file: File) = MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it) }
+        fun registration() = JSONObject().put("schema", 1).put("unityVersion", "2019.4.29f1").put("sourceTarget", 24)
+            .put("globalManagersSha256", metadataHash(managers)).put("assemblies", JSONArray().put(JSONObject()
+                .put("name", managedFile.name).put("flags", 16).put("sha256", metadataHash(managedFile))))
+            .put("scripts", JSONArray().put(JSONObject().put("fileId", 1).put("pathId", 5)))
+            .put("sourceInitializers", JSONArray()).put("diagnostics", JSONArray())
+        fun sourceReview() = JSONObject().put("schema", 1).put("appId", 433340).put("unityVersion", "2019.4.29f1")
+            .put("gameVersion", "1.4.3").put("bindingsSha256", PortSourceFingerprint.bindings(metadataSource))
+            .put("steamMethods", JSONArray().put(JSONObject().put("method", "reviewed-boundary").put("directSites", 1)))
+            .put("emptyRailComponents", true).put("directRailCallsOutsideWrappers", 0)
+        test("legacy registration facts bind both bootstrap and managed bytes without enabling a provider") {
+            val details = PortReviewMetadata.read(metadataSource, "2019.4.29f1", 24, 433340, registration(), null)
+            check(details.registrationRead && details.facts.single().contains("Android provider must still"))
+        }
+        test("legacy registration facts reject stale bootstrap and assembly fingerprints") {
+            val saved = registration(); val original = managers.readBytes(); managers.appendBytes(byteArrayOf(1))
+            check(runCatching { PortReviewMetadata.read(metadataSource, "2019.4.29f1", 24, 433340, saved, null) }.isFailure)
+            managers.writeBytes(original); val assembly = managedFile.readBytes(); managedFile.appendBytes(byteArrayOf(1))
+            check(runCatching { PortReviewMetadata.read(metadataSource, "2019.4.29f1", 24, 433340, saved, null) }.isFailure)
+            managedFile.writeBytes(assembly)
+        }
+        test("source registration cannot substitute a platform or unsafe assembly path") {
+            val unsafe = registration(); unsafe.getJSONArray("assemblies").getJSONObject(0).put("name", "../outside.dll")
+            check(runCatching { PortReviewMetadata.read(metadataSource, "2019.4.29f1", 24, 433340, unsafe, null) }.isFailure)
+            check(runCatching { PortReviewMetadata.read(metadataSource, "2019.4.29f1", 19, 433340, registration(), null) }.isFailure)
+        }
+        test("reviewed backend facts are account-game independent metadata and cannot claim another App ID") {
+            val review = sourceReview()
+            check(PortReviewMetadata.read(metadataSource, "2019.4.29f1", 24, 433340, null, review).facts.any { it.contains("not applied") })
+            check(runCatching { PortReviewMetadata.read(metadataSource, "2019.4.29f1", 24, 987, null, review) }.isFailure)
+            managedFile.appendBytes(byteArrayOf(2))
+            check(runCatching { PortReviewMetadata.read(metadataSource, "2019.4.29f1", 24, 433340, null, review) }.isFailure)
+        }
+
         val libraries = File(root, "native/pkg/lib/arm64").apply { mkdirs() }
         val savedCatalog = File(root, "native/pkg/third-party/included-native-libraries/manifest.json").apply { parentFile.mkdirs() }
         fun library(name: String, dependency: String, tag: Byte): File {
