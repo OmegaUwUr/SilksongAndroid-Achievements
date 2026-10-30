@@ -1,5 +1,11 @@
 # Legacy source and script-reference evidence — revision 52
 
+Revision 53 has now received the device's header census. It records 37,540 headers,
+241 unresolved observed references in one credits bundle, and an incomplete scan
+at the built-in resources. [Current findings and direct bundle lookup](LEGACY_BUNDLE_BINDINGS.md)
+supersede the earlier unknown counts and the bundle-lookup limitation below. The
+873 source-unbound records and no-exclusion policy are unchanged.
+
 The latest owned export contains the full failed binding records requested after
 revision 51. They change the diagnosis: an unresolved MonoScript inventory entry
 does not by itself establish an Android-only missing type or assembly.

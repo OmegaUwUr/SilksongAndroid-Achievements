@@ -208,9 +208,10 @@ public sealed class LegacyAndroidRegistrationTests
             var path = Path.Combine(root, "plan.json"); SourceAdapterFiles.WriteReport(Data, path, Inspect()); return path;
         }
         internal void Scene(string path, int fileId = 1, long scriptId = 5, string external = "globalgamemanagers",
-            string version = "2019.4.29f1", uint target = 24, int? truncate = null, bool corruptTail = false)
+            string version = "2019.4.29f1", uint target = 24, int? truncate = null, bool corruptTail = false,
+            (long Id, string Assembly, string Space, string Class)[]? scripts = null)
         {
-            var full = Path.Combine(Data, path); Write(full, [], [external], null, [], version, target, false);
+            var full = Path.Combine(Data, path); Write(full, scripts ?? [], [external], null, [], version, target, false);
             var manager = new AssetsManager();
             try
             {

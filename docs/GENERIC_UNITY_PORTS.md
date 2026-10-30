@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 52)
+# Reusable Unity preparation and experimental compilation (revision 53)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -38,6 +38,12 @@ Revision 52 adds [original-source comparison and script header-use evidence](LEG
 Retained MonoScript import records can fail against the original desktop DLLs
 too. Preparation now distinguishes those from Android-only failures and records
 observed MonoBehaviour header dependencies without approving automatic exclusions.
+
+Revision 53 adds [direct content/bundle MonoScript bindings](LEGACY_BUNDLE_BINDINGS.md)
+against the actual fingerprinted selected providers, separate from the original
+MonoManager inventory. Per-file metadata and detailed diagnostics distinguish
+unsupported built-in layouts from generic inspection failures. Exact layout,
+registration, native/player and loading requirements remain in force.
 
 ## User flow
 

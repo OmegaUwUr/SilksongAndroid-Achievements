@@ -81,6 +81,12 @@ MonoBehaviour header census. Retained import records, observed component referen
 and dynamic/native reachability remain separate facts. No inventory entry is
 removed automatically.
 
+Revision 53 adds [direct content and bundle MonoScript lookup](LEGACY_BUNDLE_BINDINGS.md)
+against the selected, fingerprinted Android/game graph. This addresses references
+that are outside the loose MonoManager inventory, without changing that inventory.
+Per-file metadata and exception details also expose incomplete built-in layouts.
+Actual full-source outcomes and Android registration/loading remain separate work.
+
 1. **Engine families:** complete providers for Unity 2022.3, 2021.3 and 2019.4.
    Each needs exact official components, its compiler/profile, native recipe,
    registration mapping and Android Java player integration. The existing Unity

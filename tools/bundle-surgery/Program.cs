@@ -58,6 +58,7 @@ internal static class Program
             Console.Error.WriteLine("  inspect-legacy-registration <source-root> <report.json> — original Unity 2019 MonoManager data; does not enable a runtime");
             Console.Error.WriteLine("  inspect-legacy-source-bindings <source-root> <binding-plan.json> <report.json> — compare script identities to the exact original DLL graph");
             Console.Error.WriteLine("  inspect-legacy-script-usage <source-root> <binding-plan.json> <report.json> — serialized MonoBehaviour header census; not runtime reachability approval");
+            Console.Error.WriteLine("  inspect-legacy-script-usage <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <binding-plan.json> <report.json> — also bind direct content/bundle MonoScripts to selected providers");
             Console.Error.WriteLine("  inspect-legacy-android-registration <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <report.json> — resolve loose-file script types and selected initializers; no registration rewrite or runtime approval");
             Console.Error.WriteLine("  inspect-managed-profile <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <report.json> — full member/dependency audit; does not register a runtime");
             Console.Error.WriteLine("  review-slime-rancher-source <source-root> <report.json> — exact Linux 1.4.3 source review");
@@ -94,6 +95,7 @@ internal static class Program
                 "inspect-legacy-registration" when args.Length == 3 => LegacyRuntimeRegistration.Run(args[1], args[2]),
                 "inspect-legacy-source-bindings" when args.Length == 4 => LegacySourceBindings.Run(args[1], args[2], args[3]),
                 "inspect-legacy-script-usage" when args.Length == 4 => LegacyScriptUsage.Run(args[1], args[2], args[3]),
+                "inspect-legacy-script-usage" when args.Length == 6 => LegacyScriptUsage.Run(args[1], args[2], args[3], args[4], args[5]),
                 "inspect-legacy-android-registration" when args.Length == 5 => LegacyAndroidRegistration.Run(args[1], args[2], args[3], args[4]),
                 "inspect-managed-profile" when args.Length == 5 => ManagedPortAudit.RunProfile(args[1], args[2], args[3], args[4]),
                 "review-slime-rancher-source" when args.Length == 3 => SlimeRancherSourceAdapter.ReviewSource(args[1], args[2]),

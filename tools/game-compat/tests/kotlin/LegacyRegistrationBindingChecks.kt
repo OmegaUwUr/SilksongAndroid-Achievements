@@ -49,6 +49,25 @@ fun legacyRegistrationBindingChecks(test: (String, () -> Unit) -> Unit) {
     }
     fun supplement(plan: JSONObject, source: JSONObject? = null, usage: JSONObject? = null, tree: String? = "c".repeat(64)) =
         LegacyBindingSupplement.read(root, "2019.4.29f1", 24, plan, "a".repeat(64), source, usage, tree)
+    val bundle = File(root, "credits.bundle").apply { writeText("bundle metadata fixture") }
+    fun directUsage(plan: JSONObject): JSONObject {
+        val owner = "${bundle.name}!CAB-main"; val sha = digest(bundle)
+        val binding = JSONObject().put("index", 0).put("file", owner).put("pathId", -88L)
+            .put("container", bundle.name).put("containerSha256", sha).put("assembly", assembly.name)
+            .put("nameSpace", "Example").put("className", "Actor").put("provider", "game")
+            .put("selectedAssembly", assembly.name).put("selectedSha256", digest(assembly)).put("resolvedType", "Example.Actor")
+            .put("resolutionChain", JSONArray().put(assembly.name)).put("resolved", true).put("issue", JSONObject.NULL).put("issueCode", JSONObject.NULL)
+        val input = JSONObject().put("file", owner).put("container", bundle.name).put("containerSha256", sha)
+            .put("format", 21).put("unityVersion", "2019.4.29f1").put("target", 24).put("objects", 2)
+            .put("monoBehaviours", 1).put("monoScripts", 1).put("layoutMatches", true)
+        val reference = JSONObject().put("file", owner).put("objectId", -7L).put("scriptFileId", 0).put("scriptPathId", -88L)
+            .put("scriptFile", owner).put("inventoryIndexes", JSONArray()).put("bindingResolved", true).put("issue", JSONObject.NULL)
+            .put("contentBindingIndex", 0).put("issueCode", JSONObject.NULL)
+        return baseEvidence(plan).put("schema", 2).put("sourceTreeSha256", "c".repeat(64)).put("references", JSONArray().put(reference))
+            .put("serializedInputs", JSONArray().put(input)).put("contentBindings", JSONArray().put(binding))
+            .put("serializedFiles", 1).put("unresolvedReferences", 0).put("unobservedUnresolvedInventory", if (plan.getInt("resolvedScripts") == 0) 1 else 0)
+            .put("headerScanComplete", true).put("diagnostics", JSONArray())
+    }
     try {
         test("legacy binding plans preserve negative IDs and never grant a native provider") {
             val details = read(report())
@@ -216,6 +235,76 @@ fun legacyRegistrationBindingChecks(test: (String, () -> Unit) -> Unit) {
                 .put("diagnostics", JSONArray().put("Unreadable file"))
             check(supplement(plan, usage = usage).blockers.single().contains("incomplete"))
             usage.put("headerScanComplete", true); check(runCatching { supplement(plan, usage = usage) }.isFailure)
+        }
+        test("direct bundle type bindings preserve inventory failures and never authorize the native player") {
+            val plan = unresolvedPlan(); val details = supplement(plan, usage = directUsage(plan))
+            check(details.facts.any { "1 observed references resolved through exact MonoScript" in it })
+            check(details.facts.any { "1 unresolved inventory entries not observed" in it } && details.blockers.isEmpty())
+            check(!GenericPortAssessment(root, "2019.4.29f1", details.facts, read(plan).blockers, true, "a".repeat(64), 24, true).canBuild)
+        }
+        test("direct bundle evidence rejects changed content and provider fingerprints") {
+            val plan = report()
+            val usage = directUsage(plan); val saved = bundle.readBytes()
+            try { bundle.appendText("changed"); check(runCatching { supplement(plan, usage = usage) }.isFailure) } finally { bundle.writeBytes(saved) }
+            val changed = directUsage(plan); changed.getJSONArray("contentBindings").getJSONObject(0).put("selectedSha256", "b".repeat(64))
+            check(runCatching { supplement(plan, usage = changed) }.isFailure)
+        }
+        test("direct script pointers cannot bind a different object or a fabricated inventory index") {
+            val plan = report()
+            for (problem in listOf("index", "path", "file", "inventory", "owner")) {
+                val usage = directUsage(plan); val row = usage.getJSONArray("references").getJSONObject(0)
+                when (problem) {
+                    "index" -> row.put("contentBindingIndex", 5)
+                    "path" -> row.put("scriptPathId", -99L)
+                    "file" -> row.put("scriptFile", "other.bundle!CAB-main")
+                    "inventory" -> row.put("inventoryIndexes", JSONArray().put(0))
+                    "owner" -> row.put("file", "other.bundle!CAB-main")
+                }
+                check(runCatching { supplement(plan, usage = usage) }.isFailure)
+            }
+        }
+        test("direct content bindings reject escaped containers ambiguous IDs and missing type providers") {
+            val plan = report()
+            for (problem in listOf("escape", "duplicate", "provider", "chain", "schema", "approval")) {
+                val usage = directUsage(plan); val rows = usage.getJSONArray("contentBindings"); val row = rows.getJSONObject(0)
+                when (problem) {
+                    "escape" -> usage.getJSONArray("serializedInputs").getJSONObject(0).put("container", "../credits.bundle")
+                    "duplicate" -> rows.put(JSONObject(row.toString()).put("index", 1))
+                    "provider" -> row.put("selectedAssembly", "DesktopOnly.dll")
+                    "chain" -> row.put("resolutionChain", JSONArray().put(assembly.name).put(assembly.name))
+                    "schema" -> usage.put("schema", 3)
+                    "approval" -> usage.put("runtimeApproved", true)
+                }
+                check(runCatching { supplement(plan, usage = usage) }.isFailure)
+            }
+        }
+        test("content header summaries must match coverage counts and stored layout metadata") {
+            val plan = report()
+            for (problem in listOf("version", "target", "format", "headers", "files")) {
+                val usage = directUsage(plan); val row = usage.getJSONArray("serializedInputs").getJSONObject(0)
+                when (problem) {
+                    "version" -> row.put("unityVersion", "2019.4.28f1")
+                    "target" -> row.put("target", 19)
+                    "format" -> row.put("format", 22)
+                    "headers" -> row.put("monoBehaviours", 0)
+                    "files" -> usage.put("serializedFiles", 0)
+                }
+                check(runCatching { supplement(plan, usage = usage) }.isFailure)
+            }
+        }
+        test("built-in layout diagnostics stay visible without masking incomplete coverage") {
+            val plan = report(); val usage = directUsage(plan).put("headerScanComplete", false)
+                .put("diagnostics", JSONArray().put("SCRIPT_USE_FILE_UNREADABLE: Resources/unity default resources — stored Unity 2019.4.28f1, target 19"))
+            val details = supplement(plan, usage = usage)
+            check(details.blockers.single().contains("incomplete") && details.facts.any { "2019.4.28f1, target 19" in it })
+        }
+        test("observed direct bundle binding failures remain content requirements") {
+            val plan = report(); val usage = directUsage(plan); val binding = usage.getJSONArray("contentBindings").getJSONObject(0)
+            binding.put("resolved", false).put("issue", "Exact type missing").put("issueCode", "TYPE_MISSING")
+                .put("provider", JSONObject.NULL).put("selectedAssembly", JSONObject.NULL).put("selectedSha256", JSONObject.NULL)
+            usage.getJSONArray("references").getJSONObject(0).put("bindingResolved", false).put("issue", "Exact type missing").put("issueCode", "TYPE_MISSING")
+            usage.put("unresolvedReferences", 1)
+            check(supplement(plan, usage = usage).blockers.single().contains("1 observed MonoBehaviour"))
         }
     } finally { root.deleteRecursively() }
 }

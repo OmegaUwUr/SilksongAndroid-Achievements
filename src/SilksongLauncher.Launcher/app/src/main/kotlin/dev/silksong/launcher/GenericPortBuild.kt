@@ -168,7 +168,11 @@ object GenericPortBuild {
             json(assetPath)
         } else null
         suspend fun supplemental(command: String, output: File): JSONObject? = try {
-            PlayerImage.run(surgery, context, listOf(command, initial.data.absolutePath, registrationPath.absolutePath, output.absolutePath)); json(output)
+            val providers = if (command == "inspect-legacy-script-usage") {
+                requireNotNull(profile)
+                listOf(UnityProfileInstaller.bcl(profile).absolutePath, UnityProfileInstaller.engine(profile).absolutePath)
+            } else emptyList()
+            PlayerImage.run(surgery, context, listOf(command, initial.data.absolutePath) + providers + listOf(registrationPath.absolutePath, output.absolutePath)); json(output)
         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
         catch (error: Exception) { output.delete(); LauncherLog.log("Supplemental script inspection failed: $command", error); null }
         val binding = registrationPath.takeIf { profile != null && registrationFailure == null }?.let { json(it) }

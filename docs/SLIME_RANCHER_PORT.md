@@ -1,20 +1,23 @@
-# Slime Rancher port work — revision 46
+# Slime Rancher port work — revision 53
 
-Revision 52 inspected the new 102-entry export and reproduces the 885-record
-breakdown: 526 missing assembly providers, 347 missing types, 12 virtual built-in
-references. The production source comparison proves the 873 non-built-in failures
-are already unbound in the exact original 92-DLL desktop graph. This calls for a
-reviewed registration/import-record policy. The new
-[MonoBehaviour header census](LEGACY_SCRIPT_REFERENCE_EVIDENCE.md) records actual
-serialized component dependencies; it has not yet run on the game's full scene
-payloads, which are absent from the export. Native/profile/backend blockers remain.
+The latest device export verifies all 104 manifest-listed files and records
+37,540 MonoBehaviour headers. Its 241 unresolved observed uses all point to ten
+bundle-local MonoScripts in the credits bundle. Revision 53 adds their
+[direct content lookup](LEGACY_BUNDLE_BINDINGS.md) against the exact selected
+Android/game provider graph and exposes detailed built-in file diagnostics.
+The actual new binding result still needs a rerun against full content, which
+is absent from this code/evidence export. Native/profile/backend blockers remain.
 
-The supplied revision-50 device assessment now resolves **1,955/2,840** script
-references against actual content. Its log contains no per-script failures, so
-the remaining 885 cannot yet be attributed to missing files, types or providers.
-Revision 51 expands [script-name/forwarder coverage and failure reporting](UNITY_SCRIPT_BINDINGS.md).
-It was checked against the original source metadata, but a corrected device count
-is not established. Engine/player, profile, input and backend requirements remain.
+The MonoManager plan still resolves **1,955/2,840** records, with **526 missing
+assembly providers**, **347 missing exact type matches** and **12 virtual built-in
+references**. All 873 non-built-in failures also fail exact original desktop DLL
+lookup. The header census observes none of those 885 records, but its coverage is
+incomplete at `Resources/unity default resources`; zero observations do not
+authorize removing them. A reviewed registration/import-record policy is required.
+
+Revision 51's [script-name/forwarder resolver](UNITY_SCRIPT_BINDINGS.md) remains
+shared by inventory and direct content lookups. Registration rewriting and
+Android execution are still unverified.
 
 Revision 50 adds a shared [Android registration binding plan](UNITY_2019_REGISTRATION.md).
 Against the supplied code/bootstrap-only export, it retains all 2,840 PPtrs and

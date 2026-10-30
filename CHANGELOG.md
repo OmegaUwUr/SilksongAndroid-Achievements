@@ -2,6 +2,43 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.53 (candidate)
+
+- Resolves direct content MonoScripts, including local UnityFS bundle scripts that
+  do not have a MonoManager inventory row. Follows the exact serialized pointer
+  and stored assembly/namespace/class identity through a closed selected-provider
+  graph; every provider's size, identity and SHA-256 must match the binding plan
+  before and after inspection. No namespace, basename or cross-bundle guessing.
+- Handles file-local, explicit same-container dependencies and the constrained
+  `archive:/CAB/CAB` form when that exact entry is present in the same bundle.
+  Reports actual selected types/providers and forwarding chains separately from
+  unchanged MonoManager entries. Type resolution does not register bundles or
+  approve their Android loading, paths, catalogs, CRCs or gameplay.
+- Bounds MonoScript object reads to 64 KiB and strings to their object ranges.
+  Schema-2 use reports add exact content bindings plus per-file version, target,
+  serialized format, object counts and container hashes. Built-in failures now
+  retain the actual exception detail and metadata when readable; mixed layouts
+  and incomplete scans stay blocked. Assessments show bounded diagnostics.
+- Reuses the existing exact-profile cache and preserves library scan, source,
+  installed-player and conversion/native cache identities. No SDK download,
+  compiler run, source rewrite or wrapper/registration exclusion is introduced.
+
+The new device export verifies all 104 manifest-listed files (106 ZIP entries).
+Its 37,540 observed headers include 241 unresolved uses, all in the credits bundle
+and pointing to ten bundle-local script objects. The only census diagnostic names
+`Resources/unity default resources`; the old report omits the exception detail, so
+its precise failure is still unknown. All 885 unresolved inventory entries were
+unobserved in these headers, which does not authorize removal. The original-source
+result remains 873 source-unbound, 12 unknown, zero additional Android-only cases.
+
+Validation: 220 C# cases, 90 generic checks, 17 pack checks and 33 persistence
+checks pass. All 117 production Kotlin files and both Java launch adapters compile.
+The actual new export passes the production evidence reader; all 95 original
+source files remain unchanged. Production C# also creates a real serialized
+fixture's schema-2 JSON accepted by production Kotlin. No revision-53 APK, full
+game content rerun, native/player, registration rewrite or gameplay test was run.
+APK builds remain manual. See docs/LEGACY_BUNDLE_BINDINGS.md.
+
 ## 1.0.3-achievements.52 (candidate)
 
 - Adds exact-original-source comparison for legacy script plans. A failed Android

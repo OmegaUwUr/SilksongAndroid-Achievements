@@ -33,6 +33,13 @@ export confirms 873 failures were already unbound on the original source; their
 use/registration treatment remains under review. See
 [original-source and content-reference evidence](docs/LEGACY_SCRIPT_REFERENCE_EVIDENCE.md).
 
+Revision 53 follows exact content MonoScripts inside local bundles against the
+fingerprinted Android/game providers. The new export localizes all 241 observed
+unresolved uses to the credits bundle; their actual new resolution count still
+needs a complete-source rerun. Built-in resource diagnostics now expose readable
+layout metadata and exception details. Caches remain unchanged. See
+[bundle bindings and current evidence](docs/LEGACY_BUNDLE_BINDINGS.md).
+
 This is a community project based on **jakobkhansen's SilksongAndroid**, with
 additional SteamSync and achievement features. It is not an official Team Cherry
 or Valve release.

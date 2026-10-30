@@ -31,7 +31,7 @@ internal static class UnityFsContent
         Action<AssetsManager, AssetsFileInstance, string> visit)
     {
         using var loaded = Open(path);
-        if (loaded.Bundle.file.Header.EngineVersion != version) throw new InvalidDataException("Bundle has a different exact Unity version.");
+        if (loaded.Bundle.file.Header.EngineVersion != version) throw new InvalidDataException($"Bundle stores Unity {loaded.Bundle.file.Header.EngineVersion}; expected exact Unity {version}.");
         foreach (var entry in loaded.Bundle.file.BlockAndDirInfo.DirectoryInfos)
         {
             if (!IsSerialized(loaded.Bundle.file, entry)) continue;
@@ -39,7 +39,7 @@ internal static class UnityFsContent
             SerializedFileDetection.RequireValidHeader(loaded.Bundle.file.DataReader.BaseStream, start, length);
             var asset = loaded.Manager.LoadAssetsFileFromBundle(loaded.Bundle, entry.Name);
             if (asset.file.Metadata.TargetPlatform != sourceTarget || asset.file.Metadata.UnityVersion != version)
-                throw new InvalidDataException("Bundle entry has a different exact source layout.");
+                throw new InvalidDataException($"Bundle entry {entry.Name} stores Unity {asset.file.Metadata.UnityVersion}, target {asset.file.Metadata.TargetPlatform}; expected Unity {version}, target {sourceTarget}.");
             loaded.Manager.LoadClassDatabaseFromPackage(version); visit(loaded.Manager, asset, entry.Name);
         }
     }

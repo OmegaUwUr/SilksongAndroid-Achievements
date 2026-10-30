@@ -1,17 +1,23 @@
 # Unity 2019.4 Android registration planning — revision 50
 
-Revision 52 inspects the newly supplied full binding report: 873 of the 885 failed
+Revision 53 adds [direct content/bundle script lookup and per-file census metadata](LEGACY_BUNDLE_BINDINGS.md).
+The new device export localizes all 241 observed unresolved references to ten
+bundle-local MonoScripts in the credits bundle. Actual resolution against that
+bundle still needs a complete-source rerun; native registration is not rewritten.
+
+Revision 52 inspects the supplied full binding report: 873 of the 885 failed
 records also fail exact lookup in the original desktop DLL graph, while 12 target
 virtual built-in resources. [Original-source comparison and the new header census](LEGACY_SCRIPT_REFERENCE_EVIDENCE.md)
 now distinguish those facts. Their use/exclusion policy and runtime registration
-remain unapproved; actual game header-use counts are not established by the export.
+remain unapproved. The newer revision-52 census is summarized above; full scene
+payloads remain outside the review export.
 
 Revision 51 expands [script lookup and failure reporting](UNITY_SCRIPT_BINDINGS.md).
 Fresh plans use schema 2 and record original identities, selected target types,
-forwarding chains and stable failure categories. The latest supplied device
-assessment resolved 1,955 of 2,840 references against complete source content; its
-remaining 885 cannot be classified from the text/log alone. The original code-only
-export result below remains historical and is not the device's current result.
+forwarding chains and stable failure categories. The supplied device plan resolves
+1,955 of 2,840 references against complete source content; the 885-record breakdown
+and original-source comparison are now established by the full exported evidence.
+The code-only export result below remains historical and is not the device count.
 
 The shared tool can now check a legacy source's script references against selected
 Android/game assemblies during preparation. This advances the engine provider
