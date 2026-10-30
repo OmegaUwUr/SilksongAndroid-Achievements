@@ -61,6 +61,7 @@ android {
         getByName("main") {
             jniLibs.srcDir(layout.buildDirectory.dir("mono/jniLibs"))
             assets.srcDir(layout.buildDirectory.dir("mono/assets"))
+            assets.srcDir(layout.buildDirectory.dir("portable-native/assets"))
         }
     }
 }
@@ -372,6 +373,34 @@ val stagePatches by tasks.registering(Sync::class) {
 }
 tasks.named("preBuild") { dependsOn(stagePatches) }
 
+val stageHollowKnightPatches by tasks.registering(Sync::class) {
+    from(rootProject.file("../../tools/hollow-knight-patches/src")) { into("src") }
+    from(rootProject.file("../../tools/hollow-knight-patches/entrypoints.json"))
+    into(layout.projectDirectory.dir("src/main/assets/ondevice/hollow-knight-patches"))
+}
+tasks.named("preBuild") { dependsOn(stageHollowKnightPatches) }
+
+val stageGenericPortPatches by tasks.registering(Sync::class) {
+    from(rootProject.file("../../tools/generic-port-patches/src")) { into("src") }
+    from(rootProject.file("../../tools/generic-port-patches/entrypoints.json"))
+    into(layout.projectDirectory.dir("src/main/assets/ondevice/generic-port-patches"))
+}
+tasks.named("preBuild") { dependsOn(stageGenericPortPatches) }
+
+val stagePortServices by tasks.registering(Sync::class) {
+    from(rootProject.file("../../tools/port-services/src")) { into("src") }
+    from(rootProject.file("../../tools/silksong-patches/src/touch/TouchControlModel.cs")) { into("src") }
+    into(layout.projectDirectory.dir("src/main/assets/ondevice/port-services"))
+}
+tasks.named("preBuild") { dependsOn(stagePortServices) }
+
+val stageHollowKnightLicense by tasks.registering(Copy::class) {
+    from(rootProject.file("../../third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt"))
+    into(layout.projectDirectory.dir("src/main/assets/licenses"))
+}
+tasks.named("preBuild") { dependsOn(stageHollowKnightLicense) }
+
+
 // SafeIo, staged the same way and for the same reasons, but kept apart from
 // the patches above because it is compiled apart from them. The patches are
 // built AGAINST the depot's Assembly-CSharp so that they can name the game's
@@ -390,3 +419,26 @@ val stageCredits by tasks.registering(Sync::class) {
     into(layout.projectDirectory.dir("src/main/assets/credits"))
 }
 tasks.named("preBuild") { dependsOn(stageCredits) }
+
+// Real open-source Android C libraries, built separately from the game's proprietary code.
+val buildPortableNativeLibraries by tasks.registering {
+    val sources = rootProject.file("../../tools/native-providers")
+    val output = layout.buildDirectory.dir("portable-native")
+    inputs.files(fileTree(sources) { include("*.py", "*.json", "*.txt", "*.exports") })
+    outputs.dir(output.map { it.dir("assets") })
+    doLast {
+        val sdk = android.sdkDirectory
+        val nativeRoot = output.get().asFile
+        exec {
+            commandLine("python3", File(sources, "build.py"),
+                "--ndk", File(sdk, "ndk/27.2.12479018"),
+                "--cmake", File(sdk, "cmake/3.22.1/bin/cmake"),
+                "--work", File(nativeRoot, "work"), "--cache", File(nativeRoot, "downloads"),
+                "--output", File(nativeRoot, "assets/native-providers"), "--jobs", "2")
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn(buildPortableNativeLibraries) }
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(buildPortableNativeLibraries)
+}

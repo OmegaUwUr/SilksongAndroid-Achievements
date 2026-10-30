@@ -3,9 +3,9 @@
           xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
 
     <application
         android:name="dev.silksong.launcher.SilksongApp"
@@ -17,20 +17,18 @@
 
         <activity
             android:name="dev.silksong.launcher.LauncherActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/launcher_app_name"
             android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+
         </activity>
 
         <activity
             android:name="dev.silksong.launcher.LoginActivity"
             android:exported="false"
             android:label="@string/login_title"
+            android:windowSoftInputMode="adjustResize"
             android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
@@ -45,6 +43,55 @@
             android:label="@string/settings_title"
             android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+
+        <activity android:name="dev.silksong.launcher.HollowKnightSetupActivity"
+            android:exported="false" android:process=":launcher"
+            android:label="@string/hk_title"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.launcher.GenericPortSetupActivity"
+            android:exported="false" android:process=":launcher"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.shell.GenericPortActivity"
+            android:exported="false" android:process=":unity_port" android:launchMode="singleTask"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
+            android:screenOrientation="sensorLandscape" android:resizeableActivity="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
+        </activity>
+        <activity android:name="dev.silksong.shell.HollowKnightActivity"
+            android:exported="false" android:process=":hollow_knight" android:launchMode="singleTask"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
+            android:screenOrientation="sensorLandscape" android:resizeableActivity="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
+        </activity>
+
+        <activity android:name="dev.silksong.launcher.SetupActivity"
+            android:exported="false" android:process=":launcher"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.launcher.GamePageActivity"
+            android:exported="false" android:process=":launcher"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <service android:name="dev.silksong.launcher.HollowKnightAchievementService"
+            android:exported="false" android:process=":launcher" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Per-game Steam achievement synchronization" />
+        </service>
+        <activity android:name="dev.silksong.launcher.GameLibraryActivity"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="true" android:process=":launcher"
+            android:label="@string/launcher_app_name"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name="dev.silksong.launcher.AchievementViewerActivity"

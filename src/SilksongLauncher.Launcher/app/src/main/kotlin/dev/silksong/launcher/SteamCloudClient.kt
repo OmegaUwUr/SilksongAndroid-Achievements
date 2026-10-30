@@ -9,6 +9,8 @@
 
 package dev.silksong.launcher
 
+import `in`.dragonbra.javasteam.enums.EResult
+
 import `in`.dragonbra.javasteam.protobufs.steamclient.SteammessagesCloudSteamclient.CCloud_ClientBeginFileUpload_Request
 import `in`.dragonbra.javasteam.protobufs.steamclient.SteammessagesCloudSteamclient.CCloud_ClientCommitFileUpload_Request
 import `in`.dragonbra.javasteam.protobufs.steamclient.SteammessagesCloudSteamclient.CCloud_ClientFileDownload_Request
@@ -56,6 +58,7 @@ class SteamCloudClient(session: SteamSession) {
                 .build()
             val resp = cloud.enumerateUserFiles(req).toFuture().get(30, TimeUnit.SECONDS)
                 ?: throw RuntimeException("enumerateUserFiles returned no response")
+            check(resp.result == EResult.OK) { "Steam could not enumerate Cloud saves: ${resp.result}" }
             val body = resp.body
                 ?: throw RuntimeException("enumerateUserFiles response missing body")
             val files = body.filesList
@@ -82,6 +85,7 @@ class SteamCloudClient(session: SteamSession) {
             .build()
         val resp = cloud.clientFileDownload(req).toFuture().get(30, TimeUnit.SECONDS)
             ?: throw RuntimeException("clientFileDownload returned no response")
+        check(resp.result == EResult.OK) { "Steam refused the Cloud download: ${resp.result}" }
         val body = resp.body
             ?: throw RuntimeException("clientFileDownload response missing body")
 
@@ -161,6 +165,7 @@ class SteamCloudClient(session: SteamSession) {
         val beginResp = cloud.clientBeginFileUpload(beginReq)
             .toFuture().get(30, TimeUnit.SECONDS)
             ?: throw RuntimeException("clientBeginFileUpload returned no response")
+        check(beginResp.result == EResult.OK) { "Steam refused the Cloud upload: ${beginResp.result}" }
         val begin = beginResp.body
             ?: throw RuntimeException("clientBeginFileUpload response missing body")
 
@@ -203,7 +208,8 @@ class SteamCloudClient(session: SteamSession) {
                 .setTransferSucceeded(allBlocksOk)
                 .build()
             try {
-                cloud.clientCommitFileUpload(commitReq).toFuture().get(30, TimeUnit.SECONDS)
+                val committed = cloud.clientCommitFileUpload(commitReq).toFuture().get(30, TimeUnit.SECONDS)
+                check(committed.result == EResult.OK && committed.body.fileCommitted) { "Steam did not confirm the saved file." }
             } catch (t: Throwable) {
                 commitFailure = t
                 LauncherLog.log("Cloud commit failed for $cloudPath: ${t.message}")

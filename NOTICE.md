@@ -91,3 +91,22 @@ See [CREDITS.md](CREDITS.md) for the original Android project, achievement-viewe
 contributors, shader-format and Steam compatibility references, and the
 Termux, LLVM, Roslyn, Unity, and other tools fetched during on-device setup.
 That file distinguishes these roles from components bundled in the APK.
+
+
+## Hollow Knight classic-player adapter
+
+Parts of the experimental Hollow Knight adapter and its regression fixtures are
+adapted from Darkaxt/HollowKnightAndroid, commit
+b65f577a0ab9fb49075de3435fc78095d4222e39, under the MIT license.
+See CREDITS.md for the component map and
+third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt for the unmodified notice.
+No game content is distributed with these source files.
+
+## Included portable native libraries
+
+Revision 41 builds SQLite, LZ4, Zstandard, Ogg/Vorbis and PNG from pinned upstream
+sources for Android ARM64. These libraries retain their original public-domain,
+BSD or PNG notices; Zstandard is used under its BSD option. Complete notices,
+source URLs, versions and hashes ship under `native-providers/` in the APK and
+are copied into built generic packages. Their human authors are credited in
+CREDITS.md. This bundle does not include proprietary Unity/game middleware.

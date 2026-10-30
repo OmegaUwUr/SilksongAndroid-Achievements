@@ -11,22 +11,23 @@ import java.util.concurrent.TimeUnit
 /** Server-authorized license access, not an inference from local files or a public profile. */
 internal object SteamOwnership {
     const val APP_ID = 1030300
-    class NotOwned : Exception("Steam denied the Silksong ownership-ticket request")
+    class NotOwned(val appId: Int = APP_ID) : Exception("Steam denied ownership for App $appId")
 
     /** Call off the UI thread, after this session has authenticated. Never log ticket bytes. */
-    fun requireOwned(session: SteamSession) {
+    fun requireOwned(session: SteamSession, appId: Int = APP_ID) {
+        require(appId > 0)
         val apps = session.steamClient.getHandler(SteamApps::class.java)
             ?: error("Steam apps handler unavailable")
         val response = try {
-            apps.getAppOwnershipTicket(APP_ID).toFuture().get(30, TimeUnit.SECONDS)
+            apps.getAppOwnershipTicket(appId).toFuture().get(30, TimeUnit.SECONDS)
         } catch (error: java.util.concurrent.CancellationException) {
             throw IllegalStateException("Steam cancelled the license-verification request. Please retry; ownership is not yet confirmed.", error)
         } catch (error: java.util.concurrent.TimeoutException) {
             throw IllegalStateException("Steam license verification timed out. Check your connection and retry.", error)
         }
         // Ticket access was denied; do not confuse transport failures with a license denial.
-        if (response.result == EResult.AccessDenied) throw NotOwned()
-        check(response.result == EResult.OK && response.appID == APP_ID && response.ticket.isNotEmpty()) {
+        if (response.result == EResult.AccessDenied) throw NotOwned(appId)
+        check(response.result == EResult.OK && response.appID == appId && response.ticket.isNotEmpty()) {
             "Steam ownership verification could not complete: ${response.result}"
         }
     }

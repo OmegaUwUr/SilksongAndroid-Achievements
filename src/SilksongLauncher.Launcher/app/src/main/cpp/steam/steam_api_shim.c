@@ -20,10 +20,12 @@
 #include <pthread.h>
 
 #define LOG_TAG "SilksongSteamShim"
-#define SOCKET_NAME "silksong-achievements-v1"
+#define SILKSONG_SOCKET_NAME "silksong-achievements-v1"
+#define HOLLOW_KNIGHT_SOCKET_NAME "hollow-knight-achievements-v1"
 #define CONNECT_TIMEOUT_MS 1500
 #define REQUEST_TIMEOUT_MS 30000
 #define SILKSONG_APP_ID UINT64_C(1030300)
+#define HOLLOW_KNIGHT_APP_ID UINT64_C(367520)
 #define STEAM_ERROR_MESSAGE_MAX 1024
 
 #define CALLBACK_USER_STATS_RECEIVED 1101
@@ -42,6 +44,43 @@ static fake_interface_t g_stub;
 static fake_interface_t g_stats;
 static bool g_ready = false;
 static uint64_t g_steam_id = 0;
+
+// Fixed process registration prevents one port from writing another game's stats.
+// Unknown named processes and unreadable identities remain disabled.
+static pthread_once_t g_process_once = PTHREAD_ONCE_INIT;
+static uint64_t g_app_id = 0;
+static const char *g_socket_name = NULL;
+static char g_account_key[65] = {0};
+static pthread_mutex_t g_account_lock = PTHREAD_MUTEX_INITIALIZER;
+static void read_process_identity(void) {
+    char name[256] = {0};
+    FILE *input = fopen("/proc/self/cmdline", "rb");
+    if (!input) return;
+    size_t count = fread(name, 1, sizeof(name) - 1, input);
+    fclose(input);
+    if (count == 0 || memchr(name, '\0', count) == NULL) return;
+    const char *suffix = strchr(name, ':');
+    if (!suffix) { g_app_id = SILKSONG_APP_ID; g_socket_name = SILKSONG_SOCKET_NAME; }
+    else if (strcmp(suffix, ":hollow_knight") == 0) {
+        g_app_id = HOLLOW_KNIGHT_APP_ID; g_socket_name = HOLLOW_KNIGHT_SOCKET_NAME;
+    }
+}
+static bool silksong_bridge_allowed(void) {
+    pthread_once(&g_process_once, read_process_identity);
+    return g_app_id != 0 && g_socket_name != NULL;
+}
+
+// New adapters bind the launch account for this process's entire lifetime.
+// A background game cannot submit its old queue after the launcher changes accounts.
+bool PortSteam_BindAccount(const char *key) {
+    if (!silksong_bridge_allowed() || !key || strlen(key) != 64) return false;
+    for (int i = 0; i < 64; i++) if (!((key[i] >= 'a' && key[i] <= 'f') || (key[i] >= '0' && key[i] <= '9'))) return false;
+    pthread_mutex_lock(&g_account_lock);
+    bool allowed = g_account_key[0] == '\0' || strcmp(g_account_key, key) == 0;
+    if (allowed) memcpy(g_account_key, key, 65);
+    pthread_mutex_unlock(&g_account_lock);
+    return allowed;
+}
 
 typedef struct {
     uint64_t game_id;
@@ -118,7 +157,7 @@ static void enqueue_callback(int32_t callback_id, const callback_payload_t *payl
 static void queue_user_stats_received(void) {
     callback_payload_t payload;
     memset(&payload, 0, sizeof(payload));
-    payload.received.game_id = SILKSONG_APP_ID;
+    payload.received.game_id = g_app_id;
     payload.received.result = ERESULT_OK;
     payload.received.steam_id_user = g_steam_id;
     enqueue_callback(CALLBACK_USER_STATS_RECEIVED, &payload);
@@ -127,7 +166,7 @@ static void queue_user_stats_received(void) {
 static void queue_user_stats_stored(void) {
     callback_payload_t payload;
     memset(&payload, 0, sizeof(payload));
-    payload.stored.game_id = SILKSONG_APP_ID;
+    payload.stored.game_id = g_app_id;
     payload.stored.result = ERESULT_OK;
     enqueue_callback(CALLBACK_USER_STATS_STORED, &payload);
 }
@@ -136,7 +175,7 @@ static void queue_achievement_stored(const char *name) {
     if (!name || !*name) return;
     callback_payload_t payload;
     memset(&payload, 0, sizeof(payload));
-    payload.achievement.game_id = SILKSONG_APP_ID;
+    payload.achievement.game_id = g_app_id;
     payload.achievement.group_achievement = 0;
     strncpy(payload.achievement.achievement_name, name,
             sizeof(payload.achievement.achievement_name) - 1);
@@ -151,6 +190,7 @@ static void set_socket_timeout(int fd, int option, int timeout_ms) {
 }
 
 static int connect_service(void) {
+    if (!silksong_bridge_allowed()) return -1;
     int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0) return -1;
 
@@ -161,10 +201,10 @@ static int connect_service(void) {
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
     addr.sun_path[0] = '\0';
-    strncpy(addr.sun_path + 1, SOCKET_NAME, sizeof(addr.sun_path) - 2);
+    strncpy(addr.sun_path + 1, g_socket_name, sizeof(addr.sun_path) - 2);
 
     if (connect(fd, (struct sockaddr *)&addr,
-                (socklen_t)(offsetof(struct sockaddr_un, sun_path) + 1 + strlen(SOCKET_NAME))) < 0) {
+                (socklen_t)(offsetof(struct sockaddr_un, sun_path) + 1 + strlen(g_socket_name))) < 0) {
         close(fd);
         return -1;
     }
@@ -175,6 +215,16 @@ static int connect_service(void) {
 // distinction is required by GetAchievement, where "0" means known + locked.
 static bool request_raw(const char *message, char *response, size_t response_size) {
     if (!message || !response || response_size < 2) return false;
+    char tagged[1024];
+    if (!silksong_bridge_allowed()) return false;
+    if (g_app_id != SILKSONG_APP_ID) {
+        pthread_mutex_lock(&g_account_lock);
+        bool bound = g_account_key[0] != '\0';
+        int size = bound ? snprintf(tagged, sizeof(tagged), "ACCOUNT\t%s\t%s", g_account_key, message) : -1;
+        pthread_mutex_unlock(&g_account_lock);
+        if (size < 0 || size >= (int)sizeof(tagged)) return false;
+        message = tagged;
+    }
     int fd = connect_service();
     if (fd < 0) return false;
 
@@ -199,6 +249,11 @@ static bool request_bool(const char *message, char *response, size_t response_si
 bool SteamAPI_Init(void) {
     char response[8];
     g_ready = false;
+    if (!silksong_bridge_allowed()) return false;
+    pthread_mutex_lock(&g_account_lock);
+    bool bound = g_app_id == SILKSONG_APP_ID || g_account_key[0] != '\0';
+    pthread_mutex_unlock(&g_account_lock);
+    if (!bound) return false;
     for (int attempt = 0; attempt < 10 && !g_ready; ++attempt) {
         g_ready = request_bool("PING\n", response, sizeof(response));
         if (!g_ready && attempt != 9) usleep(500000);
@@ -312,14 +367,14 @@ DEFINE_CLIENT_GETTER(GetISteamRemotePlay, &g_stub)
 // is alive. Keep these conservative and deterministic on Android.
 bool SteamAPI_ISteamUser_BLoggedOn(void *self) { (void)self; return g_ready; }
 uint64_t SteamAPI_ISteamUser_GetSteamID(void *self) { (void)self; return g_steam_id; }
-uint32_t SteamAPI_ISteamUtils_GetAppID(void *self) { (void)self; return (uint32_t)SILKSONG_APP_ID; }
+uint32_t SteamAPI_ISteamUtils_GetAppID(void *self) { (void)self; return silksong_bridge_allowed() ? (uint32_t)g_app_id : 0; }
 bool SteamAPI_ISteamUtils_IsOverlayEnabled(void *self) { (void)self; return false; }
-bool SteamAPI_ISteamApps_BIsSubscribed(void *self) { (void)self; return true; }
+bool SteamAPI_ISteamApps_BIsSubscribed(void *self) { (void)self; return silksong_bridge_allowed(); }
 bool SteamAPI_ISteamApps_BIsSubscribedApp(void *self, uint32_t app_id) {
-    (void)self; return app_id == (uint32_t)SILKSONG_APP_ID;
+    (void)self; return silksong_bridge_allowed() && app_id == (uint32_t)g_app_id;
 }
 bool SteamAPI_ISteamApps_BIsAppInstalled(void *self, uint32_t app_id) {
-    (void)self; return app_id == (uint32_t)SILKSONG_APP_ID;
+    (void)self; return silksong_bridge_allowed() && app_id == (uint32_t)g_app_id;
 }
 bool SteamAPI_ISteamApps_BIsDlcInstalled(void *self, uint32_t app_id) {
     (void)self; (void)app_id; return false;

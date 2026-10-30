@@ -47,6 +47,10 @@
 package dev.silksong.launcher
 
 import android.content.Context
+import `in`.dragonbra.javasteam.steam.handlers.steamapps.SteamApps
+import `in`.dragonbra.javasteam.steam.handlers.steamapps.PICSRequest
+import `in`.dragonbra.javasteam.steam.handlers.steamuser.SteamUser
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -123,6 +127,9 @@ object CloudSync {
         val localFile: File,
         val cloudTimestampUnix: Long,
         val localMtimeUnix: Long,
+        val appId: Int = SteamGame.SILKSONG.appId,
+        val account: String = "",
+        val localSize: Long = -1,
     )
 
     /**
@@ -164,16 +171,20 @@ object CloudSync {
     suspend fun analyzePull(
         context: Context,
         credentials: TokenStore.Credentials,
+        game: SteamGame = SteamGame.SILKSONG,
     ): PullAnalysis = kotlinx.coroutines.withContext(Dispatchers.IO) {
-        val saveDir = saveDirFor(context)
+        val saveDir = game.saves(context)
         saveDir.mkdirs()
 
         SteamSession().use { session ->
             session.logOn(credentials)
+            SteamOwnership.requireOwned(session, game.appId)
             val cloud = SteamCloudClient(session)
             LauncherLog.log("Pull analyze: enumerating cloud files…")
-            val allCloud = cloud.enumerateFiles(APP_ID)
-            val prefix = derivePrefix(allCloud)
+            val allCloud = cloud.enumerateFiles(game.appId).let { files ->
+                if (game == SteamGame.HOLLOW_KNIGHT) files.filter { GameSavePaths.isHollowKnightSave(sanitizeFilename(it.filename)) } else files
+            }
+            val prefix = derivePrefix(allCloud, game)
             val cloudFiles = filterRootLevel(allCloud, prefix)
             if (cloudFiles.size != allCloud.size) {
                 LauncherLog.log(
@@ -195,6 +206,9 @@ object CloudSync {
                     localFile = local,
                     cloudTimestampUnix = cf.timestampUnix,
                     localMtimeUnix = localMtime,
+                    appId = game.appId,
+                    account = accountKey(credentials.accountName),
+                    localSize = if (local.isFile) local.length() else -1,
                 )
                 when {
                     localMtime < 0 -> {
@@ -238,19 +252,33 @@ object CloudSync {
         context: Context,
         credentials: TokenStore.Credentials,
         items: List<PullItem>,
+        game: SteamGame = SteamGame.SILKSONG,
     ): Flow<Event> = channelFlow {
+        require(items.all { it.appId == game.appId }) { "Cloud items belong to a different game." }
+        if (game == SteamGame.HOLLOW_KNIGHT) {
+            requireNotNull(context) { "Game context is required for save sync." }
+            check(TokenStore(context).read()?.accountName == credentials.accountName &&
+                items.all { it.account == accountKey(credentials.accountName) }) { "Steam account changed; analyze saves again." }
+        }
         if (items.isEmpty()) {
             send(Event.Complete(0, 0, 0))
             return@channelFlow
         }
-        val saveDir = saveDirFor(context)
+        val saveDir = game.saves(context)
         saveDir.mkdirs()
 
-        LocalSaveBackup.beforeDownload(context)
+        LocalSaveBackup.beforeDownload(game.context(context), saveDir)
 
         SteamSession().use { session ->
             session.logOn(credentials)
+            SteamOwnership.requireOwned(session, game.appId)
             val cloud = SteamCloudClient(session)
+            if (game == SteamGame.HOLLOW_KNIGHT) {
+                val fresh = cloud.enumerateFiles(game.appId).associateBy { it.filename }
+                check(items.all { fresh[it.cloudFile.filename] == it.cloudFile }) { "Steam saves changed; analyze saves again." }
+                check(items.all { (if (it.localFile.isFile) it.localFile.lastModified() / 1000L else -1L) == it.localMtimeUnix &&
+                    (if (it.localFile.isFile) it.localFile.length() else -1L) == it.localSize }) { "Local saves changed; analyze saves again." }
+            }
 
             val gate = Semaphore(MAX_PARALLEL_TRANSFERS)
             val ok = AtomicInteger(0)
@@ -267,9 +295,14 @@ object CloudSync {
                     gate.withPermit {
                         send(Event.FileStarted(item.cloudFile.filename, started.incrementAndGet(), items.size))
                         try {
-                            val bytes = cloud.downloadFile(APP_ID, item.cloudFile.filename)
+                            if (game == SteamGame.HOLLOW_KNIGHT) check(TokenStore(context).read()?.accountName == credentials.accountName)
+                            val bytes = cloud.downloadFile(game.appId, item.cloudFile.filename)
+                            check(item.localFile.canonicalFile.parentFile == saveDir.canonicalFile) { "Unexpected Cloud save target." }
                             item.localFile.parentFile?.mkdirs()
-                            item.localFile.writeBytes(bytes)
+                            val target = android.util.AtomicFile(item.localFile)
+                            val stream = target.startWrite()
+                            try { stream.write(bytes); target.finishWrite(stream) }
+                            catch (error: Throwable) { target.failWrite(stream); throw error }
                             // Match the cloud timestamp on disk so a subsequent
                             // analyzePull recognises this file as in-sync rather
                             // than re-downloading on the next start.
@@ -280,7 +313,7 @@ object CloudSync {
                             send(Event.FileDone(item.localFile.name, bytes.size.toLong()))
                         } catch (t: Throwable) {
                             failed.incrementAndGet()
-                            val msg = t.message ?: t.javaClass.simpleName
+                            val msg = SteamDownloadDiagnostics.describe(t)
                             LauncherLog.log("  ↓ ${item.localFile.name}: FAILED — $msg")
                             android.util.Log.e("SilksongLauncher.Cloud", "pull failed for ${item.cloudFile.filename}", t)
                             send(Event.FileFailed(item.localFile.name, msg))
@@ -304,6 +337,9 @@ object CloudSync {
         val cloudPath: String,
         val localMtimeUnix: Long,
         val cloudTimestampUnix: Long,
+        val appId: Int = SteamGame.SILKSONG.appId,
+        val account: String = "",
+        val localSize: Long = -1,
     )
 
     /**
@@ -358,17 +394,31 @@ object CloudSync {
     suspend fun analyzePush(
         context: Context,
         credentials: TokenStore.Credentials,
+        game: SteamGame = SteamGame.SILKSONG,
     ): PushAnalysis = kotlinx.coroutines.withContext(Dispatchers.IO) {
-        val saveDir = saveDirFor(context)
-        val locals = collectLocalSaveFiles(saveDir)
+        val saveDir = game.saves(context)
+        val locals = collectLocalSaveFiles(saveDir).filter { game != SteamGame.HOLLOW_KNIGHT || GameSavePaths.isHollowKnightSave(it.name) }
         LauncherLog.log("Push analyze: found ${locals.size} local save file(s) in ${saveDir.absolutePath}")
 
         SteamSession().use { session ->
             session.logOn(credentials)
+            SteamOwnership.requireOwned(session, game.appId)
             val cloud = SteamCloudClient(session)
             LauncherLog.log("Push analyze: enumerating cloud files…")
-            val allCloud = cloud.enumerateFiles(APP_ID)
-            val cloudPrefix = derivePrefix(allCloud)
+            val allCloud = cloud.enumerateFiles(game.appId).let { files ->
+                if (game == SteamGame.HOLLOW_KNIGHT) files.filter { GameSavePaths.isHollowKnightSave(sanitizeFilename(it.filename)) } else files
+            }
+            val cloudPrefix = if (game == SteamGame.HOLLOW_KNIGHT && allCloud.isEmpty() && locals.isNotEmpty()) {
+                val apps = requireNotNull(session.steamClient.getHandler(SteamApps::class.java))
+                val tokens = apps.picsGetAccessTokens(listOf(game.appId), emptyList()).toFuture().get(30, TimeUnit.SECONDS)
+                val metadata = apps.picsGetProductInfo(listOf(PICSRequest(game.appId, tokens.appTokens[game.appId] ?: 0L)), emptyList())
+                    .toFuture().get(45, TimeUnit.SECONDS)
+                check(metadata.complete && !metadata.failed) { "Steam Cloud metadata is incomplete. Retry the save check." }
+                val app = metadata.results.firstNotNullOfOrNull { it.apps[game.appId] }
+                check(app != null && app.id == game.appId && !app.isMissingToken) { "Steam Cloud layout is unavailable." }
+                val user = requireNotNull(session.steamClient.getHandler(SteamUser::class.java)?.steamID)
+                SteamCloudLayout.hollowKnight(app.keyValues, user.accountID.toLong(), user.convertToUInt64().toULong())
+            } else derivePrefix(allCloud, game)
             val cloudFiles = filterRootLevel(allCloud, cloudPrefix)
             if (cloudFiles.size != allCloud.size) {
                 LauncherLog.log(
@@ -416,6 +466,9 @@ object CloudSync {
                             cloudPath = cloudPrefix + basename,
                             localMtimeUnix = mtimeSec,
                             cloudTimestampUnix = -1,
+                            appId = game.appId,
+                            account = accountKey(credentials.accountName),
+                            localSize = local.length(),
                         )
                     )
                     continue
@@ -425,6 +478,9 @@ object CloudSync {
                     cloudPath = cloud.filename,
                     localMtimeUnix = mtimeSec,
                     cloudTimestampUnix = cloud.timestampUnix,
+                    appId = game.appId,
+                    account = accountKey(credentials.accountName),
+                    localSize = if (local.isFile) local.length() else -1,
                 )
                 when {
                     mtimeSec == cloud.timestampUnix -> skipped.add(basename)
@@ -452,7 +508,15 @@ object CloudSync {
         credentials: TokenStore.Credentials,
         items: List<PushItem>,
         toDelete: List<SteamCloudClient.CloudFile> = emptyList(),
+        game: SteamGame = SteamGame.SILKSONG,
+        context: Context? = null,
     ): Flow<Event> = channelFlow {
+        require(items.all { it.appId == game.appId }) { "Cloud items belong to a different game." }
+        if (game == SteamGame.HOLLOW_KNIGHT) {
+            requireNotNull(context) { "Game context is required for save sync." }
+            check(TokenStore(context).read()?.accountName == credentials.accountName &&
+                items.all { it.account == accountKey(credentials.accountName) }) { "Steam account changed; analyze saves again." }
+        }
         if (items.isEmpty() && toDelete.isEmpty()) {
             send(Event.Complete(0, 0, 0))
             return@channelFlow
@@ -460,7 +524,19 @@ object CloudSync {
 
         SteamSession().use { session ->
             session.logOn(credentials)
+            SteamOwnership.requireOwned(session, game.appId)
             val cloud = SteamCloudClient(session)
+            if (game == SteamGame.HOLLOW_KNIGHT) {
+                val fresh = cloud.enumerateFiles(game.appId).associateBy { it.filename }
+                check(items.map { it.cloudPath }.distinct().size == items.size)
+                check(items.all { (fresh[it.cloudPath]?.timestampUnix ?: -1L) == it.cloudTimestampUnix }) { "Steam saves changed; analyze saves again." }
+                val saveDir = game.saves(requireNotNull(context)).canonicalFile
+                check(items.all { it.localFile.canonicalFile.parentFile == saveDir &&
+                    GameSavePaths.isHollowKnightSave(it.localFile.name) && it.localFile.isFile &&
+                    it.localFile.length() == it.localSize && it.localFile.lastModified() / 1000L == it.localMtimeUnix }) {
+                    "Local saves changed; analyze saves again."
+                }
+            }
 
             val gate = Semaphore(MAX_PARALLEL_TRANSFERS)
             val ok = AtomicInteger(0)
@@ -479,9 +555,10 @@ object CloudSync {
                     gate.withPermit {
                         send(Event.FileStarted(item.localFile.name, started.incrementAndGet(), items.size))
                         try {
+                            if (game == SteamGame.HOLLOW_KNIGHT) check(TokenStore(requireNotNull(context)).read()?.accountName == credentials.accountName)
                             val content = item.localFile.readBytes()
                             cloud.uploadFile(
-                                appId = APP_ID,
+                                appId = game.appId,
                                 cloudPath = item.cloudPath,
                                 rawContent = content,
                                 timestampUnix = item.localMtimeUnix,
@@ -495,7 +572,7 @@ object CloudSync {
                             send(Event.FileDone(item.localFile.name, content.size.toLong()))
                         } catch (t: Throwable) {
                             failed.incrementAndGet()
-                            val msg = t.message ?: t.javaClass.simpleName
+                            val msg = SteamDownloadDiagnostics.describe(t)
                             LauncherLog.log("  ↑ ${item.localFile.name}: FAILED — $msg")
                             android.util.Log.e("SilksongLauncher.Cloud", "push failed for ${item.cloudPath}", t)
                             send(Event.FileFailed(item.localFile.name, msg))
@@ -515,12 +592,12 @@ object CloudSync {
                 launch(Dispatchers.IO) {
                     gate.withPermit {
                         try {
-                            cloud.deleteFile(APP_ID, orphan.filename)
+                            cloud.deleteFile(game.appId, orphan.filename)
                             LauncherLog.log("  ✗ deleted cloud orphan: ${sanitizeFilename(orphan.filename)}")
                         } catch (t: Throwable) {
                             if (t is kotlinx.coroutines.CancellationException) throw t
                             failed.incrementAndGet()
-                            val msg = t.message ?: t.javaClass.simpleName
+                            val msg = SteamDownloadDiagnostics.describe(t)
                             send(Event.FileFailed(orphan.filename, msg))
                             LauncherLog.log("  ✗ delete failed for ${orphan.filename}: $msg")
                             android.util.Log.e("SilksongLauncher.Cloud", "delete failed for ${orphan.filename}", t)
@@ -543,7 +620,7 @@ object CloudSync {
             // timestamp for each succeeded file, breaking the loop.
             if (succeeded.isNotEmpty()) {
                 try {
-                    val after = cloud.enumerateFiles(APP_ID).associateBy { it.filename }
+                    val after = cloud.enumerateFiles(game.appId).associateBy { it.filename }
                     for (item in succeeded) {
                         val cur = after[item.cloudPath] ?: continue
                         item.localFile.setLastModified(cur.timestampUnix * 1000L)
@@ -602,11 +679,12 @@ object CloudSync {
      * sub-folder) but Steam will still accept it. Silksong on desktop
      * will normalise things on the next save.
      */
-    private fun derivePrefix(cloudFiles: List<SteamCloudClient.CloudFile>): String {
+    private fun derivePrefix(cloudFiles: List<SteamCloudClient.CloudFile>, game: SteamGame): String {
+        val fallback = if (game == SteamGame.HOLLOW_KNIGHT) "%WinAppDataLocalLow%Team Cherry/Hollow Knight/" else CLOUD_PREFIX_FALLBACK
         val shortest = cloudFiles.minByOrNull { f -> f.filename.count { it == '/' } }
-            ?: return CLOUD_PREFIX_FALLBACK
+            ?: return fallback
         val lastSlash = shortest.filename.lastIndexOf('/')
-        return if (lastSlash >= 0) shortest.filename.substring(0, lastSlash + 1) else CLOUD_PREFIX_FALLBACK
+        return if (lastSlash >= 0) shortest.filename.substring(0, lastSlash + 1) else ""
     }
 
     /**
@@ -628,6 +706,7 @@ object CloudSync {
         prefix: String,
     ): List<SteamCloudClient.CloudFile> =
         cloudFiles.filter { cf ->
+            if (!cf.filename.startsWith(prefix)) return@filter false
             val rest = cf.filename.removePrefix(prefix)
             // No remaining slash → file sits directly under the prefix.
             // (If the file doesn't even share the prefix it'll also pass

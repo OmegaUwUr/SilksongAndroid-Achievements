@@ -6,6 +6,47 @@ and single-screen or dual-screen play. The launcher prepares a native ARM64
 Unity player from your own Linux game files; it is not game streaming and does
 not require the desktop Steam client to run on Android.
 
+Development now prioritizes the **shared Unity-to-Android porting tool**: reusable
+engine-family, content, input and middleware support across games. Revision 48
+adds custom script assembly layouts to the common path, including Mono projects
+without `Assembly-CSharp.dll`. See the [tool scope and development priorities](docs/UNITY_PORTING_TOOL.md).
+
+Revision 49 adds **Download engine profile & audit** for Unity 2019.4: exact audit
+components are shared across games and retained after app updates. This resolves
+deferred managed-profile inspection independently of unfinished native/player and
+backend adapters. See [Unity 2019 profile preparation](docs/UNITY_2019_PROFILE_PREPARATION.md).
+
+Revision 50 adds source-bound **legacy Android registration planning**: MonoManager
+script references are matched to explicit loose files and selected Android/game
+types, and initializers are read from replacement modules. Missing references and
+providers remain blocked. Cached revision-49 engine inputs are reused. See
+[the binding checks and remaining provider work](docs/UNITY_2019_REGISTRATION.md).
+
+Revision 51 expands script lookup to simple assembly names, nested names and
+explicit type forwarders, and shows categorized binding failures with identity
+examples in assessments/logs. Existing SDK/download/build caches are retained.
+See [script binding coverage and evidence](docs/UNITY_SCRIPT_BINDINGS.md).
+
+Revision 52 compares failed script identities with the original DLLs and adds a
+serialized MonoBehaviour script-reference census. The supplied Slime Rancher
+export confirms 873 failures were already unbound on the original source; their
+use/registration treatment remains under review. See
+[original-source and content-reference evidence](docs/LEGACY_SCRIPT_REFERENCE_EVIDENCE.md).
+
+Revision 53 follows exact content MonoScripts inside local bundles against the
+fingerprinted Android/game providers. The new export localizes all 241 observed
+unresolved uses to the credits bundle; their actual new resolution count still
+needs a complete-source rerun. Built-in resource diagnostics now expose readable
+layout metadata and exception details. Caches remain unchanged. See
+[bundle bindings and current evidence](docs/LEGACY_BUNDLE_BINDINGS.md).
+
+Revision 54 adds a fingerprinted provider for the exact Unity 2019.4.29f1
+engine-owned built-in resource pair and resolves its twelve script IDs in a real
+SDK probe. It also records a successful synthetic Android ARM64 native host link.
+Existing scans, downloads and completed players retain their cache identities.
+The workspace outage interrupted the final repeat checks; this remains a draft.
+See [built-in provenance, native milestone and validation limits](docs/UNITY_2019_BUILTIN_PROVIDER.md).
+
 This is a community project based on **jakobkhansen's SilksongAndroid**, with
 additional SteamSync and achievement features. It is not an official Team Cherry
 or Valve release.
@@ -38,9 +79,60 @@ or Valve release.
 ### Steam and achievements
 
 - **Steam sign-in:** QR approval through the Steam mobile app, or account name
-  and password with Steam Guard confirmation when required.
-- **Game download:** uses the signed-in account's access to Silksong's Linux
-  depot. Supplying compatible game files manually is also supported.
+  and password with Steam Guard confirmation when required. Revision 33 adapts
+  sign-in to portrait/narrow windows and opens game selection after authentication.
+- **Game download:** uses the signed-in account's access to each game's Linux
+  depot. The revision-34 candidate corrects Hollow Knight to app 367520 / Linux
+  depot 367523, checks Steam's platform metadata and validates exact Linux
+  1.5.12620 files. Local game files remain supported.
+- **Persistent library and installed ports (revision 44 candidate):** caches scanned
+  games and inspection progress per account, resumes interrupted scans, and keeps
+  completed Hollow Knight/generic ports usable after routine APK updates. Migrates
+  old build markers and expansion filenames without downloading or recompiling
+  the game. Recovers completed local sources; checking Steam for newer game files
+  is a separate action. See [update behavior and checks](docs/PERSISTENT_GAME_DATA.md).
+- **Steam library discovery and preparation (revision 44 candidate):** scans the authenticated
+  library and Linux, Windows or macOS depot manifests for Unity candidates without
+  downloading entire games. Owned games appear in the artwork library before the
+  scan completes. Other entries offer **Prepare port**: owned source downloads,
+  actual dependency inspection, matching Unity component downloads and a shared
+  experimental compiler for eligible desktop classic Mono games with Vulkan shaders.
+  Optional DLC no longer hides valid base-game candidates. The Steam session keeps
+  its shared HTTP transport alive between manifest inspection and game download. See
+  [supported components and limits](docs/GENERIC_UNITY_PORTS.md). Native reports group
+  Windows API/input and store adapters separately from replaceable Android plugins;
+  unused declarations remain subject to review. Mono wrappers are checked against the
+  selected managed profile, and packs cannot replace Android system libraries. Cult
+  of the Lamb and Slime Rancher still need engine/content/platform adapters.
+- **Local bundle conversion (revision 45 candidate):** checks and retargets bounded
+  UnityFS content, including Unity 2019 serialized layouts. Inspects content even
+  when other requirements remain blocked and checks CRC/catalog loading paths.
+  Uses bounded serialized headers to avoid mistaking opaque GI files for assets;
+  renamed real assets and truncated content retain their validation checks.
+  **Export porting files for review** provides original code/startup metadata for
+  adapter work. [Slime Rancher status and source collection](docs/SLIME_RANCHER_PORT.md)
+  explains what is still missing; this does not enable the game to compile.
+- **Download and build recovery (revision 47 candidate):** spaces Steam CDN retries
+  across download workers, reports repeated network failures and keeps downloaded
+  data for retry. Stale builders are stopped through their own service connection;
+  tool runs from different game screens serialize. See
+  [download/build recovery and validation](docs/STEAM_DOWNLOAD_RECOVERY.md).
+- **Slime Rancher source review (revision 46 candidate):** reads actual legacy
+  MonoManager registration, records the reviewed Steam boundary and provides an
+  exact-source tool for disabling optional Discord desktop presence. Includes an
+  exact-profile audit and a host IL2CPP probe. The Android engine/player, native
+  integration, input and Steam adapters remain gated; see [review and probe scope](docs/SLIME_RANCHER_PORT.md).
+- **Included Android native libraries (revision 41 candidate):** eight real ARM64 C
+  libraries cover SQLite, LZ4, Zstandard, Ogg/Vorbis and PNG. Preparation identifies
+  matching declarations; **Add included libraries** creates a game-bound pack and
+  reruns the checks. Imported libraries retain priority, dependent-build conflicts
+  are refused, and unsupported engines/store SDKs remain gated. See
+  [components, versions and validation](docs/NATIVE_LIBRARY_PROVIDERS.md).
+- **Automatic Unity versions (revision 42 candidate):** generic preparation can
+  resolve additional public stable **6000.0 patches** from Unity's official API,
+  verify exact archives and installed runtime files, and reuse completed components
+  offline. Other families/streams remain unsupported; the first editor transfer can
+  exceed 4 GB. See [scope and device checks](docs/AUTOMATIC_UNITY_RUNTIMES.md).
 - **Steam Cloud:** manual download/upload, optional automatic download before
   play and upload on return to the launcher, and conflict choices when the
   destination has newer data. Both automatic options default to off.
@@ -178,6 +270,52 @@ real-device speedup yet. See [the porting performance validation guide](docs/POR
 for the timing logs and device checks.
 
 ## Getting started
+
+### Game options and compatibility (revision 43 candidate)
+
+First launch opens **Steam sign-in**, then an automatically scanned **Library**.
+Portrait covers adapt to phone/tablet widths. Tap a cover for its hero artwork,
+transparent Steam logo, green **Play/Set up** button, Steam status and available
+features. Other games offer source download and preparation; compilation is enabled
+only after full component, managed API, shader and asset checks.
+
+The owner confirmed the earlier Hollow Knight port worked. Revision 35 adds a
+shared Steam runtime, HK achievements (including reconciliation of available local
+unlock flags), playing status, playtime tracking, manual/optional automatic Cloud
+saves and a generic touch gamepad. These additions are a source candidate: build
+a new APK and **rebuild the Hollow Knight port** before testing them. The exact
+Linux **1.5.12620** / Unity **6000.0.61f1** source requirement remains.
+
+Revision 33 downloaded the macOS depot by mistake. Revision 34 downloads Linux
+files into a new folder so it cannot reuse that payload. The previous download
+remains stored separately, using additional space; existing ports and saves are kept.
+
+Hollow Knight uses separate engine, build, runtime, preferences and save storage.
+The adapter requires ARM64/Vulkan and about **17 GB free during porting**.
+Physical controllers and the new generic touch gamepad are available. Cloud sync
+is opt-in and protects newer destinations with conflict prompts and local backups.
+The original Linux source remains unchanged. Other Unity games can use the shared
+experimental path within its [current capability boundaries](docs/GENERIC_UNITY_PORTS.md).
+This is not automatic compatibility with every Unity game. See the
+[shared Steam/launcher guide](docs/SHARED_STEAM_PORTS.md) for behavior and device gates.
+
+The inspector reports Unity/platform, Mono/IL2CPP, assemblies, content layout and
+native plugin architectures. A matching Unity version does not prove compatibility.
+You can check Hollow Knight's exact source on a PC without building the APK:
+
+```sh
+python tools/game-compat/inspect_game.py "/path/to/Hollow Knight" --game hollow-knight --verify-exact --output hk-compatibility.json
+```
+
+Use your own installed files and save the report outside the game directory.
+The script requires Python 3.10+ and this repository. Reports contain metadata,
+not game/save contents or Steam credentials. See the
+[multi-game integration guide](docs/MULTI_GAME_PORTING.md) for limitations and
+remaining build/device checks. The classic converter is adapted from
+[Darkaxt/HollowKnightAndroid](https://github.com/Darkaxt/HollowKnightAndroid);
+full authorship and license information is in [CREDITS.md](CREDITS.md).
+
+### Install and play Silksong
 
 1. Download the latest APK from
    [this repository’s Releases](https://github.com/OmegaUwUr/SilksongAndroid-Achievements/releases)
@@ -435,11 +573,13 @@ local game files and saves.
 
 ### Steam ownership requirement
 
-QR and password sign-in now request a Steam app ownership ticket for Silksong
-(App ID 1030300) before accepting the login. The authenticated achievement service
-also verifies the license before becoming ready for launch, covering saved logins.
-Manual file selection does not bypass the launch requirement: Play prompts for
-Steam sign-in if needed. A successful ticket response for the correct App ID with
+QR and password sign-in authenticate the account and open game selection. Downloading
+requests a non-empty ownership ticket for the selected game: Silksong (1030300) or
+Hollow Knight (367520), with a matching App ID in the response. A Hollow Knight-only
+owner no longer needs Silksong to sign in. The Silksong achievement service still
+verifies its own license before becoming ready for launch, covering saved logins.
+Manual Silksong file selection does not bypass that launch requirement: its Play
+button prompts for Steam sign-in if needed. A successful ticket response for the correct App ID with
 non-empty ticket data is required; local files or a public Steam profile are not
 used as proof. This verifies Steam-authorized license access, not purchase receipts.
 
@@ -447,5 +587,6 @@ When Steam denies the ownership-ticket request with AccessDenied, the app explai
 is required and offers the official Silksong Steam store page. This denial alone does not prove that the account never purchased the game. Connection errors,
 timeouts, and other unconfirmed responses block verification with a retry message
 instead of claiming the account does not own the game. After buying the game,
-sign in again. Ticket contents are not stored or logged. Offline launch without
-verification is no longer supported by this flow.
+sign in again. Ticket contents are not stored or logged. Offline Silksong launch without
+verification is no longer supported by that flow. Hollow Knight has a separate
+experimental local-file launcher and does not enable Steam achievement/Cloud services.

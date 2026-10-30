@@ -85,6 +85,7 @@ class SetupActivity : Activity() {
     private lateinit var secondary: Button
     private lateinit var resetBuild: Button
     private lateinit var changeFolder: Button
+    private lateinit var gameLibrary: Button
     private var busy = false
     // Set by an action to explain what just happened; cleared when the next
     // one starts. Null means the state summary is shown instead.
@@ -219,8 +220,10 @@ class SetupActivity : Activity() {
 
     /** The game's own files are on this device, however they got here. */
     private fun haveGameFiles(): Boolean =
-        depotDir?.let {
-            PlayerImage.depotData(it) != null && PlayerImage.foreignBuild(it) == null
+        depotDir?.let { depot ->
+            val data = PlayerImage.depotData(depot)
+            data != null && GameCompatibility.silksongIdentityProblem(data) == null &&
+                PlayerImage.foreignBuild(depot) == null
         } == true
 
     /**
@@ -280,6 +283,10 @@ class SetupActivity : Activity() {
 
         header = text("Silksong SteamSync", 30f, Color.WHITE, bold = true)
         root.addView(header)
+        gameLibrary = quietButton(getString(R.string.game_library_title)) {
+            startActivity(Intent(this@SetupActivity, GameLibraryActivity::class.java))
+        }
+        root.addView(gameLibrary)
         // "Step 2 of 3" -- present only while something is running.
         stepLabel = text("", 12f, Color.parseColor("#7D3341"), bold = true).apply {
             setPadding(0, dp(16), 0, 0)
@@ -352,7 +359,10 @@ class SetupActivity : Activity() {
         })
         root.addView(quiet, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        return root
+        return android.widget.ScrollView(this).apply {
+            isFillViewport = true
+            addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
     }
 
     /** The small text-only actions under the buttons that matter. */
@@ -478,6 +488,7 @@ class SetupActivity : Activity() {
      */
     private fun setBusy(running: Boolean, sub: String = "", fraction: Float = -1f, note: String = "") {
         busy = running
+        gameLibrary.visibility = if (running) View.GONE else View.VISIBLE
         if (running) message = null
         primary.visibility = if (running) View.GONE else View.VISIBLE
         secondary.visibility = if (running) View.GONE else View.VISIBLE
@@ -789,7 +800,8 @@ class SetupActivity : Activity() {
         }
         val creds = TokenStore.Credentials(account, token)
         TokenStore(this).write(creds)
-        offerToPort(creds)
+        startActivity(Intent(this, GameLibraryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+        finish()
     }
 
     /**
@@ -947,6 +959,11 @@ class SetupActivity : Activity() {
                 }
 
                 // ── Step 2: the supporting tools ──────────────────────────
+                withContext(Dispatchers.IO) {
+                    val data = PlayerImage.depotData(depot)
+                        ?: throw java.io.IOException("No Unity game data was found in the selected folder.")
+                    GameCompatibility.requireSilksongData(data)
+                }
                 setStep(toolsStep, "Downloading supporting tools")
                 portingStage("Supporting tool downloads") {
                     prepareSupportingTools(unity, tools)
@@ -1048,9 +1065,12 @@ class SetupActivity : Activity() {
     }
 
     private fun startLauncher() {
+        if (intent.getBooleanExtra("return_to_game_page", false) && !intent.getBooleanExtra("launch_from_library", false)) {
+            finish(); return
+        }
         LauncherLog.log("Setup complete, opening $LAUNCHER_ACTIVITY_CLASS")
         try {
-            startActivity(Intent().setClassName(packageName, LAUNCHER_ACTIVITY_CLASS))
+            startActivity(Intent().setClassName(packageName, LAUNCHER_ACTIVITY_CLASS).putExtra("launch_from_library", intent.getBooleanExtra("launch_from_library", false)))
             // Setup is done and there is nothing to come back to: leaving it
             // on the stack would put it behind the back button forever.
             finish()

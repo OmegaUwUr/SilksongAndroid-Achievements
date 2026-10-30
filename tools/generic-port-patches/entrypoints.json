@@ -1,0 +1,5 @@
+{
+  "entryPoints": [
+    { "nameSpace": "GenericPortPatches", "className": "PortBootstrap", "methodName": "Start", "loadTypes": 1 }
+  ]
+}

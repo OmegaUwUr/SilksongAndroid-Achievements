@@ -16,6 +16,7 @@ object PlayerImage {
     fun stageSurgery(root: File, assets: android.content.res.AssetManager) = File(root, "surgery.dll")
     suspend fun run(dll: File, context: android.content.Context, args: List<String>, onLine: (String) -> Unit) {
         if (Fixture.cancelRewrite) throw CancellationException("cancelled while rewriting")
+        Fixture.rewrites += args
     }
 }
 object Fixture {
@@ -23,6 +24,14 @@ object Fixture {
     var emptyCpp = false
     var cancelRewrite = false
     var executions = 0
+    val rewrites = mutableListOf<List<String>>()
+    fun cli(): ByteArray {
+        val bytes = ByteArray(512); bytes[0] = 77; bytes[1] = 90
+        val buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buffer.putInt(60, 128); bytes[128] = 80; bytes[129] = 69; buffer.putShort(148, 224); buffer.putShort(152, 0x10b)
+        buffer.putInt(244, 16); buffer.putInt(360, 0x2000); buffer.putInt(364, 72)
+        return bytes
+    }
     fun write(root: File, path: String, text: String = "fixture"): File = File(root, path).also {
         it.parentFile.mkdirs(); it.writeText(text)
     }

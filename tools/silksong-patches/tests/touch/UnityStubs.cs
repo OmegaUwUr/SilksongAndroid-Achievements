@@ -36,6 +36,7 @@ namespace UnityEngine {
   public float x,y; public Vector2(float x,float y){this.x=x;this.y=y;}
   public static Vector2 zero=>new Vector2(); public static Vector2 one=>new Vector2(1,1);
   public float sqrMagnitude=>x*x+y*y;
+  public static Vector2 operator *(Vector2 a,float b)=>new Vector2(a.x*b,a.y*b);
   public static Vector2 operator -(Vector2 a,Vector2 b)=>new Vector2(a.x-b.x,a.y-b.y);
  }
  public struct Rect : IEquatable<Rect> {
@@ -59,15 +60,17 @@ namespace UnityEngine {
  public static class Resources {public static T GetBuiltinResource<T>(string path) where T:new()=>new T();}
  public enum RenderMode {ScreenSpaceOverlay} public class Canvas:Component {public RenderMode renderMode;public int sortingOrder,targetDisplay;}
  public enum TextAnchor {MiddleCenter}
- public enum RuntimeInitializeLoadType {AfterSceneLoad}
+ public enum RuntimeInitializeLoadType {AfterSceneLoad,BeforeSceneLoad}
  public class RuntimeInitializeOnLoadMethodAttribute:Attribute {public RuntimeInitializeOnLoadMethodAttribute(RuntimeInitializeLoadType t){}}
  public class DefaultExecutionOrderAttribute:Attribute {public DefaultExecutionOrderAttribute(int order){}}
- public static class Time {public static int frameCount;public static float unscaledTime,timeScale=1;}
- public static class Screen {public static int width=1280,height=720;public static Rect safeArea=new Rect(0,0,1280,720);}
+ public static class Time {public static int frameCount;public static float unscaledTime,realtimeSinceStartup,timeScale=1;}
+ public static class Application {public static string persistentDataPath;public static int targetFrameRate;public static bool runInBackground;}
+ public static class QualitySettings {public static int vSyncCount;}
+ public static class Screen {public static void SetResolution(int width,int height,bool full) {Screen.width=width;Screen.height=height;}public static int width=1280,height=720;public static Rect safeArea=new Rect(0,0,1280,720);}
  public enum TouchPhase {Began,Moved,Stationary,Ended,Canceled}
  public struct Touch {public int fingerId;public Vector2 position;public TouchPhase phase;}
  public static class Input {
-  public static Touch[] touches=Array.Empty<Touch>();public static int touchCount=>touches.Length;
+  public static Touch[] touches=Array.Empty<Touch>();public static bool legacyUnavailable;public static int touchCount {get {if(legacyUnavailable)throw new InvalidOperationException();return touches.Length;}}
   public static Touch GetTouch(int i)=>touches[i];public static Vector2 mousePosition;
   public static bool mouse;public static bool GetMouseButton(int i)=>mouse;public static bool GetMouseButtonDown(int i)=>mouse;public static bool GetMouseButtonUp(int i)=>mouse;
  }
@@ -84,6 +87,7 @@ namespace UnityEngine {
  }
 }
 namespace UnityEngine.UI {
+ public class GraphicRaycaster:UnityEngine.Component {}
  public class Image:UnityEngine.Component {public bool enabled=true,raycastTarget;public UnityEngine.Color color;public UnityEngine.Sprite sprite;}
  public class Text:UnityEngine.Component {public UnityEngine.Font font;public string text;public UnityEngine.TextAnchor alignment;public UnityEngine.Color color;public bool raycastTarget,resizeTextForBestFit;public int fontSize,resizeTextMinSize,resizeTextMaxSize;}
 }

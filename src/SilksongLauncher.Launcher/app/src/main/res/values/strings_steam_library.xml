@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_verify_failed">Steam could not finish signing in. Check your connection and retry.</string>
+    <string name="library_owned">In your Steam library · access is verified before download</string>
+    <string name="library_not_listed">Not listed in this Steam library · sign in with an account that owns it to download</string>
+    <string name="library_candidates_title">Unity games in your Steam library</string>
+    <string name="library_scan_explain">Scan your signed-in library and Linux, Windows and macOS depot file lists for Unity games. This downloads metadata, not full games. Potential ports still need an Android engine, compatible plugins and game-specific testing. A library listing does not prove port compatibility.</string>
+    <string name="library_scan_prompt">Sign in, then scan to discover potential ports. Large libraries may take several minutes.</string>
+    <string name="library_scan">Scan Steam library</string>
+    <string name="library_stop">Stop scan</string>
+    <string name="library_connecting">Reading your Steam library…</string>
+    <string name="library_progress">Checked %1$d of %2$d games\nInspecting %3$s…</string>
+    <string name="library_done">Checked %1$d games; found %2$d Unity games. %3$d games could not be fully inspected. Missing depots, DLC and access restrictions can leave results incomplete.</string>
+    <string name="library_cancelled">Scan stopped. The results shown are partial. You can scan again.</string>
+    <string name="library_failed">Steam library scanning could not finish. Check your connection and account access, then retry. Results already shown are partial.</string>
+    <string name="library_potential">Potential Mono port · adapter and device testing required</string>
+    <string name="library_needs_review">Unity detected · unsupported build or incomplete inspection</string>
+    <string name="library_requirements">View compatibility and required libraries</string>
+    <string name="hk_download">Download Hollow Knight from Steam</string>
+    <string name="hk_download_explain">Download the Linux release directly from your own Steam account (about 5.2 GB). You need to own Hollow Knight. Allow at least 7 GB for downloading and about 17 GB more free for porting.\n\nOnly the exact 1.5.12620 release is supported by this experimental adapter. If Steam supplies a different version, the app will stop before conversion. When validation finishes, choose Port Hollow Knight.</string>
+    <string name="hk_downloading">Downloading Hollow Knight from Steam…</string>
+    <string name="hk_verifying">Verifying the exact Hollow Knight release…</string>
+    <string name="hk_download_ready">Steam download verified. Choose Port Hollow Knight to build it on this device.</string>
+    <string name="hk_not_owned">This Steam account could not verify ownership of Hollow Knight. Sign in with an account that owns the game.</string>
+    <string name="hk_download_failed">Hollow Knight download failed during %1$s.\n%2$s\n\nYou can retry. Your existing port and saves are kept.</string>
+    <string name="hk_stage_storage">storage preparation</string>
+    <string name="hk_stage_download">Steam connection or download</string>
+    <string name="hk_stage_access">Steam ownership verification</string>
+    <string name="hk_stage_verify">game-file verification</string>
+    <string name="hk_previous_download">An earlier download is still stored separately. This version downloads the correct Linux depot into a new folder and keeps existing builds and saves.</string>
+</resources>

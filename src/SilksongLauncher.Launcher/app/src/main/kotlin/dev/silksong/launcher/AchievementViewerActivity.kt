@@ -94,7 +94,7 @@ class AchievementViewerActivity : Activity() {
         feedJob?.cancel()
         retry.visibility = View.GONE
         feedJob = scope.launch {
-            AchievementFeed.observe(this@AchievementViewerActivity) { state ->
+            AchievementFeed.observe(this@AchievementViewerActivity, SteamGame.fromIntent(intent)) { state ->
                 val data = state.snapshot
                 if (data == null) {
                     hasSnapshot = false

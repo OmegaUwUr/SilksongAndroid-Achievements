@@ -34,11 +34,14 @@ suspend fun exec(context: android.content.Context, dll: File, args: List<String>
 ''')
     sources = [SRC / (name + ".kt") for name in (
         "CompletedArtifact", "ConversionCache", "UnityFetcher", "ToolchainFetcher",
-        "Il2cppConverter", "PackageCompiler",
-    )] + sorted(FIXTURES.glob("*.kt")) + [stub]
+        "Il2cppConverter", "PackageCompiler", "GameProfile", "GameCompatibility", "PortDependencyAudit", "PortTarget", "UnityDistribution",
+        "UnityReleaseCatalog", "UnityRuntimeInstaller", "UnityAndroidPackage", "AndroidElf",
+    )] + sorted(FIXTURES.glob("*.kt")) + [ROOT / "tools/game-compat/tests/kotlin/GameCompatibilityChecks.kt"] + [stub]
     jar = tmp / "tests.jar"
     subprocess.run(["java", "-cp", classpath, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
                     "-no-stdlib", "-no-reflect", "-classpath", classpath,
                     "-d", str(jar), *map(str, sources)], check=True)
     subprocess.run(["java", "-cp", str(jar) + os.pathsep + classpath,
                     "dev.silksong.launcher.PortingChecksKt"], check=True)
+    subprocess.run(["java", "-cp", str(jar) + os.pathsep + classpath,
+                    "dev.silksong.launcher.GameCompatibilityChecksKt"], check=True)

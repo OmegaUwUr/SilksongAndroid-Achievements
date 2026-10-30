@@ -26,7 +26,11 @@ class SilksongApp : Application() {
     // framework instantiates the activity. attachBaseContext is the first
     // point in the process where that is possible.
     override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(base)
+        super.attachBaseContext(when {
+            HollowKnightContext.isGameProcess() -> HollowKnightContext.wrap(base)
+            GenericPortContext.isGameProcess() -> GenericPortContext.active(base)
+            else -> base
+        })
         UnityDex.inject(this)
     }
 
@@ -51,15 +55,19 @@ class SilksongApp : Application() {
         // when it stops (background, return to launcher, or normal exit).
         registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {
-                if (activity.javaClass.name != GAME_ACTIVITY) return
-                LauncherLog.log("Steam presence: GameActivity started")
-                AchievementService.reportGameActivity(applicationContext, true)
+                val game = gameFor(activity) ?: return
+                AchievementService.reportGameActivity(applicationContext, true, game)
             }
 
             override fun onActivityStopped(activity: Activity) {
-                if (activity.javaClass.name != GAME_ACTIVITY) return
-                LauncherLog.log("Steam presence: GameActivity stopped")
-                AchievementService.reportGameActivity(applicationContext, false)
+                val game = gameFor(activity) ?: return
+                AchievementService.reportGameActivity(applicationContext, false, game)
+            }
+
+            private fun gameFor(activity: Activity): SteamGame? = when (activity.javaClass.name) {
+                GAME_ACTIVITY -> SteamGame.SILKSONG
+                "dev.silksong.shell.HollowKnightActivity" -> SteamGame.HOLLOW_KNIGHT
+                else -> null
             }
 
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit

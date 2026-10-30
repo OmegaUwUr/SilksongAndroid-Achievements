@@ -2,6 +2,504 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.54 (candidate)
+
+- Adds a reviewed exact-release built-in resource provider for Unity 2019.4.29f1
+  Linux sources. The source's 2019.4.11f1 / target-5 resource is byte-identical to
+  the one in Unity's exact Linux package; all 78 object IDs/classes and 12 script
+  identities match the official Android resource, whose five shaders have Vulkan.
+- Resolves the twelve virtual built-in references in the real SDK/bootstrap probe.
+  Schema-3 registration/census evidence carries the pinned provider. Exact version,
+  target and hash checks remain in place for scenes, bundles and other resources.
+- Extracts the new resource from the retained verified Android PKG into a separate
+  cache. Existing managed-profile receipts, scans, game downloads, completed-player
+  ABI and conversion/native identities are preserved. Adds resource evidence to
+  review exports, with explicit failure/recovery and bounded linked-path checks.
+- Adds a developer-only native host probe using the exact legacy builder and NDK
+  r19. The manual synthetic build links an API-21 ARM64 libil2cpp.so, accepted by
+  production ELF inspection. It does not enable the Android-hosted player recipe.
+
+Completed checks: 236 C# cases, 95 generic checks, 17 pack checks, 12 existing
+profile-installer checks and 33 persistence checks. All 119 production Kotlin
+files and both Java launch adapters compiled. Actual archive/resource/install,
+twelve binding and schema-3 C#/Kotlin checks completed.
+
+The execution environment became unavailable during the isolated native-probe
+rerun and final repeated checks. The draft preserves the recovered edits and this
+validation limit; a fresh checkout/final rerun is still required. No revision-54
+APK, full-game census, Android player or gameplay run was performed. Native/player,
+registration, framework ABI and backend integrations remain unfinished. See
+docs/UNITY_2019_BUILTIN_PROVIDER.md.
+
+## 1.0.3-achievements.53 (candidate)
+
+- Resolves direct content MonoScripts, including local UnityFS bundle scripts that
+  do not have a MonoManager inventory row. Follows the exact serialized pointer
+  and stored assembly/namespace/class identity through a closed selected-provider
+  graph; every provider's size, identity and SHA-256 must match the binding plan
+  before and after inspection. No namespace, basename or cross-bundle guessing.
+- Handles file-local, explicit same-container dependencies and the constrained
+  `archive:/CAB/CAB` form when that exact entry is present in the same bundle.
+  Reports actual selected types/providers and forwarding chains separately from
+  unchanged MonoManager entries. Type resolution does not register bundles or
+  approve their Android loading, paths, catalogs, CRCs or gameplay.
+- Bounds MonoScript object reads to 64 KiB and strings to their object ranges.
+  Schema-2 use reports add exact content bindings plus per-file version, target,
+  serialized format, object counts and container hashes. Built-in failures now
+  retain the actual exception detail and metadata when readable; mixed layouts
+  and incomplete scans stay blocked. Assessments show bounded diagnostics.
+- Reuses the existing exact-profile cache and preserves library scan, source,
+  installed-player and conversion/native cache identities. No SDK download,
+  compiler run, source rewrite or wrapper/registration exclusion is introduced.
+
+The new device export verifies all 104 manifest-listed files (106 ZIP entries).
+Its 37,540 observed headers include 241 unresolved uses, all in the credits bundle
+and pointing to ten bundle-local script objects. The only census diagnostic names
+`Resources/unity default resources`; the old report omits the exception detail, so
+its precise failure is still unknown. All 885 unresolved inventory entries were
+unobserved in these headers, which does not authorize removal. The original-source
+result remains 873 source-unbound, 12 unknown, zero additional Android-only cases.
+
+Validation: 220 C# cases, 90 generic checks, 17 pack checks and 33 persistence
+checks pass. All 117 production Kotlin files and both Java launch adapters compile.
+The actual new export passes the production evidence reader; all 95 original
+source files remain unchanged. Production C# also creates a real serialized
+fixture's schema-2 JSON accepted by production Kotlin. No revision-53 APK, full
+game content rerun, native/player, registration rewrite or gameplay test was run.
+APK builds remain manual. See docs/LEGACY_BUNDLE_BINDINGS.md.
+
+## 1.0.3-achievements.52 (candidate)
+
+- Adds exact-original-source comparison for legacy script plans. A failed Android
+  lookup is now checked against the original DLL graph, with source-unbound,
+  unknown and Android-only cases distinguished. No short-name/namespace guess or
+  exclusion rule is applied.
+- Adds a read-only MonoBehaviour `m_Script` header census across loose serialized
+  files, serialized built-in inputs and supported local UnityFS entries. It keeps
+  object IDs and joins explicit loose-file pointers to the original MonoManager
+  inventory. Missing/out-of-plan/bundle mappings stay unresolved; unreadable or
+  mixed layouts and incomplete scene trees cannot claim full header coverage.
+- Reports observed unresolved references separately from unobserved inventory
+  entries. The census covers headers only; other fields, code/reflection, dynamic
+  loading and runtime registration remain unverified. Zero observations do not
+  authorize deleting registrations or native wrappers.
+- Binds supplemental reports to the original assembly/bootstrap fingerprints,
+  exact binding-plan hash and inspected content tree. Displays summaries in the
+  assessment/log and exports both reports with hashes in profile evidence.
+  Existing SDK receipts, source/download snapshots, installed-player ABI and
+  conversion/native cache identities are unchanged.
+
+The new owned export verifies all 102 manifest entries. Its 885 failures comprise
+526 missing assembly providers, 347 missing type matches and 12 virtual built-in
+resource references. Production C# comparison confirms all 873 non-built-in cases
+are already unbound in the exact original 92-DLL desktop graph; no additional
+Android-only failure is identified among them. Production Kotlin accepts that
+real report, and all 95 original source files remain unchanged. Scene payloads
+are absent from this export, so actual game header-use counts still need the new
+on-device census. No records are stripped and no runtime compatibility is claimed.
+
+Validation: 200 C# cases, 83 generic checks, 17 pack checks and 33 persistence
+checks pass. All 116 production Kotlin files and both Java launch adapters compile.
+No revision-52 APK, native/player run or gameplay test was performed; builds stay
+manual. See docs/LEGACY_SCRIPT_REFERENCE_EVIDENCE.md.
+
+## 1.0.3-achievements.51 (candidate)
+
+- Expands shared MonoScript type lookup to simple assembly names and exact DLL
+  filenames, explicit nested `Outer/Inner` and `Outer+Inner` forms, and metadata
+  type forwarders through the selected assembly graph. Namespace/case, declaring
+  type and forwarded assembly version/culture/public-key token remain checked.
+  Ambiguities, missing targets, cycles, unsupported module exports and chains
+  above 32 assemblies stay unresolved; no process/search-path fallback is used.
+- Preserves raw serialized script identities while recording the final selected
+  assembly, canonical type and full forwarding chain in schema-2 binding plans.
+  This is inspection only; MonoManager and source assemblies/content are not
+  rewritten and the Unity 2019 native/player gate is unchanged.
+- Adds stable failure categories and bounded identity examples to both the
+  assessment and launcher log. Missing types/providers are no longer presented
+  generically as missing source files. Opened content hashes are checked even
+  when a script's type remains unresolved. Review exports retain the full plan.
+- Keeps shared SDK receipts, source downloads, installed-player ABI and conversion
+  cache recipes unchanged. Preparation reuses the existing exact components.
+
+Validation: 184 C# cases, 75 generic checks, 17 pack checks and 33 persistence
+checks pass; all 115 production Kotlin files and both Java launch adapters compile.
+A metadata-only probe of the owned original 92-DLL desktop set resolves 19,819
+definitions, including 4,860 nested definitions, plus 2,536 exported forwarders.
+All 95 staged source files remain unchanged. This is not an Android-profile or
+gameplay test and does not identify/fix all 885 failures in the device's revision-50
+assessment; their individual records are absent from the attached log. No APK,
+native link, registration rewrite or device/gameplay run was performed. Builds
+remain manual. See docs/UNITY_SCRIPT_BINDINGS.md.
+
+## 1.0.3-achievements.50 (candidate)
+
+- Adds a shared, read-only Unity 2019.4 Android registration binding plan.
+  MonoManager script references resolve only through their explicit contained
+  loose-file paths. Script class/namespace/assembly identities must exist in the
+  selected Android BCL/engine or original managed package/game assembly. Original
+  pointer order, negative path IDs and source flags are retained.
+- Reads runtime initializers from the selected Android/game modules. Desktop
+  engine/framework binaries cannot fill missing providers; package assemblies
+  such as UnityEngine.UI retain their own managed audit requirements. Missing
+  registrations, malformed initializer shapes and unsupported bundle/virtual
+  paths remain visible requirements rather than being silently removed.
+- Runs this plan with the prepared exact profile, binds its report hash into
+  component/source evidence, checks source/content hashes when displaying results
+  and includes it in the review export. No modern registration JSON is fabricated
+  and no source assembly/content is rewritten.
+- Reuses revision-49 shared components offline. Existing scans, downloads,
+  installed players, native build caches and saves keep their identities. This
+  step does not enable the unfinished Unity 2019 native/player recipe.
+
+Validation: 161 C# cases, 70 generic source/component checks, 17 pack checks and
+33 persistence/update checks pass; all 115 production Kotlin files compile.
+Real exact archives were verified/installed and reused offline again. The owned
+Slime Rancher code/bootstrap export retains 74 registrations and 2,840 script
+references; its two cluster modules have no selected provider, and the referenced
+content was not included in that export. Two Android CoreModule initializers were
+read. The real C# report was accepted by production Kotlin validation, original
+source hashes remain unchanged, and no native/player/gameplay compatibility is
+claimed. No revision-50 APK or device test was performed; builds remain manual.
+See docs/UNITY_2019_REGISTRATION.md.
+
+## 1.0.3-achievements.49 (candidate)
+
+- Adds a separate **Download engine profile & audit** action for stable Unity
+  2019.4 sources. Exact compiler/configuration files, the Unity AOT class library
+  and Android managed modules can now be prepared while backend/content/native
+  requirements are still blocked. This component provider does not enable a
+  native build, player lifecycle or script-registration recipe.
+- Resolves the exact official release, verifies full editor/Android archive
+  lengths and published checksums, reads legacy ODC CPIO as data, and fingerprints
+  every selected installed file. Selected editor trees are collected across the
+  complete archive, including non-contiguous entries. No installer/editor runs.
+- Stores components in an app-wide, per-version cache shared between games.
+  Completed installations reuse offline and survive APK updates. Locks, atomic
+  publication, verified-stage resume and previous-copy recovery preserve existing
+  data on cancellation/failure. Modified or added files invalidate readiness.
+- Runs the full original managed reference/member/native audit against those
+  Android components when available. Exports include source-bound profile evidence.
+  Build eligibility now also explicitly requires a registered native engine
+  family, even if a metadata/profile report otherwise passes.
+
+Validation: 12 profile-installer, 18 existing automatic-runtime, 62 generic and
+17 pack checks pass; 33 persistence checks pass alongside compilation of all
+114 production Kotlin files and both Java launch adapters. The actual complete
+2019.4.29f1 archives were verified, installed by the production Kotlin code and
+reused offline: 70 AOT BCL DLLs and 58 Android DLLs. The production C# audit of the
+owned Slime Rancher export reports no missing references/members, with Mono.Posix
+and two cluster modules still unresolved. Original source bytes are unchanged.
+No revision-49 APK, legacy compiler/native player execution or gameplay test was
+performed. Builds remain manual. See docs/UNITY_2019_PROFILE_PREPARATION.md.
+
+## 1.0.3-achievements.48 (candidate)
+
+- Broadens the common Unity-to-Android tool to Mono games whose script assemblies
+  have custom names, including assembly-definition projects without any
+  `Assembly-CSharp.dll`. Steam discovery, local inspection, source recovery,
+  preparation, conversion and code exports use the assembly set. Dedicated game
+  adapters retain their own identity/source constraints.
+- Validates bounded managed CLI headers, source paths and case conflicts. Modern
+  registration entries must refer to existing assemblies without duplicates.
+  The full Cecil audit still checks every game DLL's native imports, reference
+  closure and selected Android member APIs, and now rejects metadata/name mismatch.
+- Tracks which staged assemblies came from the game after Android BCL/engine and
+  package replacement. One batch applies the existing File.Replace save adapter to
+  that entire game set, including custom save DLLs, without rewriting SDK providers
+  or the port helpers. Original sources are preserved.
+- Versions the generic conversion recipe so a requested rebuild uses the expanded
+  save adaptation. Installed ports and completed library caches keep their existing
+  update behavior; use manual Scan to refresh previously classified library entries.
+- Adds a shared-tool development plan centered on reusable engine, content, input
+  and middleware providers, with Android build/runtime tests as milestones.
+
+Validation: 134 C# cases, 61 generic source/component checks, 17 pack checks,
+42 library/dependency checks, 33 persistence/update checks, 32 Python tests and
+14 porting regression groups pass. All 112 production Kotlin files and both Java
+launch adapters compile against the configured APIs. Converter tests use metadata
+fixtures and a simulated compiler boundary; no new actual-game/native/Android
+compatibility is claimed. APK assembly remains manual. See docs/UNITY_PORTING_TOOL.md.
+
+## 1.0.3-achievements.47 (candidate)
+
+- Addresses the supplied revision-46 log's 719 rapid Steam CDN DNS failures.
+  Shares exponential backoff between a session's content workers and stops after
+  12 consecutive transport/service failures with an actionable retry message.
+  A fully consumed successful response restores normal parallel downloads.
+  Cancellation stays responsive, CDN authentication is preserved, and sign-in,
+  discovery and other sessions have independent state. Existing verified download
+  data is retained for retry; the app does not replace Android's DNS resolver.
+- Removes package-wide background-process termination and its permission.
+  Stale builders receive a quit message over their own existing service binding,
+  without creating a new service. Occupied, unreachable slots are skipped.
+  Tool runs from different game screens serialize so cleanup cannot mistake an
+  active preparation for a stale process.
+- Verifies all 100 manifest-listed files in the new Slime Rancher export. The
+  source fingerprint is unchanged, its device registration report has no errors,
+  and its content report still has 313 shaders and zero layout/content errors.
+  This does not complete its Android engine or game-specific adapters.
+
+Validation: 20 real JavaSteam/OkHttp transport and retry checks, 6 complete
+MonoRuntime lifecycle checks with simulated Android boundaries, and 32 persistent
+cache/update/source-evidence checks pass. All 112 production Kotlin files and both
+Java launch adapters compile against the configured APIs. No APK, Android process,
+native player, live Steam download or gameplay test was run. APK assembly stays
+manual. See docs/STEAM_DOWNLOAD_RECOVERY.md.
+
+## 1.0.3-achievements.46 (candidate)
+
+- Reviews the supplied, hash-verified Slime Rancher Linux 1.4.3 export. Adds
+  source-bound backend facts and a Unity 2019 MonoManager reader to preparation
+  and future exports. Reads the real assembly flags, script references and source
+  initializers instead of fabricating modern registration JSON.
+- Adds an explicit developer adapter that disables seven optional Discord desktop
+  presence imports in a separate staged assembly. Requires the exact reviewed
+  source and full managed fingerprint; preserves the original and refuses changed
+  signatures, other games and output overwrites. Preparation reports its availability
+  without applying it or clearing native/runtime blockers.
+- Adds an explicit exact-profile member audit and refuses unprovided desktop
+  engine modules. The reviewed Android profile reports no missing game members;
+  Mono.Posix and two cluster modules still need selection/registration handling.
+- Adds a reproducible host conversion probe with exact-component checks and an
+  assembly dependency plan that retains game/Android roots and encoding providers.
+  The unmodified legacy compiler produces 548 C++ files and 20,204,840 metadata
+  bytes from 93 staged assemblies. This is not a native player/gameplay test.
+
+The supplied device report has 313 shaders, no missing Vulkan data and zero
+content/layout problems. Validation includes the actual export's legacy metadata
+and staged optional-feature patch, 124 C# cases, 32 persistence/source-evidence
+checks, 57 generic checks and 17 pack checks. All 111 production Kotlin files and
+both Java launch adapters compile against the configured APIs. APK assembly stays
+manual. Android linking, player lifecycle, script binding remapping, input and
+Steam integration remain unfinished; Slime Rancher is not enabled for compilation.
+See docs/SLIME_RANCHER_PORT.md for the host probe result and remaining boundaries.
+
+## 1.0.3-achievements.45 (candidate)
+
+- Replaces the permissive serialized-file probe that can misclassify opaque GI
+  data such as `.ecm` files. Detects bounded headers and real Unity version stamps
+  for loose files and unflagged UnityFS entries, without an extension-based bypass.
+  Preserves opaque bytes during conversion and still inspects renamed real assets.
+- Checks metadata/file/data bounds before parsing serialized content. Truncated
+  assets and broken known player-asset names remain blocked. Bundle probes stay
+  inside their own entry and preserve the reader position.
+- Reports unreadable serialized files once, marks the individual inspection as
+  failed and continues counting shaders in the remaining content.
+
+Validation: 104 C# cases pass, including 19 new classification, preservation,
+corruption and entry-boundary cases. The actual production and xUnit sources were
+compiled with Roslyn because this host's .NET CLI cannot read process-start
+metadata. No game/Android/native code was executed. The owner's actual `.ecm` file
+was not available; a device rescan is needed to confirm this failure's exact cause.
+Slime Rancher's Unity 2019 runtime/profile and Steam/RAIL/Discord adapter blockers
+remain. APK assembly stays manual. See docs/SLIME_RANCHER_PORT.md.
+
+## 1.0.3-achievements.44 (candidate)
+
+- Persists account-scoped library results and scan checkpoints independently of
+  the Activity. Reuses completed scans after restart, navigation, sign-in and APK
+  updates; interrupted scans skip both matching and non-matching games already
+  inspected. Manual Scan refreshes the library. Older caches retain their results.
+- Removes APK version/update timestamps from Hollow Knight and generic installed
+  port compatibility. Adopts known older build markers after checking the actual
+  player archives, engine identity, ARM64 libraries and matching expansion GUID.
+  Updates only the expansion filename needed by Unity; preserves game/source/save
+  bytes and does not invoke downloads or compilers to migrate a valid port.
+- Publishes player dex with each new port and retains the previous complete
+  package during a rebuild. Loads included native providers using the manifest
+  saved with that port, so a newer APK library bundle does not change its load set.
+- Restores downloaded sources when their saved selection is missing, reuses
+  completed manifest-bound snapshots locally, and adds an explicit Steam source
+  update action. Installed generic ports now appear in the Installed filter.
+
+Validation: all 110 production Kotlin files and both actual Java launch adapters
+compile against Android API 35 and the configured dependencies. 28 filesystem,
+cache and update-regression checks, 41 Steam library/dependency checks, 57 generic
+preparation checks and 17 plugin-pack checks pass. The Java adapters use an explicit
+Unity hosting API fixture; no Android/native/game code is executed. APK assembly
+remains manual. Device upgrade, offline and gameplay testing are still required.
+See docs/PERSISTENT_GAME_DATA.md. Slime Rancher's existing adapter blockers remain.
+
+## 1.0.3-achievements.43 (candidate)
+
+- Adds checked local UnityFS bundle inspection/conversion, including legacy Unity
+  2019 serialized-file coverage. Preserves resource bytes and rejects mixed engine
+  versions/platforms, unsupported shaders and oversized/corrupt archives.
+- Runs read-only content checks before returning engine/native blockers, retaining
+  individual content diagnostics. Adds guards for bundle CRCs, offsets and catalog/
+  cache/remote loading paths so desktop hashes are not silently reused.
+- Adds source-bound native-call evidence and a manual game-code/startup-metadata
+  export for reviewing missing adapters. Includes a standalone PC collector;
+  excludes saves, credentials, media and engine binaries.
+- Audits complete official Unity 2019.4.29f1 editor/Android archives and converts a
+  synthetic legacy assembly to C++/metadata on the host. Does not enable a Unity 2019 provider:
+  native compilation, player/registration integration and game-specific adapters
+  remain unfinished. Slime Rancher is still blocked; its original files are needed.
+
+Validation and exact boundaries: docs/SLIME_RANCHER_PORT.md. APK building remains
+manual. No Slime Rancher conversion or gameplay was tested.
+
+## 1.0.3-achievements.42 (candidate)
+
+- Resolves exact public stable Unity 6000.0 patch releases automatically using
+  Unity's official release/module metadata. Retains the two pinned component sets
+  and dedicated game guards; rejects fuzzy versions, changed archive layouts,
+  foreign downloads, prereleases and unsupported engine families/streams.
+- Verifies full archive sizes/checksums, selected runtime layout and device API/page
+  requirements. Fingerprints installed core files for offline reuse, stages before
+  publishing, preserves prior runtimes and reuses completed components after retry.
+- Keeps asset/shader/native/profile preparation mandatory before experimental
+  compilation. Unity 2019/2022, Addressables and missing platform adapters remain
+  unsupported. The first additional editor download may exceed 4 GB.
+
+Validation: 18 runtime checks, 52 generic source checks, 17 pack checks, 13 porting
+regression groups and the dedicated compatibility checks pass. All 106 launcher
+Kotlin sources type-check. Exact limits are in docs/AUTOMATIC_UNITY_RUNTIMES.md. No APK or
+on-device runtime/game build is performed by this change; APK assembly stays manual.
+
+## 1.0.3-achievements.35 (candidate)
+
+- Adds per-game Steam service registration, isolated HK achievement IPC/schema/cache,
+  earned-unlock hooks, account-bound retry queues, playing status and local playtime
+  tracking. Steam's own totals remain read-only. Disconnected sessions can retry;
+  stopping a service no longer kills the shared launcher.
+- Adds manual HK Cloud save transfers and opt-in before/after-play sync. Validates
+  the game's reported save location, locks transfers against the running game,
+  preserves local backups, confirms conflicts and rejects stale account/file plans.
+  First uploads require a confirmed Steam Cloud layout. Checks final Steam commits.
+- Separates shared Steam/touch runtime compilation from game-specific patch DLLs
+  to avoid assembly cycles. Applies the existing Android-safe File.Replace helper
+  to HK where required and checks platform hook signatures before conversion.
+- Adds a generic Input System touch gamepad with a separate HK InControl binding,
+  physical-controller coexistence and lifecycle/input-release handling.
+- Changes first launch to sign-in, then an automatically scanned artwork library,
+  then hero/logo game pages with a green Play/Set up button. Uses recycled adaptive
+  cover grids, bounded artwork caches, public Steam assets and text fallbacks.
+- Fixes scanner exclusions of Windows/macOS-only games and recognizes Mac app
+  bundles. Tries manifests before requesting optional CDN authorization. Unverified
+  games remain visible; potential candidates still require individual adapters.
+
+Validation: all launcher Kotlin type-checks against Android API 35 and actual
+JavaSteam dependencies; 31 Steam/metadata/layout/save checks, 10 shared C# runtime
+and hook checks, 24 existing touch checks and 4 native routing cases pass. C# checks
+use explicit Unity/InControl and Steam-response fixtures. Resources compile with
+aapt2; resource references, manifest registrations, shell syntax and whitespace pass.
+The owner confirmed the earlier HK port worked. These additions still need an APK,
+an HK rebuild and live Steam/save/controller/UI device tests. The workflow remains
+manual. See docs/SHARED_STEAM_PORTS.md.
+
+## 1.0.3-achievements.34 (candidate)
+
+- Corrects Hollow Knight's Steam depot from 367522 (macOS) to 367523 (Linux).
+  Both game downloads now check Steam's actual depot platform and public manifest
+  before fetching game files, then pin the attempt to that inspected manifest.
+  Explicit depot selection bypasses JavaSteam's OS filter, so `os = "linux"`
+  alone did not prevent revision 33 from downloading the macOS build.
+- Uses `games/hollow-knight/depot-367523` for corrected downloads. The old download,
+  local sources, installed port and saves are preserved; the setup screen explains
+  that the previous download remains stored separately. Exact Linux 1.5.12620
+  validation still runs before a download is marked ready or porting begins.
+- Assigns a distinct LoginID to each Steam session so overlapping library scans,
+  downloads and background services do not share JavaSteam's default identity.
+- Logs the Hollow Knight failure stage and useful exception causes. Download log
+  forwarding removes URLs, common credential fields and Steam IDs before logging;
+  the displayed failure also uses the sanitized diagnostic.
+
+Evidence: the owner's revision-33 device log recorded the wrong depot completing,
+retries reusing it, CDN timeouts and a `LogonSessionReplaced` event. This fix does
+not claim to eliminate Steam CDN failures. The private log is not included here.
+
+Validation: all launcher Kotlin sources type-check against Android API 35 and the
+configured JavaSteam fork with real dependencies. 24 synthetic Steam metadata,
+dependency, isolation, retry and diagnostic checks pass; Android resources compile
+with aapt2. Revision 34 still needs an APK build and a successful device download,
+port and gameplay retest. The APK workflow remains manual.
+
+## 1.0.3-achievements.33 (candidate)
+
+- Makes Choose a game the app entry point and the destination after Steam login.
+  Sign-in verifies the account without requiring Silksong; download ownership checks
+  use the selected game App ID. Existing Silksong Steam-service checks remain.
+- Reflows Steam sign-in into a scrolling form on narrow/portrait windows and two
+  columns on wide windows. Supports keyboard resizing, 48 dp controls, Guard-field
+  scrolling and rotation without restarting authentication.
+- Adds Hollow Knight Steam download/resume under its own storage, using app 367520
+  ownership verification and exact 1.5.12620 hashes before marking the download
+  ready. This revision incorrectly selected macOS depot 367522; revision 34 fixes
+  the depot selection. A newer/different source is rejected before porting.
+- Adds authenticated Steam library discovery with batched product-info requests and
+  HTTPS depot-manifest inspection. Scans metadata, not full game payloads. Reports
+  potential Linux Mono candidates, unsupported IL2CPP/mixed builds and incomplete
+  scans. Supports stopping scans and clears results on account change.
+- Adds per-game dependency reports for native plugins, FMOD, Wwise, Rewired, Burst,
+  SQLite, CRI, AVPro, Input System and Steamworks. Other games still require adapters;
+  arbitrary middleware binaries are not bundled or treated as compatible.
+
+Validation: all launcher Kotlin sources type-check against Android API 35 and the
+configured JavaSteam achievement fork (real dependencies; generated R constants).
+17 synthetic Steam metadata/dependency/retry checks, 24 Python source-inspection checks,
+12 Kotlin porting regression groups plus compatibility guards, and 4 native process
+isolation cases pass. Resources and both manifest routes were checked. No APK,
+live-account library scan/download, portrait device test or gameplay test was run.
+
+## 1.0.3-achievements.32 (experimental candidate)
+
+Adds a source implementation of the Hollow Knight porting path for the exact
+Linux 1.5.12620 release. **No APK or Android gameplay validation has been run.**
+
+- Adds experimental Hollow Knight setup/port/play/rebuild options, with separate
+  Unity 6000.0.61f1 downloads, patch compilation, runtime process, dex, caches,
+  preferences and save directories.
+- Adapts Darkaxt/HollowKnightAndroid's MIT classic converter and APK/OBB packaging.
+  Validates the complete 1,748-file source manifest and Vulkan shader slices;
+  keeps the original game tree unchanged and excludes desktop native libraries.
+- Builds directly into the converted image to avoid an additional full-tree copy.
+  Uses resumable conversion, existing compiler caches, storage checks, a runtime
+  file lock and package replacement that preserves the previous build on failure.
+- Blocks Hollow Knight and other named processes from using the Silksong native
+  Steam achievement bridge. HK Steam/Cloud support and touch controls remain off;
+  the first adapter uses a physical controller, a 60 FPS target and 1280-pixel
+  maximum rendering width. These settings are not a stability guarantee.
+- Adds `--verify-exact` to the read-only PC inspector; Other Unity game stays
+  inspection-only. Updates all profile status text and both activity manifests.
+- Preserves upstream MIT notices and credits Darkaxt, jakobkhansen and contributors,
+  and ChatGPT (OpenAI) for this integration work.
+
+Validation: 24 Python checks, 12 Kotlin porting groups plus compatibility guards,
+37 C# classic/serialized cases, and 4 native Steam process cases pass on the host.
+New Android integration and Java shell code type-check against API 35 with service,
+pipeline and Unity API stubs. C# uses the actual production converter and synthetic
+assets. Android resources, manifests, shell syntax and whitespace checks pass.
+No APK build, real-game patch compile, Android port or gameplay test has run;
+the workflow remains manual. See docs/MULTI_GAME_PORTING.md for testing limits.
+
+## 1.0.3-achievements.31 (candidate)
+
+Adds a game catalog and compatibility-inspection foundation. **This is not a
+working Hollow Knight port or a universal Unity-game converter.**
+
+- Adds Games & compatibility to setup and the dashboard, listing Silksong,
+  Hollow Knight (Steam app 367520), and an Other Unity game inspection option.
+- Makes each entry's status explicit. Only the existing Silksong entry can open
+  porting setup; adding a catalog flag cannot activate another game's adapter.
+- Inspects Unity serialized headers, managed PE/CLI indicators, desktop IL2CPP,
+  content layout and native plugin ELF architecture without modifying game files.
+- Rejects ambiguous folders and records incomplete/unsupported metadata clearly.
+- Adds a shareable metadata report and a Python PC inspector using the same catalog.
+- Guards Silksong setup, patch compilation, conversion, content rewriting and
+  launch against files belonging to a different game. Identity uses app.info's
+  product, with the original Silksong folder name as a fallback when it is absent.
+- Registers the new activity in both Android manifests and the packaged-manifest
+  check. Adds credits and the remaining per-game integration requirements.
+
+Validation: 16 Python inspector regression tests, Android XML/resource references,
+manifest-registration checks, shell syntax and diff whitespace checks passed.
+No Kotlin, C#, native or APK compilation was run for this revision, in accordance
+with the requested manual build policy. Kotlin checks were added/prepared but not
+run. Hollow Knight's actual Linux files and Android gameplay validation are still
+needed before an adapter can be implemented and promoted.
+
 ## 1.0.3-achievements.30 (candidate)
 
 Adds personalized touch controls, enabled from the launcher's Gameplay settings

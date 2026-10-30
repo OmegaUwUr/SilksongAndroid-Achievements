@@ -210,20 +210,16 @@ step_5_apk_shell() {
         <meta-data android:name="android.game_mode_config"
                    android:resource="@xml/game_mode_config" />
         <activity android:name="dev.silksong.launcher.SetupActivity"
-            android:exported="true" android:process=":launcher"
+            android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <activity android:name="dev.silksong.launcher.LauncherActivity"
             android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <activity android:name="dev.silksong.launcher.LoginActivity"
             android:exported="false" android:process=":launcher"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <activity android:name="dev.silksong.launcher.SteamAccountActivity"
@@ -234,6 +230,51 @@ step_5_apk_shell() {
             android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.launcher.HollowKnightSetupActivity"
+            android:exported="false" android:process=":launcher"
+            android:label="@string/hk_title"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.shell.HollowKnightActivity"
+            android:exported="false" android:process=":hollow_knight" android:launchMode="singleTask"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
+            android:screenOrientation="sensorLandscape" android:resizeableActivity="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
+        </activity>
+
+        <activity android:name="dev.silksong.launcher.GenericPortSetupActivity"
+            android:exported="false" android:process=":launcher"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.shell.GenericPortActivity"
+            android:exported="false" android:process=":unity_port" android:launchMode="singleTask"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
+            android:screenOrientation="sensorLandscape" android:resizeableActivity="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
+        </activity>
+
+        <activity android:name="dev.silksong.launcher.GamePageActivity"
+            android:exported="false" android:process=":launcher"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <service android:name="dev.silksong.launcher.HollowKnightAchievementService"
+            android:exported="false" android:process=":launcher" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Per-game Steam achievement synchronization" />
+        </service>
+        <activity android:name="dev.silksong.launcher.GameLibraryActivity"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="true" android:process=":launcher"
+            android:label="@string/launcher_app_name"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
         <activity android:name="dev.silksong.launcher.AchievementViewerActivity"
             android:exported="false" android:process=":launcher"
             android:label="@string/achievements_title"
@@ -395,6 +436,18 @@ EOF
             --file AndroidManifest.xml > "$sh/manifest-tree.txt"
         grep -Fq 'dev.silksong.launcher.AchievementViewerActivity' "$sh/manifest-tree.txt" \
             || fail "Packaged manifest is missing AchievementViewerActivity"
+        grep -Fq 'dev.silksong.launcher.GameLibraryActivity' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing GameLibraryActivity"
+        grep -Fq 'dev.silksong.launcher.GamePageActivity' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing GamePageActivity"
+        grep -Fq 'dev.silksong.launcher.HollowKnightAchievementService' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing HollowKnightAchievementService"
+        grep -Fq 'dev.silksong.launcher.GenericPortSetupActivity' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing GenericPortSetupActivity"
+        grep -Fq 'dev.silksong.shell.GenericPortActivity' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing GenericPortActivity"
+        grep -Fq 'dev.silksong.shell.HollowKnightActivity' "$sh/manifest-tree.txt" \
+            || fail "Packaged manifest is missing HollowKnightActivity"
     fi
 
     # GameActivity and the activity that hosts the player (shell/*.java) are
@@ -419,6 +472,10 @@ EOF
     if (( have_launcher )); then
         cp="$cp:$sh/aar/classes.jar"
         changed+=("$sh/aar/classes.jar")
+        cp -f "$SCRIPT_DIR/shell/HollowKnightActivity.java" "$sh/src/"
+        srcs+=("$sh/src/HollowKnightActivity.java")
+        cp -f "$SCRIPT_DIR/shell/GenericPortActivity.java" "$sh/src/"
+        srcs+=("$sh/src/GenericPortActivity.java")
         local jar
         for jar in "$launcher_deps"/*.jar; do
             [[ -f "$jar" ]] || continue

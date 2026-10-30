@@ -20,6 +20,8 @@ import `in`.dragonbra.javasteam.depotdownloader.DepotDownloader
 import `in`.dragonbra.javasteam.depotdownloader.IDownloadListener
 import `in`.dragonbra.javasteam.depotdownloader.data.AppItem
 import `in`.dragonbra.javasteam.depotdownloader.data.DownloadItem
+import `in`.dragonbra.javasteam.steam.handlers.steamapps.PICSRequest
+import `in`.dragonbra.javasteam.steam.handlers.steamapps.SteamApps
 import `in`.dragonbra.javasteam.util.log.LogListener
 import `in`.dragonbra.javasteam.util.log.LogManager
 import kotlinx.coroutines.Dispatchers
@@ -96,12 +98,8 @@ object DepotFetcher {
      * rule the toolchain and dotnet fetchers already use, and for the same
      * reason -- "some of it is on disk" is not the question anyone is asking.
      */
-    fun isPresent(installDir: File): Boolean =
-        completeMarker(installDir).isFile && isPresentOnDisk(installDir)
-
-    /** The tree looks right, regardless of whether a run ever finished. */
-    private fun isPresentOnDisk(installDir: File): Boolean =
-        PlayerImage.depotData(installDir) != null
+    fun isPresent(installDir: File, target: SteamDepotTarget = SteamDepotTarget.SILKSONG): Boolean =
+        runCatching { completeMarker(installDir).readText().trim() == target.depotId.toString() && target.hasSource(installDir) }.getOrDefault(false)
 
     private fun completeMarker(installDir: File) = File(installDir, ".download-complete")
 
@@ -125,7 +123,7 @@ object DepotFetcher {
      * one being closed here, and closing it properly means hashing the depot
      * against the manifest.
      */
-    private fun dropUnwritten(installDir: File): Int {
+    internal fun dropUnwritten(installDir: File): Int {
         // Collected before anything is deleted: removing entries from under a
         // directory walk that is still reading them is its own bug.
         val holes = ArrayList<File>()
@@ -151,12 +149,18 @@ object DepotFetcher {
         credentials: TokenStore.Credentials,
         installDir: File,
         stagingDir: File,
+        target: SteamDepotTarget = SteamDepotTarget.SILKSONG,
+        validateSource: suspend (File) -> Unit = {},
     ): Flow<Event> = channelFlow {
         // Held because the nested use-blocks below shadow this scope, and the
         // wait loop still needs to know whether the collector is still there.
         val producer = this
+        if (target == SteamDepotTarget.HOLLOW_KNIGHT) {
+            target.requireHollowKnightDirectory(installDir)
+        }
         installDir.mkdirs()
         stagingDir.mkdirs()
+        completeMarker(installDir).delete()
 
         // Before anything is asked of Steam: a previous attempt that was
         // cancelled has left holes the resume cannot see. See dropUnwritten.
@@ -168,10 +172,25 @@ object DepotFetcher {
         // discarded. It is the only view into what the downloader is doing.
         LogManager.addListener(logForwarder)
 
-        LauncherLog.log("Downloading depot $DEPOT_ID to ${installDir.absolutePath}")
+        LauncherLog.log("Downloading ${target.title}, depot ${target.depotId}")
         try {
             SteamSession().use { session ->
                 session.logOn(credentials)
+                SteamOwnership.requireOwned(session, target.appId)
+                // Explicit depots bypass the downloader's OS filter. Verify Steam's
+                // platform metadata first and pin this attempt to the inspected manifest.
+                val apps = requireNotNull(session.steamClient.getHandler(SteamApps::class.java))
+                val tokens = apps.picsGetAccessTokens(listOf(target.appId), emptyList())
+                    .toFuture().get(30, TimeUnit.SECONDS)
+                val metadata = apps.picsGetProductInfo(
+                    listOf(PICSRequest(target.appId, tokens.appTokens[target.appId] ?: 0L)), emptyList())
+                    .toFuture().get(45, TimeUnit.SECONDS)
+                check(metadata.complete && !metadata.failed) { "Steam depot metadata was incomplete. Retry the download." }
+                val app = metadata.results.firstNotNullOfOrNull { it.apps[target.appId] }
+                    ?: error("Steam did not return metadata for the selected game. Retry the download.")
+                check(!app.isMissingToken) { "Steam did not authorize access to the game's depot metadata." }
+                val manifest = SteamDepotMetadata.requireLinuxManifest(target, app.id, app.keyValues)
+                LauncherLog.log("Steam confirmed Linux depot ${target.depotId}; manifest ${manifest.toULong()}")
 
                 // The downloader needs to know what the account may download,
                 // and Steam sends that on its own callback shortly after
@@ -182,6 +201,7 @@ object DepotFetcher {
                 val finished = CountDownLatch(1)
                 val failure = AtomicReference<Throwable?>(null)
 
+                session.requireDownloadTransport()
                 DepotDownloader(
                     steamClient = session.steamClient,
                     licenses = licenses,
@@ -225,14 +245,15 @@ object DepotFetcher {
 
                     downloader.add(
                         AppItem(
-                            appId = APP_ID,
+                            appId = target.appId,
                             installDirectory = installDir.absolutePath,
                             branch = BRANCH,
                             // Without this the downloader picks the depots for
                             // the platform it is running on, which here is
                             // Android and is not a platform this game ships.
                             os = "linux",
-                            depot = listOf(DEPOT_ID),
+                            depot = listOf(target.depotId),
+                            manifest = listOf(manifest),
                         )
                     )
                     downloader.finishAdding()
@@ -242,16 +263,19 @@ object DepotFetcher {
                     // done rather than polling.
                     while (!finished.await(1, TimeUnit.SECONDS)) {
                         if (!producer.isActive) throw java.util.concurrent.CancellationException()
+                        session.requireDownloadTransport()
                     }
+                    session.requireDownloadTransport()
                 }
 
-                failure.get()?.let { throw RuntimeException("depot download failed: $it", it) }
-                if (!isPresentOnDisk(installDir))
-                    throw RuntimeException("depot downloaded but $DATA_DIR is missing")
+                failure.get()?.let { throw java.io.IOException("Steam download failed: " + SteamDownloadDiagnostics.describe(it), it) }
+                validateSource(installDir)
+                if (!target.hasSource(installDir))
+                    throw RuntimeException("Steam downloaded ${target.title}, but this release does not match its supported Linux source. No port was started.")
 
                 // Only now, and only here: everything above has to have run
                 // without throwing for the depot to be worth trusting later.
-                completeMarker(installDir).writeText(DEPOT_ID.toString())
+                completeMarker(installDir).writeText(target.depotId.toString())
                 LauncherLog.log("Depot download complete")
                 send(Event.Done)
             }
@@ -261,7 +285,7 @@ object DepotFetcher {
     }.flowOn(Dispatchers.IO)
 
     /** Puts JavaSteam's own logging where the launcher's log can show it. */
-    private val logForwarder = object : LogListener {
+    internal val logForwarder = object : LogListener {
         override fun onLog(clazz: Class<*>, message: String?, throwable: Throwable?) =
             forward("", clazz, message, throwable)
 
@@ -269,8 +293,8 @@ object DepotFetcher {
             forward("ERROR ", clazz, message, throwable)
 
         private fun forward(level: String, clazz: Class<*>, message: String?, throwable: Throwable?) {
-            LauncherLog.log("[${clazz.simpleName}] $level${message.orEmpty()}" +
-                (throwable?.let { " — $it" } ?: ""))
+            LauncherLog.log(SteamDownloadDiagnostics.sanitize("[${clazz.simpleName}] $level${message.orEmpty()}" +
+                (throwable?.let { " — $it" } ?: "")))
         }
     }
 }

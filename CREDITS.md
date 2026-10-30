@@ -2,6 +2,23 @@
 
 This repository builds on the work of the people and projects below. The entries explain where code, dependencies, artwork, or feature ideas are used. Existing copyright and license notices remain in [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
 
+## Included native libraries (revision 41)
+
+| Upstream authors/project | Included component |
+| --- | --- |
+| [D. Richard Hipp and SQLite contributors](https://sqlite.org/) | SQLite 3.54.1; public-domain C database library |
+| [Yann Collet and LZ4 contributors](https://github.com/lz4/lz4) | LZ4 1.10.0; BSD-2-Clause library code |
+| [Yann Collet, Meta and Zstandard contributors](https://github.com/facebook/zstd) | Zstandard 1.5.7; BSD license option |
+| [Xiph.Org Foundation and Ogg/Vorbis contributors](https://xiph.org/) | libogg 1.3.6 and libvorbis/libvorbisfile/libvorbisenc 1.3.7; original BSD notices retained |
+| [PNG Development Group, Cosmin Truta and libpng contributors](https://github.com/pnggroup/libpng) | libpng 1.6.59; original PNG license retained |
+
+The build recipe, source/hash validation, source-bound pack integration and game
+process loading were developed with **ChatGPT (OpenAI)**. The upstream people
+above authored the libraries. Their complete notices and component provenance
+ship in the APK under `native-providers/` and accompany generic built packages.
+No game code or proprietary middleware is supplied by this bundle. See the
+[native provider guide](docs/NATIVE_LIBRARY_PROVIDERS.md).
+
 ## Original Android project
 
 **[jakobkhansen](https://github.com/jakobkhansen) and the [SilksongAndroid contributors](https://github.com/jakobkhansen/SilksongAndroid/graphs/contributors)** — [SilksongAndroid](https://github.com/jakobkhansen/SilksongAndroid).
@@ -190,3 +207,70 @@ styles, and the scrolling Back layout are original changes for this repository.
 
 Steam initialization retry/cleanup and license-request diagnostics are original
 changes for this repository, using the existing JavaSteam integration credited above.
+
+## Personalized controls and game compatibility tools
+
+The revision-30 touch layout/editor and revision-31 game catalog, read-only
+inspectors and game-identity guards were developed for this repository with
+assistance from **ChatGPT (OpenAI)**. They extend **jakobkhansen and the
+SilksongAndroid contributors'** launcher and porting foundation credited above.
+
+The inspectors use the [Microsoft PE/COFF format specification](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format)
+as a file-format reference. Unity metadata inspection follows the serialized
+header layout already used by this project's AssetsTools.NET-based tooling.
+The inspection-only revision 31 did not include a Hollow Knight port. Revision 32
+adds the experimental adapter credited below. Hollow Knight and Silksong remain
+Team Cherry's games; neither Team Cherry nor the upstream authors endorse this fork.
+
+## Experimental Hollow Knight adapter (revision 32)
+
+**[Darkaxt](https://github.com/Darkaxt) and the
+[HollowKnightAndroid contributors](https://github.com/Darkaxt/HollowKnightAndroid)**
+provided the MIT-licensed implementation used for this adaptation. The reference
+is pinned to commit [b65f577a0ab9fb49075de3435fc78095d4222e39](https://github.com/Darkaxt/HollowKnightAndroid/commit/b65f577a0ab9fb49075de3435fc78095d4222e39).
+
+- Imported `ClassicPlayerTree.cs`, `ClassicTreeCommands.cs`, `ClassicTreeConverter.cs`,
+  `SerializedFileDetection.cs`, `SerializedFileTransformer.cs`, their synthetic
+  asset fixtures and classic/serialized regression tests.
+- Imported the exact Linux Hollow Knight 1.5.12620 file inventory (names, sizes and
+  hashes only) and Unity 6000.0.61f1 download identities.
+- Adapted first-scene/ZIP32 APK + OBB packing in `ClassicPlayerImage.kt`, including
+  matching OBB GUIDs and the private expansion-directory approach.
+- The original porting foundation remains **jakobkhansen/SilksongAndroid and its
+  contributors**, credited above.
+
+The upstream copyright and permission notice is preserved verbatim in
+[third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt](third-party/Darkaxt-HollowKnightAndroid-LICENSE.txt)
+and staged into the APK's license assets. Upstream artwork, skins, mods and
+companion-screen interfaces are not included in this adaptation.
+
+The isolated setup/runtime wiring, exact-source CLI verification, native Steam
+process guard and integration work were developed for this repository with
+**ChatGPT (OpenAI)**. This project was made possible through ChatGPT assistance
+and the human authors' code credited here. Source integration is experimental;
+it is not evidence of Android gameplay validation.
+
+## Steam library flow (revision 33)
+
+Portrait sign-in, account-first game selection, the Hollow Knight Steam download
+route, authenticated manifest discovery and dependency reports were developed for
+this repository with **ChatGPT (OpenAI)**. The Steam protocol/CDN implementation
+continues to use **Longi94 / JavaSteam contributors** and **Joshua Tam / GameNative's
+achievement-support fork**, credited above. No game content or additional proprietary
+FMOD/Wwise/CRI/AVPro middleware is redistributed by this change.
+
+## Shared Steam services and artwork library (revision 35)
+
+The per-game Steam service refactoring, account-bound HK bridge, shared runtime,
+Cloud save checks, generic touch controller, artwork navigation and scanner fixes
+were developed for this repository with **ChatGPT (OpenAI)**. This project was made
+possible through ChatGPT assistance and the human authors' work credited above.
+
+The generic controller reuses this repository's touch input model. Its HK binding
+reconciliation follows the public Input System/InControl approach in **Darkaxt and
+HollowKnightAndroid contributors'** MIT implementation credited above; the shared
+runtime keeps that game-specific binding separate. The existing **jakobkhansen /
+SilksongAndroid** save helper and Cloud foundation are reused. **Mono.Cecil** supplies
+the signature-checked hooks, and **JavaSteam / its achievement-support fork** supplies
+the authenticated Steam protocol. Official library artwork is requested from Steam's
+public CDN at runtime; game content and proprietary middleware are not added to git.

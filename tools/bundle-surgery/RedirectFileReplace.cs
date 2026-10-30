@@ -31,7 +31,37 @@ internal static class RedirectFileReplace
     const string HelperType = "SafeIo";
     const string HelperMethod = "Replace";
 
-    public static int Run(string assemblyPath, string helperPath)
+    /** One process for the complete staged game set. SDK replacements and port helpers
+     * are excluded by the staging plan, rather than inferred from assembly names. */
+    internal static int RunSet(string staged, string helper, string selection)
+    {
+        SourceAdapterFiles.RequireRegular(selection, 512 * 1024);
+        SourceAdapterFiles.RequireRegular(helper, 128 * 1024 * 1024);
+        var names = System.Text.Json.JsonSerializer.Deserialize<string[]>(File.ReadAllText(selection))
+            ?? throw new InvalidDataException("Missing staged assembly selection.");
+        if (names.Length > 1024 || names.Distinct(StringComparer.OrdinalIgnoreCase).Count() != names.Length)
+            throw new InvalidDataException("Invalid staged assembly selection.");
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(staged));
+        if (Path.GetDirectoryName(Path.GetFullPath(helper)) != root)
+            throw new InvalidDataException("The save helper must belong to the staged assembly directory.");
+        var paths = new List<string>();
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name) || Path.GetFileName(name) != name ||
+                name.Any(c => c is '\\' or ':' || char.IsControl(c)) || !name.EndsWith(".dll", StringComparison.Ordinal) ||
+                name.Equals(Path.GetFileName(helper), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Unsafe or conflicting staged assembly name.");
+            var path = Path.Combine(root, name);
+            SourceAdapterFiles.RequireRegular(path, 128 * 1024 * 1024);
+            paths.Add(path);
+        }
+        // Validate every path before the first rewrite. Failure never publishes a conversion.
+        foreach (var path in paths.OrderBy(p => p, StringComparer.Ordinal))
+            if (Run(path, helper, allowEmpty: true) != 0) return 1;
+        return 0;
+    }
+
+    public static int Run(string assemblyPath, string helperPath, bool allowEmpty = false)
     {
         if (!File.Exists(assemblyPath))
         {
@@ -117,6 +147,10 @@ internal static class RedirectFileReplace
 
             if (rewritten == 0)
             {
+                if (allowEmpty) {
+                    Console.WriteLine("  No File.Replace calls require redirection in this game build.");
+                    return 0;
+                }
                 // See the header: a no-op rewrite is the failure mode that
                 // hides itself, so it is an error rather than a shrug.
                 Console.Error.WriteLine("  ✗ no File.Replace call sites found — the game's save path has "

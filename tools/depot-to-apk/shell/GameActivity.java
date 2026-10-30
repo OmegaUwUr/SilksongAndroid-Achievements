@@ -71,8 +71,8 @@ public class GameActivity extends PlayerActivity
         int version = 1;
         try
         {
-            version = (int) getPackageManager()
-                .getPackageInfo(getPackageName(), 0).getLongVersionCode();
+            android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            version = Build.VERSION.SDK_INT >= 28 ? (int) info.getLongVersionCode() : info.versionCode;
         }
         catch (Exception ignored) { }
         return new java.io.File(dir, "main." + version + "." + getPackageName() + ".obb");

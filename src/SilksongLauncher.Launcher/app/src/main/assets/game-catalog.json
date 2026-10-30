@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "silksong",
+      "title": "Hollow Knight: Silksong",
+      "steamAppId": 1030300,
+      "adapter": "silksong-linux-v1",
+      "dataDirectories": [
+        "Hollow Knight Silksong_Data"
+      ],
+      "products": [
+        "Hollow Knight Silksong",
+        "Hollow Knight: Silksong",
+        "Silksong"
+      ],
+      "unityVersions": [
+        "6000.0.50f1",
+        "6000.0.50f1-uum-100966-branch1"
+      ]
+    },
+    {
+      "id": "hollow-knight",
+      "title": "Hollow Knight",
+      "steamAppId": 367520,
+      "adapter": "hollow-knight-linux-1.5.12620-v1",
+      "dataDirectories": [
+        "hollow_knight_Data",
+        "Hollow Knight_Data"
+      ],
+      "products": [
+        "Hollow Knight"
+      ],
+      "unityVersions": [
+        "6000.0.61f1"
+      ]
+    },
+    {
+      "id": "other-unity",
+      "title": "Other Unity game",
+      "steamAppId": null,
+      "adapter": null,
+      "dataDirectories": [],
+      "products": [],
+      "unityVersions": []
+    }
+  ]
+}

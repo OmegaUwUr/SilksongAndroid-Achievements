@@ -44,36 +44,93 @@ internal static class Program
     static string ClassDataPath { get; } = Path.Combine(
         AppContext.BaseDirectory, "classdata.tpk");
 
-    static int Main(string[] args)
+    internal static int Main(string[] args)
     {
         if (args.Length < 1)
         {
             Console.Error.WriteLine("usage: BundleSurgery <command> [args]");
             Console.Error.WriteLine("commands:");
+            Console.Error.WriteLine("  manifest-classic-tree <source-root> <report.json>");
+            Console.Error.WriteLine("  retarget-classic-tree <source-root> <output-root> <profile-manifest.json> <report.json>");
+            Console.Error.WriteLine("  manifest-portable-tree <source-root> <source-target: 24|19|2> <report.json>");
+            Console.Error.WriteLine("  inspect-portable-content <source-root> <source-target: 24|19|2> <report.json> — diagnostic report, including UnityFS content");
+            Console.Error.WriteLine("  inspect-native-call-sites <source-root> <report.json> — metadata for reviewing native backend adapters");
+            Console.Error.WriteLine("  inspect-legacy-registration <source-root> <report.json> — original Unity 2019 MonoManager data; does not enable a runtime");
+            Console.Error.WriteLine("  inspect-legacy-source-bindings <source-root> <binding-plan.json> <report.json> — compare script identities to the exact original DLL graph");
+            Console.Error.WriteLine("  inspect-legacy-script-usage <source-root> <binding-plan.json> <report.json> — serialized MonoBehaviour header census; not runtime reachability approval");
+            Console.Error.WriteLine("  inspect-legacy-script-usage <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <binding-plan.json> <report.json> — also bind direct content/bundle MonoScripts to selected providers");
+            Console.Error.WriteLine("  inspect-legacy-android-registration <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <report.json> — resolve loose-file script types and selected initializers; no registration rewrite or runtime approval");
+            Console.Error.WriteLine("  inspect-legacy-android-registration <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <exact-Android-default-resources> <report.json> — also review the pinned engine-owned built-in mapping");
+            Console.Error.WriteLine("  inspect-managed-profile <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <report.json> — full member/dependency audit; does not register a runtime");
+            Console.Error.WriteLine("  review-slime-rancher-source <source-root> <report.json> — exact Linux 1.4.3 source review");
+            Console.Error.WriteLine("  disable-slime-rancher-discord <source-root> <new-Assembly-CSharp.dll> — disable optional desktop presence in a separate staged copy");
+            Console.Error.WriteLine("  plan-slime-rancher-assemblies <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <report.json> — host conversion probe inputs; not a runtime capability");
+            Console.Error.WriteLine("  create-portable-profile-manifest <source-root> <steam-ID> <game-version> <unity-version> <source-target> <manifest.json>");
+            Console.Error.WriteLine("  retarget-portable-tree <source-root> <output-root> <manifest.json> <source-target> <report.json>");
             Console.Error.WriteLine("  extract-vulkan-android <in.bundle> <out.bundle>  — extract Vulkan SPIR-V slice + retarget to Android (the main pipeline command)");
             Console.Error.WriteLine("  set-unity-version <file> <version>               — rewrite the Unity version stamped in a SerializedFile (e.g. strip an internal branch suffix)");
             Console.Error.WriteLine("  set-graphics-apis <globalgamemanagers> <ids>     — set BuildSettings.m_GraphicsAPIs (21=Vulkan, 11=GLES3, 17=OpenGLCore)");
             Console.Error.WriteLine("  set-build-version <globalgamemanagers> <version> — set BuildSettings.m_Version (must match the SerializedFile version)");
             Console.Error.WriteLine("  patch-catalog-path <in.bin> <out.bin> <abs-path> — repoint an Addressables catalog's content root at an absolute path");
             Console.Error.WriteLine("  redirect-file-replace <Assembly-CSharp.dll> <SilksongIo.dll> — point the game's File.Replace calls at SafeIo (fixes saving where ReplaceFile is unsupported)");
+            Console.Error.WriteLine("  redirect-port-file-replace <staged-assemblies> <save-helper.dll> <selection.json> — adapt saving across all staged game script assemblies");
             Console.Error.WriteLine("  retarget-tree <src-dir> <dst-dir>               — extract-vulkan-android over a whole bundle tree, in parallel, resumable");
             Console.Error.WriteLine();
             Console.Error.WriteLine("inspection (diagnostic):");
             return 2;
         }
 
-        return args[0] switch
+        try
         {
-            "set-unity-version" when args.Length >= 3 => SetUnityVersion(args[1], args[2]),
-            "set-graphics-apis" when args.Length >= 3 => SetGraphicsApis(args[1], args[2]),
-            "set-build-version" when args.Length >= 3 => SetBuildVersion(args[1], args[2]),
-            "patch-catalog-path" when args.Length >= 4 => PatchCatalogPath(args[1], args[2], args[3]),
-            "redirect-file-replace" when args.Length >= 3 => RedirectFileReplace.Run(args[1], args[2]),
-            "retarget-tree" when args.Length >= 3 => RetargetTree(args[1], args[2]),
-            "extract-vulkan-android" when args.Length >= 3 => ExtractVulkanAndroid(args[1], args[2]),
-            "shader-report" when args.Length >= 2 => ShaderReport(args[1]),
-            _ => Usage(),
-        };
+            return args[0] switch
+            {
+                "set-unity-version" when args.Length >= 3 => SetUnityVersion(args[1], args[2]),
+                "set-graphics-apis" when args.Length >= 3 => SetGraphicsApis(args[1], args[2]),
+                "set-build-version" when args.Length >= 3 => SetBuildVersion(args[1], args[2]),
+                "patch-catalog-path" when args.Length >= 4 => PatchCatalogPath(args[1], args[2], args[3]),
+                "redirect-file-replace" when args.Length >= 3 => RedirectFileReplace.Run(args[1], args[2], args.Skip(3).Contains("--allow-empty")),
+                "redirect-port-file-replace" when args.Length == 4 => RedirectFileReplace.RunSet(args[1], args[2], args[3]),
+                "hook-port-services" when args.Length == 3 => HookPortServices.Run(args[1], args[2]),
+                "inspect-managed-port" when args.Length == 4 => ManagedPortAudit.Run(args[1], args[2], args[3]),
+                "inspect-native-call-sites" when args.Length == 3 => NativeCallEvidence.Run(args[1], args[2]),
+                "inspect-legacy-registration" when args.Length == 3 => LegacyRuntimeRegistration.Run(args[1], args[2]),
+                "inspect-legacy-source-bindings" when args.Length == 4 => LegacySourceBindings.Run(args[1], args[2], args[3]),
+                "inspect-legacy-script-usage" when args.Length == 4 => LegacyScriptUsage.Run(args[1], args[2], args[3]),
+                "inspect-legacy-script-usage" when args.Length == 6 => LegacyScriptUsage.Run(args[1], args[2], args[3], args[4], args[5]),
+                "inspect-legacy-android-registration" when args.Length == 5 => LegacyAndroidRegistration.Run(args[1], args[2], args[3], args[4]),
+                "inspect-legacy-android-registration" when args.Length == 6 => LegacyAndroidRegistration.Run(args[1], args[2], args[3], args[5], args[4]),
+                "inspect-managed-profile" when args.Length == 5 => ManagedPortAudit.RunProfile(args[1], args[2], args[3], args[4]),
+                "review-slime-rancher-source" when args.Length == 3 => SlimeRancherSourceAdapter.ReviewSource(args[1], args[2]),
+                "disable-slime-rancher-discord" when args.Length == 3 => SlimeRancherSourceAdapter.DisableOptionalDiscord(args[1], args[2]),
+                "plan-slime-rancher-assemblies" when args.Length == 5 => LegacyAssemblyPlan.RunSlime(args[1], args[2], args[3], args[4]),
+                "inspect-managed-port" when args.Length == 5 => ManagedPortAudit.Run(args[1], args[2], args[3], args[4]),
+                "list-port-initializers" when args.Length == 4 => ManagedPortAudit.RuntimeInitializers(args[1], args[2], args[3]),
+                "retarget-tree" when args.Length >= 3 => RetargetTree(args[1], args[2]),
+                "retarget-serialized-android" when args.Length == 3 => RetargetSerializedAndroid(args[1], args[2]),
+                "manifest-classic-tree" when args.Length == 3 =>
+                    ClassicTreeCommands.Manifest(args[1], args[2]),
+                "manifest-portable-tree" when args.Length == 4 && int.TryParse(args[2], out var inspectTarget) =>
+                    ClassicTreeCommands.Manifest(args[1], args[3], inspectTarget),
+                "inspect-portable-content" when args.Length == 4 && int.TryParse(args[2], out var contentTarget) =>
+                    ClassicTreeCommands.InspectContent(args[1], args[3], contentTarget),
+                "create-classic-profile-manifest" when args.Length == 6 =>
+                    ClassicTreeCommands.CreateProfileManifest(args[1], args[2], args[3], args[4], args[5]),
+                "create-portable-profile-manifest" when args.Length == 7 && int.TryParse(args[5], out var createTarget) =>
+                    ClassicTreeCommands.CreateProfileManifest(args[1], args[2], args[3], args[4], args[6], createTarget, true),
+                "retarget-classic-tree" when args.Length == 5 =>
+                    ClassicTreeCommands.Retarget(args[1], args[2], args[3], args[4]),
+                "retarget-portable-tree" when args.Length == 6 && int.TryParse(args[4], out var convertTarget) =>
+                    ClassicTreeCommands.Retarget(args[1], args[2], args[3], args[5], convertTarget, true),
+                "extract-vulkan-android" when args.Length >= 3 => ExtractVulkanAndroid(args[1], args[2]),
+                "shader-report" when args.Length >= 2 => ShaderReport(args[1]),
+                _ => Usage(),
+            };
+        }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine(args[0] + " failed: " + error.Message);
+            return 1;
+        }
     }
 
     // Retargets an entire bundle tree in one process.
@@ -481,6 +538,12 @@ internal static class Program
     }
 
 
+
+    static int RetargetSerializedAndroid(string input, string output)
+    {
+        SerializedFileTransformer.Transform(input, output, requireVulkan: true);
+        return 0;
+    }
 
     static int ExtractVulkanAndroid(string inputPath, string outputPath)
     {

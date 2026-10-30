@@ -30,7 +30,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 class TokenStore(context: Context) {
 
-    private val prefs = context.applicationContext
+    private val prefs = HollowKnightContext.shared(context.applicationContext)
         .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     /**

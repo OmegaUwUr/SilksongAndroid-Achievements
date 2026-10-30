@@ -54,6 +54,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
@@ -61,6 +63,10 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 
 object MonoRuntime {
+
+    // Per-game filesystem locks do not serialize tools started by different game
+    // screens. A builder in use by another preparation must never be a straggler.
+    private val runs = Mutex()
 
     /** Where the class library is unpacked to. */
     private const val BCL = "mono-bcl"
@@ -254,7 +260,7 @@ object MonoRuntime {
         cwd: File? = null,
         env: Map<String, String> = emptyMap(),
         onLine: (String) -> Unit = {},
-    ): Toolchain.Result = withContext(Dispatchers.IO) {
+    ): Toolchain.Result = runs.withLock { withContext(Dispatchers.IO) {
         if (!assembly.isFile) throw IOException("no such assembly: $assembly")
 
         // Wall clock, for matching against the platform's record of process
@@ -443,7 +449,7 @@ object MonoRuntime {
         }
 
         Toolchain.Result(exitCode ?: MonoService.FAILED, collected.toString(), lowMemory)
-    }
+    } }
 
     /** As much output as is kept; the rest is streamed to [onLine] and dropped. */
     private const val MAX_CAPTURED = 1 shl 20
@@ -493,7 +499,12 @@ object MonoRuntime {
         var refusal = "no reason given"
         for (attempt in 1..START_ATTEMPTS) {
             val slot = nextSlot()
-            awaitBuilderGone(context, slot)
+            if (!awaitBuilderGone(context, slot)) {
+                refusal = "${slot.process} is still occupied by an earlier program"
+                LauncherLog.log("mono: $refusal; trying the next builder")
+                if (attempt < START_ATTEMPTS) delay(START_RETRY_MS)
+                continue
+            }
             val binding = Binding(context.applicationContext, slot)
             // Every way out of the attempt except the one that hands the
             // binding to the caller has to release it. A registered connection
@@ -611,7 +622,7 @@ object MonoRuntime {
         }
 
         /** Binds, and waits for the process to exist. Null if it does not. */
-        suspend fun connect(timeoutMs: Long): Messenger? {
+        suspend fun connect(timeoutMs: Long, create: Boolean = true): Messenger? {
             bound = runCatching {
                 context.bindService(
                     Intent(context, slot.service),
@@ -636,7 +647,7 @@ object MonoRuntime {
                     // to the low memory killer several levels before the one
                     // drawing the screen. It changes only that ordering; the
                     // scheduling group is BIND_IMPORTANT's doing, not this.
-                    Context.BIND_AUTO_CREATE or Context.BIND_ABOVE_CLIENT,
+                    if (create) Context.BIND_AUTO_CREATE or Context.BIND_ABOVE_CLIENT else 0,
                 )
             }.getOrDefault(false)
             if (!bound) {
@@ -697,13 +708,10 @@ object MonoRuntime {
      * refused by the process already using it, and the build would blame the
      * compiler.
      *
-     * [killBuilder] is the only lever, and it is a blunt one --
-     * killBackgroundProcesses is package-wide and takes every process of this
-     * app that is not in the foreground, including :launcher, which is where
-     * the build is being run from. So it is used only while :launcher is in
-     * the foreground and therefore out of its reach. Otherwise the straggler
-     * is left alone and the run is attempted anyway: it will fail, but a
-     * failed run is recoverable and a killed launcher is not.
+     * Cleanup binds only to an existing service, without AUTO_CREATE, and asks
+     * that exact binder to quit. If it is already gone or cannot be reached,
+     * the next slot/retry handles it. There is no package-wide process stop
+     * and no foreground-state guess or PID-reuse race.
      *
      * A device that will not say which of its own processes exist gets none of
      * this -- [builderRunning] answering nothing is treated as "not there", so
@@ -711,7 +719,7 @@ object MonoRuntime {
      * right way round: [startRun] retries anyway, whereas waiting on a
      * question that has no answer would cost every run its full timeout.
      */
-    private suspend fun awaitBuilderGone(context: Context, slot: Slot) {
+    private suspend fun awaitBuilderGone(context: Context, slot: Slot): Boolean {
         // The process about to be used has to be gone: one process hosts one
         // run, and a second arriving in it would be refused.
         val targetGone = waitBuilderGone(context, slot)
@@ -722,37 +730,21 @@ object MonoRuntime {
         // the run that made it was holding, and with one process this was
         // noticed for free.
         val strays = Slot.values().filter { it != slot && builderRunning(context, it) == true }
-        if (targetGone && strays.isEmpty()) return
+        if (targetGone && strays.isEmpty()) return true
 
-        val up = (if (targetGone) strays else strays + slot).joinToString(", ") { it.process }
-        if (!launcherForeground()) {
-            LauncherLog.log(
-                "mono: $up still up from an earlier run, " +
-                    "and :launcher is in the background; leaving it",
-            )
-            return
+        for (stale in if (targetGone) strays else strays + slot) {
+            val binding = Binding(context.applicationContext, stale)
+            try {
+                if (binding.connect(BUILDER_EXIT_WAIT_MS, create = false) != null) {
+                    LauncherLog.log("mono: asking stale ${stale.process} service to exit")
+                    binding.quit()
+                } else {
+                    LauncherLog.log("mono: stale ${stale.process} service is unavailable; trying the next builder")
+                }
+            } finally { binding.close() }
         }
-        LauncherLog.log(
-            "mono: $up still up from an earlier run; ending this app's background processes",
-        )
-        killBuilder(context)
-        waitBuilderGone(context, slot)
+        return waitBuilderGone(context, slot)
     }
-
-    /**
-     * Whether this process is one the user is looking at.
-     *
-     * Which is the same question as whether killBackgroundProcesses would
-     * take it: that reaps everything at or below service importance, and a
-     * launcher with no foreground service is a cached process the moment the
-     * user leaves. Not being able to tell counts as "no" -- the cost of
-     * being wrong one way is a straggler, and the other way is the build.
-     */
-    private fun launcherForeground(): Boolean = runCatching {
-        val state = ActivityManager.RunningAppProcessInfo()
-        ActivityManager.getMyMemoryState(state)
-        state.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
-    }.getOrDefault(false)
 
     /** True if the process is gone before [BUILDER_EXIT_WAIT_MS] is up. */
     private suspend fun waitBuilderGone(context: Context, slot: Slot): Boolean {
@@ -780,14 +772,14 @@ object MonoRuntime {
     private fun builderRunning(context: Context, slot: Slot): Boolean? {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return null
         return runCatching {
-            am.runningAppProcesses?.any { it.processName.endsWith(slot.process) }
+            am.runningAppProcesses?.any { it.processName == context.packageName + slot.process }
         }.getOrNull()
     }
 
     /** The pid of a builder process, or 0 when it cannot be told. */
     private fun builderPid(context: Context, slot: Slot): Int = runCatching {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return 0
-        am.runningAppProcesses?.firstOrNull { it.processName.endsWith(slot.process) }?.pid ?: 0
+        am.runningAppProcesses?.firstOrNull { it.processName == context.packageName + slot.process }?.pid ?: 0
     }.getOrDefault(0)
 
     /**
@@ -968,29 +960,6 @@ object MonoRuntime {
     /** How long the platform is given to write the record of a death. */
     private const val EXIT_REASON_TRIES = 6
     private const val EXIT_REASON_WAIT_MS = 250L
-
-    /**
-     * Ends every process of this app that is not in the foreground, the
-     * builders included.
-     *
-     * The bluntest thing here, and no longer used for anything but a
-     * straggler. Cancelling a run goes down the binding instead -- see the
-     * cancellation handler in [exec] -- because that reaches the one process
-     * that should go, and this reaches :launcher too, which is where the build
-     * is being run from and which is in the background in exactly the case
-     * worth surviving.
-     *
-     * [awaitBuilderGone] is what is left, and only while :launcher is in the
-     * foreground and so out of its reach. Anywhere else it would be a bug.
-     *
-     * Needs KILL_BACKGROUND_PROCESSES, which is a normal permission: granted
-     * at install, no prompt. If it is somehow refused, the worst case is a
-     * straggler outliving the run that made it.
-     */
-    private fun killBuilder(context: Context) {
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return
-        runCatching { am.killBackgroundProcesses(context.packageName) }
-    }
 
     /**
      * How long a builder is allowed to not exist before it counts as dead.
