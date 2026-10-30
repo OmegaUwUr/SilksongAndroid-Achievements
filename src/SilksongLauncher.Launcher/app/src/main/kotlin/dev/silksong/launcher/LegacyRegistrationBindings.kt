@@ -21,9 +21,13 @@ internal object LegacyRegistrationBindings {
         "FORWARDER_TARGET_MISSING" to "missing forwarded providers", "FORWARDER_IDENTITY_MISMATCH" to "forwarded assembly identity mismatches",
         "FORWARDER_CYCLE" to "type-forwarding cycles", "FORWARDER_LIMIT" to "excessive type-forwarding chains")
     fun read(data: File, version: String, target: Int, report: JSONObject): Details {
-        require(UnityManagedProfile.supports(version) && report.getInt("schema") == 2 &&
+        require(UnityManagedProfile.supports(version) && report.getInt("schema") in setOf(2, 3) &&
             report.getString("unityVersion") == version && report.getInt("sourceTarget") == target &&
             !report.getBoolean("runtimeApproved")) { "Invalid legacy Android binding plan." }
+        val builtin = if (report.getInt("schema") == 3) report.getJSONObject("builtinResource").also {
+            LegacyBuiltinResources.read(data, version, target, it)
+        } else null
+        if (builtin == null) require(report.isNull("builtinResource"))
         require(report.getString("bindingsSha256") == PortSourceFingerprint.bindings(data) &&
             report.getString("globalManagersSha256") == digest(File(data, "globalgamemanagers"))) { "Legacy Android binding source changed." }
         val assemblies = report.getJSONArray("assemblies")
@@ -109,6 +113,7 @@ internal object LegacyRegistrationBindings {
         if (unprovided > 0) blockers += "$unprovided registered desktop assemblies have no selected Android provider. Their registration cannot be silently removed."
         if (diagnostics.length() > 0) blockers += "Legacy Android registration plan needs review: ${(0 until minOf(12, diagnostics.length())).joinToString { diagnostics.getString(it) }}"
         val facts = mutableListOf("Legacy Android binding plan: $resolved/${scripts.length()} script references resolved; $unprovided registered assemblies lack a selected provider; ${initializers.length()} selected initializers inspected. Source references and order are preserved. Registration rewriting, native linking and Android player execution remain unverified.")
+        if (builtin != null) facts += "Reviewed engine built-in provider: the source default resource matches the exact Unity $version Linux package. Its 78 object IDs/classes and 12 MonoScript identities match the official Android resource; 5/5 Android built-in shaders have Vulkan data. The prebuilt internal stamp is ${LegacyBuiltinResources.STORED_VERSION}; scenes and bundles retain exact game-version/platform checks."
         if (unresolved > 0) {
             facts += "Legacy script failures: " + failures.entries.sortedByDescending { it.value }.joinToString { "${it.value} ${issues.getValue(it.key)}" } + ". Counts do not establish runtime use."
             facts += examples.values.take(6)

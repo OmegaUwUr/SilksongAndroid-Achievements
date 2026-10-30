@@ -47,6 +47,9 @@ object GenericPortBuild {
                 UnityProfileInstaller.install(cache, version) { step, done, total ->
                     trySend(PlayerImage.Progress(step, if (total > 0) done.toFloat() / total else -1f))
                 }
+                UnityBuiltinResourceInstaller.prepare(cache, version, allowDownload = true) { step, done, total ->
+                    trySend(PlayerImage.Progress(step, if (total > 0) done.toFloat() / total else -1f))
+                }
             }.collect { progress(it) }
             assess(context, source, progress)
         }
@@ -109,7 +112,9 @@ object GenericPortBuild {
         val registrationPath = File(root, "legacy-android-registration.json").also { it.delete() }
         val sourceBindingsPath = File(root, "legacy-source-bindings.json").also { it.delete() }
         val scriptUsagePath = File(root, "legacy-script-usage.json").also { it.delete() }
+        val builtinEvidencePath = File(root, "builtin-resource-evidence.json").also { it.delete() }
         var registrationFailure: String? = null
+        var builtinFailure: String? = null
         val profile = if (UnityManagedProfile.supports(initial.version)) UnityProfileInstaller.root(profileCache(context), initial.version)
             .takeIf { UnityProfileInstaller.ready(it, initial.version) } else null
         if (profile == null) {
@@ -120,11 +125,35 @@ object GenericPortBuild {
             val receipt = UnityProfileInstaller.receiptHash(profile)
             PlayerImage.run(surgery, context, listOf("inspect-managed-profile", initial.data.absolutePath,
                 UnityProfileInstaller.bcl(profile).absolutePath, UnityProfileInstaller.engine(profile).absolutePath, managedPath.absolutePath))
+            var builtinResource: File? = null
+            if (LegacyBuiltinResources.supports(initial.version, initial.sourcePlatform ?: 0)) {
+                try {
+                    require(LegacyBuiltinResources.matches(File(initial.data, LegacyBuiltinResources.SOURCE_FILE),
+                        LegacyBuiltinResources.SOURCE_BYTES, LegacyBuiltinResources.SOURCE_HASH)) {
+                        "The source's default resource does not match the reviewed exact-release Linux resource."
+                    }
+                    progress(PlayerImage.Progress("Preparing verified Android built-in resources", -1f))
+                    builtinResource = UnityBuiltinResourceInstaller.prepare(profileCache(context), initial.version) { step, _, _ -> LauncherLog.log(step) }
+                    if (builtinResource == null) builtinFailure = "The exact Android built-in resource is not prepared. Use Download engine profile & audit; existing managed components remain cached."
+                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (error: Exception) {
+                    builtinFailure = "Engine built-in resource preparation needs review: ${error.message.orEmpty().take(400)}"
+                    LauncherLog.log("Engine built-in resource preparation failed", error)
+                }
+            }
             progress(PlayerImage.Progress("Binding legacy scripts against Android assemblies", -1f))
             try {
                 PlayerImage.run(surgery, context, listOf("inspect-legacy-android-registration", initial.data.absolutePath,
-                    UnityProfileInstaller.bcl(profile).absolutePath, UnityProfileInstaller.engine(profile).absolutePath, registrationPath.absolutePath))
+                    UnityProfileInstaller.bcl(profile).absolutePath, UnityProfileInstaller.engine(profile).absolutePath) +
+                    listOfNotNull(builtinResource?.absolutePath) + registrationPath.absolutePath)
                 check(registrationPath.length() in 1L..(32 * 1024 * 1024L)) { "Registration binding report is missing or exceeds its limit." }
+                if (builtinResource != null) {
+                    check(UnityBuiltinResourceInstaller.ready(profileCache(context), initial.version)) { "Built-in resource inputs changed during inspection." }
+                    val evidence = JSONObject(UnityBuiltinResourceInstaller.receipt(profileCache(context), initial.version).readText())
+                        .put("appId", context.appId).put("bindingsSha256", binding).put("runtimeApproved", false)
+                        .put("sourceResourceSha256", LegacyBuiltinResources.SOURCE_HASH)
+                    builtinEvidencePath.writeText(evidence.toString())
+                }
             } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
             catch (error: Exception) {
                 registrationPath.delete()
@@ -139,6 +168,7 @@ object GenericPortBuild {
                 .put("componentReceiptSha256", receipt).put("auditSha256", UnityReleaseCatalog.hash(managedPath.readBytes()))
                 .put("registrationAuditStatus", if (registrationFailure == null) "completed" else "unavailable")
                 .apply { if (registrationFailure == null) put("registrationAuditSha256", UnityReleaseCatalog.hash(registrationPath.readBytes())) }
+                .apply { if (builtinEvidencePath.isFile) put("builtinResourceAuditSha256", UnityReleaseCatalog.hash(builtinEvidencePath.readBytes())) }
                 .put("scope", "Exact compiler/Android managed-profile audit only. Native build, Android player, registration, backend and gameplay compatibility are not approved.").toString())
         }
         val callSites = File(root, "native-call-sites.json").also { it.delete() }
@@ -193,7 +223,7 @@ object GenericPortBuild {
         }
         val unavailable = if (binding != null && (sourceBindings == null || content != null && usage == null))
             listOf("Supplemental legacy source/use inspection did not complete; review the launcher log. No script inventory exclusions are approved.") else emptyList()
-        val withProfile = if (profile != null) initial.copy(blockers = initial.blockers + listOfNotNull(registrationFailure) + unavailable,
+        val withProfile = if (profile != null) initial.copy(blockers = initial.blockers + listOfNotNull(registrationFailure, builtinFailure) + unavailable,
             facts = initial.facts.filterNot { it.startsWith("Exact Unity ${initial.version} compiler and Android managed-profile components can be downloaded separately") } +
             "Exact Unity ${initial.version} compiler and Android managed-profile components are installed and fully fingerprinted in the shared cache. Original game assemblies were audited against that Android profile; native/player integration remains blocked.") else initial
         val preliminary = GenericPortAssessment.finish(withProfile, context, json(managedPath), content, legacy, review,

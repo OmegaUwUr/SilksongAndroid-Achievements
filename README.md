@@ -40,6 +40,13 @@ needs a complete-source rerun. Built-in resource diagnostics now expose readable
 layout metadata and exception details. Caches remain unchanged. See
 [bundle bindings and current evidence](docs/LEGACY_BUNDLE_BINDINGS.md).
 
+Revision 54 adds a fingerprinted provider for the exact Unity 2019.4.29f1
+engine-owned built-in resource pair and resolves its twelve script IDs in a real
+SDK probe. It also records a successful synthetic Android ARM64 native host link.
+Existing scans, downloads and completed players retain their cache identities.
+The workspace outage interrupted the final repeat checks; this remains a draft.
+See [built-in provenance, native milestone and validation limits](docs/UNITY_2019_BUILTIN_PROVIDER.md).
+
 This is a community project based on **jakobkhansen's SilksongAndroid**, with
 additional SteamSync and achievement features. It is not an official Team Cherry
 or Valve release.

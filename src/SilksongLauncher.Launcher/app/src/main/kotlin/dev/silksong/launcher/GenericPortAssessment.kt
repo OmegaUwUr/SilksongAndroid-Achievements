@@ -30,7 +30,7 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             if (header == null) blockers += "Readable Unity serialized files are required."
             else {
                 if (header.platform !in PortTarget.desktopPlatforms) blockers += "Source target ${header.platform} needs an asset converter provider."
-                else facts += "Source platform: ${GameCompatibility.platformName(header.platform)}. Every serialized file must match; usable Vulkan shaders are required. Direct3D/Metal shader conversion is not available."
+                else facts += "Source platform: ${GameCompatibility.platformName(header.platform)}. Game serialized files must match; engine-owned built-ins require a reviewed exact-release provider. Usable Vulkan shaders are required. Direct3D/Metal shader conversion is not available."
                 if (UnityManagedProfile.supports(header.version)) {
                     facts += "Exact Unity ${header.version} compiler and Android managed-profile components can be downloaded separately with Download engine profile. This allows a full profile audit while backend adapters are still blocked. The first transfer is about 2–3 GB; components are shared between games and retained across app updates."
                     blockers += "Unity ${header.version} still needs the legacy Android native-build, player-lifecycle and script-registration provider. Preparing its exact compiler/managed profile does not enable the Unity 6 native recipe or authorize compilation."

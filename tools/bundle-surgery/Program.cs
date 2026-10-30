@@ -60,6 +60,7 @@ internal static class Program
             Console.Error.WriteLine("  inspect-legacy-script-usage <source-root> <binding-plan.json> <report.json> — serialized MonoBehaviour header census; not runtime reachability approval");
             Console.Error.WriteLine("  inspect-legacy-script-usage <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <binding-plan.json> <report.json> — also bind direct content/bundle MonoScripts to selected providers");
             Console.Error.WriteLine("  inspect-legacy-android-registration <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <report.json> — resolve loose-file script types and selected initializers; no registration rewrite or runtime approval");
+            Console.Error.WriteLine("  inspect-legacy-android-registration <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <exact-Android-default-resources> <report.json> — also review the pinned engine-owned built-in mapping");
             Console.Error.WriteLine("  inspect-managed-profile <source-root> <exact-bcl-directory> <exact-Android-managed-directory> <report.json> — full member/dependency audit; does not register a runtime");
             Console.Error.WriteLine("  review-slime-rancher-source <source-root> <report.json> — exact Linux 1.4.3 source review");
             Console.Error.WriteLine("  disable-slime-rancher-discord <source-root> <new-Assembly-CSharp.dll> — disable optional desktop presence in a separate staged copy");
@@ -97,6 +98,7 @@ internal static class Program
                 "inspect-legacy-script-usage" when args.Length == 4 => LegacyScriptUsage.Run(args[1], args[2], args[3]),
                 "inspect-legacy-script-usage" when args.Length == 6 => LegacyScriptUsage.Run(args[1], args[2], args[3], args[4], args[5]),
                 "inspect-legacy-android-registration" when args.Length == 5 => LegacyAndroidRegistration.Run(args[1], args[2], args[3], args[4]),
+                "inspect-legacy-android-registration" when args.Length == 6 => LegacyAndroidRegistration.Run(args[1], args[2], args[3], args[5], args[4]),
                 "inspect-managed-profile" when args.Length == 5 => ManagedPortAudit.RunProfile(args[1], args[2], args[3], args[4]),
                 "review-slime-rancher-source" when args.Length == 3 => SlimeRancherSourceAdapter.ReviewSource(args[1], args[2]),
                 "disable-slime-rancher-discord" when args.Length == 3 => SlimeRancherSourceAdapter.DisableOptionalDiscord(args[1], args[2]),

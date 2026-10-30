@@ -68,6 +68,12 @@ fun legacyRegistrationBindingChecks(test: (String, () -> Unit) -> Unit) {
             .put("serializedFiles", 1).put("unresolvedReferences", 0).put("unobservedUnresolvedInventory", if (plan.getInt("resolvedScripts") == 0) 1 else 0)
             .put("headerScanComplete", true).put("diagnostics", JSONArray())
     }
+    fun builtin(): JSONObject = JSONObject().put("recipe", LegacyBuiltinResources.RECIPE).put("unityVersion", "2019.4.29f1")
+        .put("sourceTarget", 24).put("virtualFile", LegacyBuiltinResources.VIRTUAL_FILE).put("sourceFile", LegacyBuiltinResources.SOURCE_FILE)
+        .put("sourceSha256", LegacyBuiltinResources.SOURCE_HASH).put("sourceBytes", LegacyBuiltinResources.SOURCE_BYTES)
+        .put("storedUnityVersion", "2019.4.11f1").put("format", 21).put("storedSourceTarget", 5)
+        .put("androidSha256", LegacyBuiltinResources.ANDROID_HASH).put("androidBytes", LegacyBuiltinResources.ANDROID_BYTES)
+        .put("storedAndroidTarget", 13).put("objects", 78).put("scripts", 12).put("shaders", 5).put("vulkanShaders", 5)
     try {
         test("legacy binding plans preserve negative IDs and never grant a native provider") {
             val details = read(report())
@@ -305,6 +311,41 @@ fun legacyRegistrationBindingChecks(test: (String, () -> Unit) -> Unit) {
             usage.getJSONArray("references").getJSONObject(0).put("bindingResolved", false).put("issue", "Exact type missing").put("issueCode", "TYPE_MISSING")
             usage.put("unresolvedReferences", 1)
             check(supplement(plan, usage = usage).blockers.single().contains("1 observed MonoBehaviour"))
+        }
+        test("the reviewed built-in descriptor is exact-release and platform bound") {
+            LegacyBuiltinResources.shape(builtin(), "2019.4.29f1", 24)
+            for ((version, target) in listOf("2019.4.30f1" to 24, "2019.4.29f1" to 19, "6000.0.50f1" to 24))
+                check(runCatching { LegacyBuiltinResources.shape(builtin(), version, target) }.isFailure)
+        }
+        test("built-in mappings cannot change pins counts stored layouts or virtual names") {
+            for ((field, value) in mapOf("recipe" to "unreviewed", "sourceFile" to "level0", "virtualFile" to "Library/other",
+                "sourceSha256" to "b".repeat(64), "androidSha256" to "c".repeat(64), "sourceBytes" to 7L,
+                "storedUnityVersion" to "2019.4.29f1", "storedSourceTarget" to 24, "storedAndroidTarget" to 5,
+                "objects" to 77, "scripts" to 11, "shaders" to 4, "vulkanShaders" to 0)) {
+                check(runCatching { LegacyBuiltinResources.shape(builtin().put(field, value), "2019.4.29f1", 24) }.isFailure)
+            }
+        }
+        test("metadata alone cannot grant an engine-owned resource exception") {
+            check(runCatching { LegacyBuiltinResources.read(root, "2019.4.29f1", 24, builtin()) }.isFailure)
+            val source = File(root, LegacyBuiltinResources.SOURCE_FILE).apply { parentFile.mkdirs(); writeText("wrong source") }
+            check(runCatching { LegacyBuiltinResources.read(root, "2019.4.29f1", 24, builtin()) }.isFailure)
+            val json = report().put("schema", 3).put("builtinResource", builtin())
+            check(runCatching { read(json) }.isFailure); source.delete()
+        }
+        test("only the exact built-in file metadata can use the resource provider") {
+            fun input() = JSONObject().put("file", LegacyBuiltinResources.SOURCE_FILE).put("container", LegacyBuiltinResources.SOURCE_FILE)
+                .put("containerSha256", LegacyBuiltinResources.SOURCE_HASH).put("unityVersion", "2019.4.11f1").put("format", 21)
+                .put("target", 5).put("objects", 78).put("monoScripts", 12).put("layoutProvider", LegacyBuiltinResources.RECIPE)
+            check(LegacyBuiltinResources.sourceInput(input(), builtin()))
+            for ((field, value) in mapOf("file" to "level0", "container" to "content.bundle", "containerSha256" to "a".repeat(64),
+                "unityVersion" to "2019.4.29f1", "format" to 22, "target" to 24, "monoScripts" to 11, "layoutProvider" to "other"))
+                check(!LegacyBuiltinResources.sourceInput(input().put(field, value), builtin()))
+        }
+        test("ordinary scene and bundle reports cannot borrow a built-in layout provider") {
+            val plan = report(); val usage = directUsage(plan)
+            usage.getJSONArray("serializedInputs").getJSONObject(0).put("layoutProvider", LegacyBuiltinResources.RECIPE)
+            check(runCatching { supplement(plan, usage = usage) }.isFailure)
+            usage.put("schema", 3); check(runCatching { supplement(plan, usage = usage) }.isFailure)
         }
     } finally { root.deleteRecursively() }
 }

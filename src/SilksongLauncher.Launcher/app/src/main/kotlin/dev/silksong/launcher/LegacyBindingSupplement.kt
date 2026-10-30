@@ -50,11 +50,12 @@ internal object LegacyBindingSupplement {
             if (failedSource > 0) blockers += "$failedSource script inventory records are unbound even against the original source assemblies. A reviewed legacy registration policy is required; they are not automatically excluded."
         }
         if (usage != null) {
-            common(usage, setOf(1, 2))
+            common(usage, setOf(1, 2, 3))
+            require(usage.getInt("schema") != 3 || plan.getInt("schema") == 3)
             require(tree != null && Regex("[a-f0-9]{64}").matches(tree) && usage.getString("sourceTreeSha256") == tree)
             val refs = usage.getJSONArray("references"); val diagnostics = usage.getJSONArray("diagnostics")
             require(refs.length() <= 100000 && diagnostics.length() <= 10000 && usage.getInt("serializedFiles") in 0..100000)
-            val content = if (usage.getInt("schema") == 2) LegacyContentBindings.read(data, version, target, plan, usage) else null
+            val content = if (usage.getInt("schema") >= 2) LegacyContentBindings.read(data, version, target, plan, usage) else null
             var directResolved = 0
             var unresolved = 0; val seen = mutableSetOf<Int>(); val objects = mutableSetOf<Pair<String, Long>>()
             for (i in 0 until refs.length()) {

@@ -22,6 +22,9 @@ internal object LegacyContentBindings {
             providers[file] = provider to sha
         }
         val inputs = report.getJSONArray("serializedInputs"); require(inputs.length() <= 100000)
+        val builtin = if (report.getInt("schema") == 3) plan.getJSONObject("builtinResource").also {
+            LegacyBuiltinResources.read(data, version, target, it)
+        } else null
         val files = mutableMapOf<String, Pair<String, String>>(); val hashes = mutableMapOf<String, String>()
         var matching = 0; var headers = 0L
         for (i in 0 until inputs.length()) {
@@ -40,7 +43,9 @@ internal object LegacyContentBindings {
             require(actual == sha)
             val objects = row.getInt("objects"); val behaviours = row.getInt("monoBehaviours"); val scripts = row.getInt("monoScripts")
             require(objects in 0..1000000 && behaviours in 0..objects && scripts in 0..objects && behaviours.toLong() + scripts <= objects)
-            val matches = row.getLong("format") == 21L && row.getString("unityVersion") == version && row.getLong("target") == target.toLong()
+            val builtinMatch = builtin != null && !row.isNull("layoutProvider") && LegacyBuiltinResources.sourceInput(row, builtin)
+            if (!row.isNull("layoutProvider")) require(builtinMatch)
+            val matches = builtinMatch || row.getLong("format") == 21L && row.getString("unityVersion") == version && row.getLong("target") == target.toLong()
             require(row.getBoolean("layoutMatches") == matches)
             if (matches) { matching++; headers += behaviours }
             files[file] = container to sha

@@ -13,7 +13,8 @@ internal static class LegacyScriptUsage
         string? Assembly, string? NameSpace, string? ClassName, string? Provider, string? SelectedAssembly,
         string? SelectedSha256, string? ResolvedType, string[] ResolutionChain, bool Resolved, string? IssueCode, string? Issue);
     internal sealed record SerializedInput(string File, string Container, string ContainerSha256, uint Format,
-        string UnityVersion, uint Target, int Objects, int MonoBehaviours, int MonoScripts, bool LayoutMatches);
+        string UnityVersion, uint Target, int Objects, int MonoBehaviours, int MonoScripts, bool LayoutMatches,
+        string? LayoutProvider = null);
     internal sealed record Report(int Schema, string UnityVersion, int SourceTarget, string BindingsSha256,
         string GlobalManagersSha256, string BindingPlanSha256, string SourceTreeSha256, Reference[] References,
         int SerializedFiles, int UnresolvedReferences, int UnobservedUnresolvedInventory, bool HeaderScanComplete,
@@ -54,14 +55,17 @@ internal static class LegacyScriptUsage
         void InspectFile(AssetsManager manager, AssetsFileInstance file, string owner, string container, string hash, string? bundle, string? entry = null)
         {
             if (inputs.Count >= 100000 || !visited.Add(owner)) throw new InvalidDataException("Script-use input count exceeds its limit or contains duplicate file identities.");
-            var layout = file.file.Header.Version == 21 && file.file.Metadata.UnityVersion == plan.UnityVersion && file.file.Metadata.TargetPlatform == plan.SourceTarget;
+            var builtinLayout = LegacyBuiltinResources.MatchesSource(data, plan.UnityVersion, plan.SourceTarget, plan.BuiltinResource, owner, hash, file);
+            var layout = builtinLayout || file.file.Header.Version == 21 && file.file.Metadata.UnityVersion == plan.UnityVersion && file.file.Metadata.TargetPlatform == plan.SourceTarget;
             inputs.Add(new(owner, container, hash, file.file.Header.Version, file.file.Metadata.UnityVersion, file.file.Metadata.TargetPlatform,
-                file.file.Metadata.AssetInfos.Count, file.file.GetAssetsOfType((AssetClassID)114).Count(), file.file.GetAssetsOfType((AssetClassID)115).Count(), layout));
+                file.file.Metadata.AssetInfos.Count, file.file.GetAssetsOfType((AssetClassID)114).Count(), file.file.GetAssetsOfType((AssetClassID)115).Count(), layout,
+                builtinLayout ? plan.BuiltinResource!.Recipe : null));
             if (!layout)
                 throw new InvalidDataException($"Stored Unity {file.file.Metadata.UnityVersion}, format {file.file.Header.Version}, target {file.file.Metadata.TargetPlatform}; expected Unity {plan.UnityVersion}, format 21, target {plan.SourceTarget}. An exact resource/layout provider is required.");
             if (file.file.Metadata.AssetInfos.Count > 1000000 || file.file.Metadata.AssetInfos.Select(i => i.PathId).Distinct().Count() != file.file.Metadata.AssetInfos.Count)
                 throw new InvalidDataException("Script-use object table exceeds limits or has duplicate IDs.");
             serialized++;
+            manager.LoadClassDatabaseFromPackage(file.file.Metadata.UnityVersion);
             foreach (var info in file.file.GetAssetsOfType((AssetClassID)115))
             {
                 // Existing inventory bindings retain their original pointer/index and provider evidence.
@@ -104,7 +108,12 @@ internal static class LegacyScriptUsage
                         if (fileId < 0 || fileId > file.file.Metadata.Externals.Count) throw new InvalidDataException("Script pointer has an invalid external file ID.");
                         var ext = file.file.Metadata.Externals[fileId - 1];
                         var raw = string.IsNullOrEmpty(ext.OriginalPathName) ? ext.PathName : ext.OriginalPathName;
-                        if (bundle is not null && raw.StartsWith("archive:/", StringComparison.Ordinal))
+                        if (plan.BuiltinResource is not null && raw.Replace('\\', '/') == plan.BuiltinResource.VirtualFile)
+                        {
+                            LegacyBuiltinResources.RequireMapping(data, plan.UnityVersion, plan.SourceTarget, plan.BuiltinResource);
+                            target = plan.BuiltinResource.SourceFile;
+                        }
+                        else if (bundle is not null && raw.StartsWith("archive:/", StringComparison.Ordinal))
                         {
                             var parts = raw[9..].Split('/');
                             // Only the canonical self-mount form is supported; never search other bundles by CAB basename.
@@ -120,7 +129,7 @@ internal static class LegacyScriptUsage
                             target = bundle is null ? relative : bundle + "!" + relative;
                         }
                     }
-                    if (bundle is not null || !lookup.TryGetValue((target, pathId), out var scripts))
+                    if (!lookup.TryGetValue((target, pathId), out var scripts))
                     {
                         // Resolve after all files in this container have been visited; references may precede their MonoScript entry.
                         references.Add(new(owner, info.PathId, fileId, pathId, target, [], false, "Pending direct content binding.", IssueCode: "CONTENT_BINDING_PENDING"));
@@ -187,7 +196,7 @@ internal static class LegacyScriptUsage
         var after = ClassicPlayerTree.Discover(data, plan.SourceTarget);
         if (after.SourceTreeSha256 != inventory.SourceTreeSha256) throw new InvalidDataException("Content tree changed during script-use inspection.");
         selected?.Verify();
-        return new(2, plan.UnityVersion, plan.SourceTarget, plan.BindingsSha256, plan.GlobalManagersSha256, evidence.PlanSha256,
+        return new(plan.BuiltinResource is null ? 2 : 3, plan.UnityVersion, plan.SourceTarget, plan.BindingsSha256, plan.GlobalManagersSha256, evidence.PlanSha256,
             inventory.SourceTreeSha256, references.ToArray(), serialized, references.Count(r => !r.BindingResolved),
             plan.Scripts.Count(s => !s.Resolved && !seen.Contains(s.Index)), diagnostics.Count == 0, diagnostics.Distinct().Take(10000).ToArray(), false,
             "Read-only MonoBehaviour.m_Script header census and exact content MonoScript/type lookup in loose serialized files and supported local UnityFS entries. Direct type resolution does not register the bundle or approve Android loading. Zero observed references does not establish runtime unreachability: other serialized fields, dynamic loading, code/reflection, catalogs and native registration remain outside this census. No import records, registrations or native wrappers are removed; runtime approval remains false.",

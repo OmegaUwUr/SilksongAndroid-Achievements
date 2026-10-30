@@ -20,27 +20,30 @@ internal static partial class LegacyAndroidRegistration
     internal sealed record Report(int Schema, string UnityVersion, int SourceTarget, string BindingsSha256,
         string GlobalManagersSha256, Component[] SelectedAssemblies, AssemblyBinding[] Assemblies,
         ScriptBinding[] Scripts, LegacyRuntimeRegistration.Initializer[] SelectedInitializers,
-        string[] Diagnostics, int ResolvedScripts, bool RuntimeApproved, string Scope);
+        string[] Diagnostics, int ResolvedScripts, bool RuntimeApproved, string Scope,
+        LegacyBuiltinResources.Mapping? BuiltinResource = null);
     private sealed record Loaded(Component Component,
         LegacyRuntimeRegistration.Initializer[] Initializers);
     private const long MaxAssetBytes = 512L * 1024 * 1024;
 
-    internal static int Run(string data, string bcl, string engine, string output)
+    internal static int Run(string data, string bcl, string engine, string output, string? builtinResource = null)
     {
         SourceAdapterFiles.RequireOutside(bcl, output);
         SourceAdapterFiles.RequireOutside(engine, output);
         SourceAdapterFiles.RequireOutside(bcl, output + ".part");
         SourceAdapterFiles.RequireOutside(engine, output + ".part");
-        var report = Inspect(data, bcl, engine);
+        if (builtinResource is not null) LegacyBindingEvidence.RequireOutput(builtinResource, output);
+        var report = Inspect(data, bcl, engine, builtinResource);
         SourceAdapterFiles.WriteReport(data, output, report);
         return 0;
     }
 
-    internal static Report Inspect(string data, string bcl, string engine)
+    internal static Report Inspect(string data, string bcl, string engine, string? builtinResource = null)
     {
         var legacy = LegacyRuntimeRegistration.Inspect(data);
         if (!VersionStamp().IsMatch(legacy.UnityVersion) || legacy.SourceTarget is not (24 or 19 or 2))
             throw new InvalidDataException("Android registration planning covers stable Unity 2019.4 desktop sources only.");
+        var builtin = builtinResource is null ? null : LegacyBuiltinResources.Review(data, legacy.UnityVersion, legacy.SourceTarget, builtinResource, engine);
         var managed = Path.Combine(data, "Managed");
         var sourceFiles = Files(managed, 1024);
         var bclFiles = Files(bcl, 512);
@@ -118,6 +121,7 @@ internal static partial class LegacyAndroidRegistration
             try
             {
                 relative = group.Key == 0 ? "globalgamemanagers" : LocalPath(externals[group.Key - 1]);
+                if (builtin is not null && relative == builtin.VirtualFile) relative = builtin.SourceFile;
                 var path = Path.Combine(data, relative.Replace('/', Path.DirectorySeparatorChar));
                 issueCode = relative.StartsWith("Library/", StringComparison.Ordinal) ? "VIRTUAL_RESOURCE_UNMAPPED" : "CONTENT_MISSING";
                 SourceAdapterFiles.RequireRegular(path, MaxAssetBytes);
@@ -132,14 +136,15 @@ internal static partial class LegacyAndroidRegistration
                     assets.LoadClassPackage(Path.Combine(AppContext.BaseDirectory, "classdata.tpk"));
                     var file = assets.LoadAssetsFile(path);
                     issueCode = "SOURCE_LAYOUT_MISMATCH";
-                    if (file.file.Header.Version != 21 || file.file.Metadata.UnityVersion != legacy.UnityVersion ||
-                        file.file.Metadata.TargetPlatform != legacy.SourceTarget)
+                    if ((file.file.Header.Version != 21 || file.file.Metadata.UnityVersion != legacy.UnityVersion ||
+                        file.file.Metadata.TargetPlatform != legacy.SourceTarget) &&
+                        !LegacyBuiltinResources.MatchesSource(data, legacy.UnityVersion, legacy.SourceTarget, builtin, relative, hash, file))
                         throw new InvalidDataException("Referenced script file has a different exact Unity version, format or source platform.");
                     issueCode = "OBJECT_TABLE_INVALID";
                     if (file.file.Metadata.AssetInfos.Count > 1000000 ||
                         file.file.Metadata.AssetInfos.Select(a => a.PathId).Distinct().Count() != file.file.Metadata.AssetInfos.Count)
                         throw new InvalidDataException("Referenced script file has excessive or ambiguous object identifiers.");
-                    assets.LoadClassDatabaseFromPackage(legacy.UnityVersion);
+                    assets.LoadClassDatabaseFromPackage(file.file.Metadata.UnityVersion);
                     foreach (var row in group)
                     {
                         var bound = row with { AssetFile = relative, AssetSha256 = hash };
@@ -193,12 +198,13 @@ internal static partial class LegacyAndroidRegistration
         using var fingerprint = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var path in sourceFiles)
         { fingerprint.AppendData(Encoding.UTF8.GetBytes(Path.GetFileName(path) + "\0")); fingerprint.AppendData(Convert.FromHexString(snapshots[path])); }
-        return new(2, legacy.UnityVersion, legacy.SourceTarget, Convert.ToHexString(fingerprint.GetHashAndReset()).ToLowerInvariant(),
+        if (builtin is not null) LegacyBuiltinResources.RequireMapping(data, legacy.UnityVersion, legacy.SourceTarget, builtin);
+        return new(builtin is null ? 2 : 3, legacy.UnityVersion, legacy.SourceTarget, Convert.ToHexString(fingerprint.GetHashAndReset()).ToLowerInvariant(),
             legacy.GlobalManagersSha256, selected.Values.Select(s => s.Component).OrderBy(c => c.File, StringComparer.Ordinal).ToArray(),
             assemblyBindings, bindings, selected.Values.SelectMany(s => s.Initializers).OrderBy(i => i.Assembly, StringComparer.Ordinal)
                 .ThenBy(i => i.Type, StringComparer.Ordinal).ThenBy(i => i.Method, StringComparer.Ordinal).ToArray(),
             diagnostics.Distinct().ToArray(), bindings.Count(b => b.Resolved), false,
-            "Read-only Unity 2019.4 script/type and selected-initializer binding plan. Exact component provenance must be checked by the provider. Preserves source PPtr order and flags; does not rewrite MonoManager, fabricate modern JSON, remove wrappers, compile a native player or approve runtime/gameplay compatibility. Bundle/archive external references require an adapter.");
+            "Read-only Unity 2019.4 script/type and selected-initializer binding plan. Exact component provenance must be checked by the provider. Preserves source PPtr order and flags; does not rewrite MonoManager, fabricate modern JSON, remove wrappers, compile a native player or approve runtime/gameplay compatibility. Bundle/archive external references require an adapter.", builtin);
     }
 
     internal static string LocalPath(string value)

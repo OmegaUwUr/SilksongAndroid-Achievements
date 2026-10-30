@@ -22,11 +22,14 @@ internal sealed class LegacyBindingEvidence
         var plan = JsonSerializer.Deserialize<LegacyAndroidRegistration.Report>(File.ReadAllText(planPath),
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? throw new InvalidDataException("Binding plan is empty.");
         var original = LegacyRuntimeRegistration.Inspect(data);
-        if (plan.Schema is not (1 or 2) || plan.RuntimeApproved || !plan.UnityVersion.StartsWith("2019.4.", StringComparison.Ordinal) || plan.UnityVersion != original.UnityVersion ||
+        if (plan.Schema is not (1 or 2 or 3) || plan.RuntimeApproved || !plan.UnityVersion.StartsWith("2019.4.", StringComparison.Ordinal) || plan.UnityVersion != original.UnityVersion ||
             plan.SourceTarget != original.SourceTarget || plan.GlobalManagersSha256 != original.GlobalManagersSha256 ||
             plan.Scripts.Length != original.Scripts.Length || plan.Scripts.Length > 100000 ||
             plan.ResolvedScripts != plan.Scripts.Count(s => s.Resolved))
             throw new InvalidDataException("Supplemental inspection needs a source-bound read-only legacy binding plan.");
+        if (plan.Schema == 3) LegacyBuiltinResources.RequireMapping(data, plan.UnityVersion, plan.SourceTarget,
+            plan.BuiltinResource ?? throw new InvalidDataException("Built-in resource mapping is missing."));
+        else if (plan.BuiltinResource is not null) throw new InvalidDataException("Unexpected built-in mapping in an older plan schema.");
         for (var i = 0; i < plan.Scripts.Length; i++)
             if (plan.Scripts[i].Index != i || plan.Scripts[i].FileId != original.Scripts[i].FileId || plan.Scripts[i].PathId != original.Scripts[i].PathId)
                 throw new InvalidDataException("Binding plan changed the original MonoManager script references.");
@@ -47,6 +50,7 @@ internal sealed class LegacyBindingEvidence
             throw new InvalidDataException("Supplemental binding inputs changed during inspection.");
         foreach (var (path, hash) in hashes)
         { SourceAdapterFiles.RequireRegular(path, 128L * 1024 * 1024); if (SourceAdapterFiles.Hash(path) != hash) throw new InvalidDataException("Original managed files changed."); }
+        if (Plan.BuiltinResource is not null) LegacyBuiltinResources.RequireMapping(data, Plan.UnityVersion, Plan.SourceTarget, Plan.BuiltinResource);
     }
     internal static void RequireOutput(string planPath, string output)
     {

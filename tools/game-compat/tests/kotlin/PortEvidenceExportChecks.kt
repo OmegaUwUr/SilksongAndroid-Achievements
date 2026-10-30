@@ -57,7 +57,7 @@ fun portEvidenceExportChecks(test: (String, () -> Unit) -> Unit) {
             } finally { plan.delete() }
         }
         test("porting export includes source comparisons and script header census reports") {
-            val files = listOf("legacy-source-bindings.json", "legacy-script-usage.json").map { name -> File(reports, name).apply { writeText("metadata fixture") } }
+            val files = listOf("legacy-source-bindings.json", "legacy-script-usage.json", "builtin-resource-evidence.json").map { name -> File(reports, name).apply { writeText("metadata fixture") } }
             try {
                 val bytes = ByteArrayOutputStream(); write(bytes); val names = mutableListOf<String>()
                 ZipInputStream(bytes.toByteArray().inputStream()).use { zip -> while (true) {

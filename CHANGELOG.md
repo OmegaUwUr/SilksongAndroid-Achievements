@@ -2,6 +2,35 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.54 (candidate)
+
+- Adds a reviewed exact-release built-in resource provider for Unity 2019.4.29f1
+  Linux sources. The source's 2019.4.11f1 / target-5 resource is byte-identical to
+  the one in Unity's exact Linux package; all 78 object IDs/classes and 12 script
+  identities match the official Android resource, whose five shaders have Vulkan.
+- Resolves the twelve virtual built-in references in the real SDK/bootstrap probe.
+  Schema-3 registration/census evidence carries the pinned provider. Exact version,
+  target and hash checks remain in place for scenes, bundles and other resources.
+- Extracts the new resource from the retained verified Android PKG into a separate
+  cache. Existing managed-profile receipts, scans, game downloads, completed-player
+  ABI and conversion/native identities are preserved. Adds resource evidence to
+  review exports, with explicit failure/recovery and bounded linked-path checks.
+- Adds a developer-only native host probe using the exact legacy builder and NDK
+  r19. The manual synthetic build links an API-21 ARM64 libil2cpp.so, accepted by
+  production ELF inspection. It does not enable the Android-hosted player recipe.
+
+Completed checks: 236 C# cases, 95 generic checks, 17 pack checks, 12 existing
+profile-installer checks and 33 persistence checks. All 119 production Kotlin
+files and both Java launch adapters compiled. Actual archive/resource/install,
+twelve binding and schema-3 C#/Kotlin checks completed.
+
+The execution environment became unavailable during the isolated native-probe
+rerun and final repeated checks. The draft preserves the recovered edits and this
+validation limit; a fresh checkout/final rerun is still required. No revision-54
+APK, full-game census, Android player or gameplay run was performed. Native/player,
+registration, framework ABI and backend integrations remain unfinished. See
+docs/UNITY_2019_BUILTIN_PROVIDER.md.
+
 ## 1.0.3-achievements.53 (candidate)
 
 - Resolves direct content MonoScripts, including local UnityFS bundle scripts that
