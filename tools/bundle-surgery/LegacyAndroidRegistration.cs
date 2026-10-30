@@ -15,12 +15,13 @@ internal static partial class LegacyAndroidRegistration
         string? Provider, string? SelectedSha256);
     internal sealed record ScriptBinding(int Index, int FileId, long PathId, string? AssetFile,
         string? AssetSha256, string? Assembly, string? NameSpace, string? ClassName,
-        string? Provider, string? SelectedSha256, bool Resolved, string? Issue);
+        string? Provider, string? SelectedSha256, bool Resolved, string? Issue,
+        string? SelectedAssembly = null, string? ResolvedType = null, string[]? ResolutionChain = null, string? IssueCode = null);
     internal sealed record Report(int Schema, string UnityVersion, int SourceTarget, string BindingsSha256,
         string GlobalManagersSha256, Component[] SelectedAssemblies, AssemblyBinding[] Assemblies,
         ScriptBinding[] Scripts, LegacyRuntimeRegistration.Initializer[] SelectedInitializers,
         string[] Diagnostics, int ResolvedScripts, bool RuntimeApproved, string Scope);
-    private sealed record Loaded(Component Component, string Path, HashSet<string> Types,
+    private sealed record Loaded(Component Component,
         LegacyRuntimeRegistration.Initializer[] Initializers);
     private const long MaxAssetBytes = 512L * 1024 * 1024;
 
@@ -49,6 +50,7 @@ internal static partial class LegacyAndroidRegistration
             throw new InvalidDataException("The selected Android profile is incomplete.");
         var snapshots = new Dictionary<string, string>(StringComparer.Ordinal);
         var selected = new Dictionary<string, Loaded>(StringComparer.OrdinalIgnoreCase);
+        var scriptTypes = new ManagedScriptTypes();
         var diagnostics = new List<string>(legacy.Diagnostics);
         long total = 0;
         void Add(string path, string provider)
@@ -74,8 +76,8 @@ internal static partial class LegacyAndroidRegistration
                     diagnostics.Add("Selected initializer needs a registration adapter: " + file + " -> " + method.FullName);
                 else initializers.Add(new(assembly.Name.Name, type.FullName, method.Name, load));
             }
-            selected.Add(file, new(new(file, provider, hash, new FileInfo(path).Length), path,
-                types.Select(t => t.FullName).ToHashSet(StringComparer.Ordinal), initializers.ToArray()));
+            scriptTypes.Add(assembly);
+            selected.Add(file, new(new(file, provider, hash, new FileInfo(path).Length), initializers.ToArray()));
         }
         foreach (var path in bclFiles) Add(path, "bcl");
         foreach (var path in engineFiles)
@@ -112,11 +114,14 @@ internal static partial class LegacyAndroidRegistration
         foreach (var group in bindings.GroupBy(p => p.FileId))
         {
             string? relative = null;
+            var issueCode = "EXTERNAL_PATH_UNSUPPORTED";
             try
             {
                 relative = group.Key == 0 ? "globalgamemanagers" : LocalPath(externals[group.Key - 1]);
                 var path = Path.Combine(data, relative.Replace('/', Path.DirectorySeparatorChar));
+                issueCode = relative.StartsWith("Library/", StringComparison.Ordinal) ? "VIRTUAL_RESOURCE_UNMAPPED" : "CONTENT_MISSING";
                 SourceAdapterFiles.RequireRegular(path, MaxAssetBytes);
+                issueCode = "CONTENT_UNREADABLE";
                 contentBytes = checked(contentBytes + new FileInfo(path).Length);
                 if (contentBytes > 2L * 1024 * 1024 * 1024) throw new InvalidDataException("Referenced registration content exceeds 2 GiB.");
                 var hash = SourceAdapterFiles.Hash(path); snapshots.TryAdd(path, hash);
@@ -126,9 +131,11 @@ internal static partial class LegacyAndroidRegistration
                 {
                     assets.LoadClassPackage(Path.Combine(AppContext.BaseDirectory, "classdata.tpk"));
                     var file = assets.LoadAssetsFile(path);
+                    issueCode = "SOURCE_LAYOUT_MISMATCH";
                     if (file.file.Header.Version != 21 || file.file.Metadata.UnityVersion != legacy.UnityVersion ||
                         file.file.Metadata.TargetPlatform != legacy.SourceTarget)
                         throw new InvalidDataException("Referenced script file has a different exact Unity version, format or source platform.");
+                    issueCode = "OBJECT_TABLE_INVALID";
                     if (file.file.Metadata.AssetInfos.Count > 1000000 ||
                         file.file.Metadata.AssetInfos.Select(a => a.PathId).Distinct().Count() != file.file.Metadata.AssetInfos.Count)
                         throw new InvalidDataException("Referenced script file has excessive or ambiguous object identifiers.");
@@ -136,35 +143,41 @@ internal static partial class LegacyAndroidRegistration
                     foreach (var row in group)
                     {
                         var bound = row with { AssetFile = relative, AssetSha256 = hash };
+                        var scriptIssue = "SCRIPT_INSPECTION_FAILED";
                         try
                         {
                             var info = file.file.GetAssetInfo(row.PathId);
+                            scriptIssue = info is null ? "SCRIPT_OBJECT_MISSING" : "OBJECT_NOT_MONOSCRIPT";
                             if (info is null || info.TypeId != 115) throw new InvalidDataException("Script reference does not identify a MonoScript (class 115).");
+                            scriptIssue = "SCRIPT_METADATA_INVALID";
                             var fields = assets.GetBaseField(file, info);
                             var assembly = fields["m_AssemblyName"].AsString;
                             var space = fields["m_Namespace"].AsString;
                             var name = fields["m_ClassName"].AsString;
-                            if (!AssemblyFile().IsMatch(assembly) || !SafeText(space, true) || !SafeText(name, false))
+                            if (!SafeText(assembly, true) || !SafeText(space, true) || !SafeText(name, true))
                                 throw new InvalidDataException("MonoScript has an unsafe or unsupported managed identity.");
                             bound = bound with { Assembly = assembly, NameSpace = space, ClassName = name };
-                            if (!selected.TryGetValue(assembly, out var target))
-                                throw new InvalidDataException("MonoScript assembly has no selected Android provider.");
-                            if (target.Component.File != assembly)
-                                throw new InvalidDataException("MonoScript assembly casing differs from the selected provider identity.");
-                            bound = bound with { Provider = target.Component.Provider, SelectedSha256 = target.Component.Sha256 };
-                            var fullName = string.IsNullOrEmpty(space) ? name : space + "." + name;
-                            if (!target.Types.Contains(fullName)) throw new InvalidDataException("MonoScript type is absent from the selected assembly.");
-                            bindings[row.Index] = bound with { Resolved = true };
+                            var result = scriptTypes.Resolve(assembly, space, name);
+                            bound = bound with { ResolutionChain = result.Chain };
+                            if (result.IssueCode is not null)
+                            {
+                                bindings[row.Index] = bound with { IssueCode = result.IssueCode, Issue = result.Issue }; continue;
+                            }
+                            var target = selected[result.SelectedAssembly!].Component;
+                            bindings[row.Index] = bound with { Resolved = true, SelectedAssembly = target.File,
+                                ResolvedType = result.ResolvedType, Provider = target.Provider, SelectedSha256 = target.Sha256 };
                         }
                         catch (Exception error) when (error is not OutOfMemoryException)
-                        { bindings[row.Index] = bound with { Issue = Failure(error) }; }
+                        { bindings[row.Index] = bound with { Issue = Failure(error), IssueCode = scriptIssue }; }
                     }
                 }
                 finally { assets.UnloadAll(); }
             }
             catch (Exception error) when (error is not OutOfMemoryException)
             {
-                foreach (var row in group) bindings[row.Index] = row with { AssetFile = relative, Issue = Failure(error) };
+                if (error is not (FileNotFoundException or DirectoryNotFoundException) && issueCode is "CONTENT_MISSING" or "VIRTUAL_RESOURCE_UNMAPPED")
+                    issueCode = "CONTENT_UNREADABLE";
+                foreach (var row in group) bindings[row.Index] = row with { AssetFile = relative, Issue = Failure(error), IssueCode = issueCode };
             }
         }
         if (bindings.Any(b => !b.Resolved)) diagnostics.Add("Unresolved MonoManager script references: " + bindings.Count(b => !b.Resolved));
@@ -180,7 +193,7 @@ internal static partial class LegacyAndroidRegistration
         using var fingerprint = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var path in sourceFiles)
         { fingerprint.AppendData(Encoding.UTF8.GetBytes(Path.GetFileName(path) + "\0")); fingerprint.AppendData(Convert.FromHexString(snapshots[path])); }
-        return new(1, legacy.UnityVersion, legacy.SourceTarget, Convert.ToHexString(fingerprint.GetHashAndReset()).ToLowerInvariant(),
+        return new(2, legacy.UnityVersion, legacy.SourceTarget, Convert.ToHexString(fingerprint.GetHashAndReset()).ToLowerInvariant(),
             legacy.GlobalManagersSha256, selected.Values.Select(s => s.Component).OrderBy(c => c.File, StringComparer.Ordinal).ToArray(),
             assemblyBindings, bindings, selected.Values.SelectMany(s => s.Initializers).OrderBy(i => i.Assembly, StringComparer.Ordinal)
                 .ThenBy(i => i.Type, StringComparer.Ordinal).ThenBy(i => i.Method, StringComparer.Ordinal).ToArray(),

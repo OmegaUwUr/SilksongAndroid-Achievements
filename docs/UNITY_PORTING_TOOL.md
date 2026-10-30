@@ -69,6 +69,12 @@ selected Android/game types and reads replacement-module initializers, preservin
 registration order and reporting missing providers. The writer, built-in virtual
 resource mapping, native link and Android player remain separate provider work.
 
+Revision 51 expands the shared [managed script lookup](UNITY_SCRIPT_BINDINGS.md)
+to simple assembly names, nested types and explicit selected type-forwarding
+graphs. Reason categories and bounded examples now identify the capability still
+needed instead of labeling every unresolved type a missing file. Native/player
+eligibility and persistent component/build identities are unchanged.
+
 1. **Engine families:** complete providers for Unity 2022.3, 2021.3 and 2019.4.
    Each needs exact official components, its compiler/profile, native recipe,
    registration mapping and Android Java player integration. The existing Unity

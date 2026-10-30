@@ -1,5 +1,12 @@
 # Slime Rancher port work — revision 46
 
+The supplied revision-50 device assessment now resolves **1,955/2,840** script
+references against actual content. Its log contains no per-script failures, so
+the remaining 885 cannot yet be attributed to missing files, types or providers.
+Revision 51 expands [script-name/forwarder coverage and failure reporting](UNITY_SCRIPT_BINDINGS.md).
+It was checked against the original source metadata, but a corrected device count
+is not established. Engine/player, profile, input and backend requirements remain.
+
 Revision 50 adds a shared [Android registration binding plan](UNITY_2019_REGISTRATION.md).
 Against the supplied code/bootstrap-only export, it retains all 2,840 PPtrs and
 reports their absent content: 2,828 target `globalgamemanagers.assets`, and 12

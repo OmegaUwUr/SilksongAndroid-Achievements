@@ -22,6 +22,11 @@ types, and initializers are read from replacement modules. Missing references an
 providers remain blocked. Cached revision-49 engine inputs are reused. See
 [the binding checks and remaining provider work](docs/UNITY_2019_REGISTRATION.md).
 
+Revision 51 expands script lookup to simple assembly names, nested names and
+explicit type forwarders, and shows categorized binding failures with identity
+examples in assessments/logs. Existing SDK/download/build caches are retained.
+See [script binding coverage and evidence](docs/UNITY_SCRIPT_BINDINGS.md).
+
 This is a community project based on **jakobkhansen's SilksongAndroid**, with
 additional SteamSync and achievement features. It is not an official Team Cherry
 or Valve release.

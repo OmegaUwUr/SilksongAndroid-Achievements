@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 50)
+# Reusable Unity preparation and experimental compilation (revision 51)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -27,6 +27,12 @@ script references, checks types against selected providers and inventories selec
 initializers. Its source-bound plan is exported for review; it does not rewrite
 registration or enable a legacy native build. Existing cached components are
 reused without a new download or compiler run.
+
+Revision 51 adds [simple/nested/forwarded script type lookup](UNITY_SCRIPT_BINDINGS.md)
+and separates missing files from missing types, providers and forwarding failures.
+The assessment and launcher log include bounded failed identities; the export
+retains all records. No runtime/build requirement is cleared by these metadata
+checks alone.
 
 ## User flow
 

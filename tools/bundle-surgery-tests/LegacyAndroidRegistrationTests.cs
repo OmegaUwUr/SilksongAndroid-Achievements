@@ -59,6 +59,20 @@ public sealed class LegacyAndroidRegistrationTests
         Assert.Empty(report.Diagnostics);
     }
 
+    [Fact]
+    public void A_simple_script_name_follows_a_facade_to_its_exact_selected_Android_definition()
+    {
+        using var fixture = new Fixture();
+        fixture.Facade("Game.Code", "UnityEngine.CoreModule");
+        fixture.Global([(0, 5)], [(5, "Game.Code", "Example", "Actor")]);
+        var report = fixture.Inspect(); var script = Assert.Single(report.Scripts);
+        Assert.Equal(2, report.Schema); Assert.True(script.Resolved); Assert.Equal("Game.Code", script.Assembly);
+        Assert.Equal("UnityEngine.CoreModule.dll", script.SelectedAssembly); Assert.Equal("android", script.Provider);
+        Assert.Equal("Example.Actor", script.ResolvedType);
+        Assert.Equal(new[] { "Game.Code.dll", "UnityEngine.CoreModule.dll" }, script.ResolutionChain);
+        Assert.Null(script.IssueCode); Assert.Empty(report.Diagnostics); Assert.False(report.RuntimeApproved);
+    }
+
     [Theory]
     [InlineData("missing-type")]
     [InlineData("missing-provider")]
@@ -189,6 +203,13 @@ public sealed class LegacyAndroidRegistrationTests
             Assembly(Managed, "Game.Code", "Actor"); Assembly(Bcl, "mscorlib", "Object"); Assembly(Engine, "UnityEngine.CoreModule", "Actor");
         }
         internal LegacyAndroidRegistration.Report Inspect() => LegacyAndroidRegistration.Inspect(Data, Bcl, Engine);
+        internal void Facade(string name, string target)
+        {
+            using var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0)), name, ModuleKind.Dll);
+            var reference = new AssemblyNameReference(target, new Version(1, 0)); assembly.MainModule.AssemblyReferences.Add(reference);
+            assembly.MainModule.ExportedTypes.Add(new ExportedType("Example", "Actor", assembly.MainModule, reference) { IsForwarder = true });
+            assembly.Write(Path.Combine(Managed, name + ".dll"));
+        }
         internal void Assembly(string directory, string name, string typeName, string? boot = null, bool instanceInitializer = false)
         {
             using var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0)), name, ModuleKind.Dll);

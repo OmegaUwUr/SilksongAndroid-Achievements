@@ -2,6 +2,35 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.51 (candidate)
+
+- Expands shared MonoScript type lookup to simple assembly names and exact DLL
+  filenames, explicit nested `Outer/Inner` and `Outer+Inner` forms, and metadata
+  type forwarders through the selected assembly graph. Namespace/case, declaring
+  type and forwarded assembly version/culture/public-key token remain checked.
+  Ambiguities, missing targets, cycles, unsupported module exports and chains
+  above 32 assemblies stay unresolved; no process/search-path fallback is used.
+- Preserves raw serialized script identities while recording the final selected
+  assembly, canonical type and full forwarding chain in schema-2 binding plans.
+  This is inspection only; MonoManager and source assemblies/content are not
+  rewritten and the Unity 2019 native/player gate is unchanged.
+- Adds stable failure categories and bounded identity examples to both the
+  assessment and launcher log. Missing types/providers are no longer presented
+  generically as missing source files. Opened content hashes are checked even
+  when a script's type remains unresolved. Review exports retain the full plan.
+- Keeps shared SDK receipts, source downloads, installed-player ABI and conversion
+  cache recipes unchanged. Preparation reuses the existing exact components.
+
+Validation: 184 C# cases, 75 generic checks, 17 pack checks and 33 persistence
+checks pass; all 115 production Kotlin files and both Java launch adapters compile.
+A metadata-only probe of the owned original 92-DLL desktop set resolves 19,819
+definitions, including 4,860 nested definitions, plus 2,536 exported forwarders.
+All 95 staged source files remain unchanged. This is not an Android-profile or
+gameplay test and does not identify/fix all 885 failures in the device's revision-50
+assessment; their individual records are absent from the attached log. No APK,
+native link, registration rewrite or device/gameplay run was performed. Builds
+remain manual. See docs/UNITY_SCRIPT_BINDINGS.md.
+
 ## 1.0.3-achievements.50 (candidate)
 
 - Adds a shared, read-only Unity 2019.4 Android registration binding plan.

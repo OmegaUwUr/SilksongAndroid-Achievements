@@ -170,6 +170,8 @@ object GenericPortBuild {
             "Exact Unity ${initial.version} compiler and Android managed-profile components are installed and fully fingerprinted in the shared cache. Original game assemblies were audited against that Android profile; native/player integration remains blocked.") else initial
         val preliminary = GenericPortAssessment.finish(withProfile, context, json(managedPath), content, legacy, review,
             registrationPath.takeIf { profile != null && registrationFailure == null }?.let { json(it) })
+        preliminary.facts.filter { it.startsWith("Legacy script failures:") || it.startsWith("Legacy script example:") }
+            .forEach { LauncherLog.log(it) }
         if (preliminary.blockers.isNotEmpty()) return preliminary
         val target = PortTarget.classic(context.appId, initial.version, initial.sourcePlatform!!)
         if (!UnityFetcher.isPresent(unity, target)) UnityFetcher.fetch(unity, target = target).collect {

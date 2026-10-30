@@ -1,5 +1,12 @@
 # Unity 2019.4 Android registration planning — revision 50
 
+Revision 51 expands [script lookup and failure reporting](UNITY_SCRIPT_BINDINGS.md).
+Fresh plans use schema 2 and record original identities, selected target types,
+forwarding chains and stable failure categories. The latest supplied device
+assessment resolved 1,955 of 2,840 references against complete source content; its
+remaining 885 cannot be classified from the text/log alone. The original code-only
+export result below remains historical and is not the device's current result.
+
 The shared tool can now check a legacy source's script references against selected
 Android/game assemblies during preparation. This advances the engine provider
 beyond merely reading MonoManager counts. It is a read-only binding plan; the
