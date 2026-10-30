@@ -1,5 +1,11 @@
 # Unity 2019.4 Android registration planning — revision 50
 
+Revision 52 inspects the newly supplied full binding report: 873 of the 885 failed
+records also fail exact lookup in the original desktop DLL graph, while 12 target
+virtual built-in resources. [Original-source comparison and the new header census](LEGACY_SCRIPT_REFERENCE_EVIDENCE.md)
+now distinguish those facts. Their use/exclusion policy and runtime registration
+remain unapproved; actual game header-use counts are not established by the export.
+
 Revision 51 expands [script lookup and failure reporting](UNITY_SCRIPT_BINDINGS.md).
 Fresh plans use schema 2 and record original identities, selected target types,
 forwarding chains and stable failure categories. The latest supplied device

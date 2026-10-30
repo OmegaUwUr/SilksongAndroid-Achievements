@@ -189,7 +189,7 @@ public sealed class LegacyAndroidRegistrationTests
         Assert.Throws<InvalidDataException>(() => fixture.Inspect());
     }
 
-    private sealed class Fixture : IDisposable
+    internal sealed class Fixture : IDisposable
     {
         private readonly string root = Path.Combine(Path.GetTempPath(), "android-registration-" + Guid.NewGuid().ToString("N"));
         internal string Data => Path.Combine(root, "source");
@@ -203,6 +203,31 @@ public sealed class LegacyAndroidRegistrationTests
             Assembly(Managed, "Game.Code", "Actor"); Assembly(Bcl, "mscorlib", "Object"); Assembly(Engine, "UnityEngine.CoreModule", "Actor");
         }
         internal LegacyAndroidRegistration.Report Inspect() => LegacyAndroidRegistration.Inspect(Data, Bcl, Engine);
+        internal string Plan()
+        {
+            var path = Path.Combine(root, "plan.json"); SourceAdapterFiles.WriteReport(Data, path, Inspect()); return path;
+        }
+        internal void Scene(string path, int fileId = 1, long scriptId = 5, string external = "globalgamemanagers",
+            string version = "2019.4.29f1", uint target = 24, int? truncate = null, bool corruptTail = false)
+        {
+            var full = Path.Combine(Data, path); Write(full, [], [external], null, [], version, target, false);
+            var manager = new AssetsManager();
+            try
+            {
+                manager.LoadClassPackage(Path.Combine(AppContext.BaseDirectory, "classdata.tpk")); manager.LoadClassDatabaseFromPackage(version);
+                var file = manager.LoadAssetsFile(full); var template = new AssetTypeTemplateField();
+                template.FromClassDatabase(manager.ClassDatabase, manager.ClassDatabase.FindAssetClassByID(114), false);
+                var value = ValueBuilder.DefaultValueFieldFromTemplate(template);
+                value["m_Script.m_FileID"].AsInt = fileId; value["m_Script.m_PathID"].AsLong = scriptId;
+                var bytes = value.WriteToByteArray();
+                if (corruptTail) Array.Fill(bytes, (byte)255, 28, bytes.Length - 28);
+                if (truncate is not null) bytes = bytes[..truncate.Value];
+                var info = AssetFileInfo.Create(file.file, -7, 114, manager.ClassDatabase, false); info.SetNewData(bytes); file.file.Metadata.AddAssetInfo(info);
+                using var writer = new AssetsFileWriter(full + ".next"); file.file.Write(writer);
+            }
+            finally { manager.UnloadAll(); }
+            File.Move(full + ".next", full, true);
+        }
         internal void Facade(string name, string target)
         {
             using var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0)), name, ModuleKind.Dll);

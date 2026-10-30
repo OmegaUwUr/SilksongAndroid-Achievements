@@ -1,4 +1,4 @@
-# Reusable Unity preparation and experimental compilation (revision 51)
+# Reusable Unity preparation and experimental compilation (revision 52)
 
 This is a source candidate, not a tested APK or a universal Unity converter. Other
 library entries now have **Prepare port** instead of a disabled Play button. The
@@ -33,6 +33,11 @@ and separates missing files from missing types, providers and forwarding failure
 The assessment and launcher log include bounded failed identities; the export
 retains all records. No runtime/build requirement is cleared by these metadata
 checks alone.
+
+Revision 52 adds [original-source comparison and script header-use evidence](LEGACY_SCRIPT_REFERENCE_EVIDENCE.md).
+Retained MonoScript import records can fail against the original desktop DLLs
+too. Preparation now distinguishes those from Android-only failures and records
+observed MonoBehaviour header dependencies without approving automatic exclusions.
 
 ## User flow
 

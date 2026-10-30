@@ -65,7 +65,8 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
 
         fun finish(initial: GenericPortAssessment, context: GenericPortContext, managed: JSONObject,
             assets: JSONObject?, legacyRegistration: JSONObject? = null, sourceReview: JSONObject? = null,
-            androidRegistration: JSONObject? = null): GenericPortAssessment {
+            androidRegistration: JSONObject? = null, sourceBindings: JSONObject? = null, scriptUsage: JSONObject? = null,
+            bindingPlanSha256: String? = null): GenericPortAssessment {
             val blockers = initial.blockers.toMutableList(); val facts = initial.facts.toMutableList()
             if (legacyRegistration != null || sourceReview != null) try {
                 val details = PortReviewMetadata.read(initial.data!!, initial.version!!, initial.sourcePlatform!!,
@@ -81,6 +82,11 @@ data class GenericPortAssessment(val data: File?, val version: String?, val fact
             } catch (error: Exception) {
                 blockers += "Legacy Android binding plan was rejected: ${error.message}"
             }
+            if (sourceBindings != null || scriptUsage != null) try {
+                val details = LegacyBindingSupplement.read(initial.data!!, initial.version!!, initial.sourcePlatform!!,
+                    androidRegistration!!, bindingPlanSha256!!, sourceBindings, scriptUsage, assets?.getString("sourceTreeSha256"))
+                facts += details.facts; blockers += details.blockers
+            } catch (error: Exception) { blockers += "Supplemental legacy script evidence was rejected: ${error.message}" }
             fun strings(json: JSONObject, key: String): List<String> {
                 val array = json.getJSONArray(key)
                 require(array.length() <= 10000) { "Audit is too large." }

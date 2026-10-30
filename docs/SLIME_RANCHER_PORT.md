@@ -1,5 +1,14 @@
 # Slime Rancher port work — revision 46
 
+Revision 52 inspected the new 102-entry export and reproduces the 885-record
+breakdown: 526 missing assembly providers, 347 missing types, 12 virtual built-in
+references. The production source comparison proves the 873 non-built-in failures
+are already unbound in the exact original 92-DLL desktop graph. This calls for a
+reviewed registration/import-record policy. The new
+[MonoBehaviour header census](LEGACY_SCRIPT_REFERENCE_EVIDENCE.md) records actual
+serialized component dependencies; it has not yet run on the game's full scene
+payloads, which are absent from the export. Native/profile/backend blockers remain.
+
 The supplied revision-50 device assessment now resolves **1,955/2,840** script
 references against actual content. Its log contains no per-script failures, so
 the remaining 885 cannot yet be attributed to missing files, types or providers.

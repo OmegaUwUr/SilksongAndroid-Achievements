@@ -107,6 +107,8 @@ object GenericPortBuild {
         val managedPath = File(root, "managed-port-audit.json")
         val profileEvidence = File(root, "engine-profile-evidence.json").also { it.delete() }
         val registrationPath = File(root, "legacy-android-registration.json").also { it.delete() }
+        val sourceBindingsPath = File(root, "legacy-source-bindings.json").also { it.delete() }
+        val scriptUsagePath = File(root, "legacy-script-usage.json").also { it.delete() }
         var registrationFailure: String? = null
         val profile = if (UnityManagedProfile.supports(initial.version)) UnityProfileInstaller.root(profileCache(context), initial.version)
             .takeIf { UnityProfileInstaller.ready(it, initial.version) } else null
@@ -165,12 +167,35 @@ object GenericPortBuild {
                 initial.sourcePlatform.toString(), assetPath.absolutePath))
             json(assetPath)
         } else null
-        val withProfile = if (profile != null) initial.copy(blockers = initial.blockers + listOfNotNull(registrationFailure),
+        suspend fun supplemental(command: String, output: File): JSONObject? = try {
+            PlayerImage.run(surgery, context, listOf(command, initial.data.absolutePath, registrationPath.absolutePath, output.absolutePath)); json(output)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (error: Exception) { output.delete(); LauncherLog.log("Supplemental script inspection failed: $command", error); null }
+        val binding = registrationPath.takeIf { profile != null && registrationFailure == null }?.let { json(it) }
+        val bindingHash = binding?.let { UnityReleaseCatalog.hash(registrationPath.readBytes()) }
+        val sourceBindings = if (binding != null) {
+            progress(PlayerImage.Progress("Comparing script identities against the original DLLs", -1f))
+            supplemental("inspect-legacy-source-bindings", sourceBindingsPath)
+        } else null
+        val usage = if (binding != null && content != null) {
+            progress(PlayerImage.Progress("Inspecting MonoBehaviour script references in content", -1f))
+            supplemental("inspect-legacy-script-usage", scriptUsagePath)
+        } else null
+        if (profileEvidence.isFile) {
+            val evidence = json(profileEvidence)
+            if (sourceBindings != null) evidence.put("sourceBindingAuditSha256", UnityReleaseCatalog.hash(sourceBindingsPath.readBytes()))
+            if (usage != null) evidence.put("scriptUsageAuditSha256", UnityReleaseCatalog.hash(scriptUsagePath.readBytes()))
+            profileEvidence.writeText(evidence.toString())
+        }
+        val unavailable = if (binding != null && (sourceBindings == null || content != null && usage == null))
+            listOf("Supplemental legacy source/use inspection did not complete; review the launcher log. No script inventory exclusions are approved.") else emptyList()
+        val withProfile = if (profile != null) initial.copy(blockers = initial.blockers + listOfNotNull(registrationFailure) + unavailable,
             facts = initial.facts.filterNot { it.startsWith("Exact Unity ${initial.version} compiler and Android managed-profile components can be downloaded separately") } +
             "Exact Unity ${initial.version} compiler and Android managed-profile components are installed and fully fingerprinted in the shared cache. Original game assemblies were audited against that Android profile; native/player integration remains blocked.") else initial
         val preliminary = GenericPortAssessment.finish(withProfile, context, json(managedPath), content, legacy, review,
-            registrationPath.takeIf { profile != null && registrationFailure == null }?.let { json(it) })
-        preliminary.facts.filter { it.startsWith("Legacy script failures:") || it.startsWith("Legacy script example:") }
+            binding, sourceBindings, usage, bindingHash)
+        preliminary.facts.filter { it.startsWith("Legacy script failures:") || it.startsWith("Legacy script example:") ||
+            it.startsWith("Original-source binding check:") || it.startsWith("Serialized script-use census:") }
             .forEach { LauncherLog.log(it) }
         if (preliminary.blockers.isNotEmpty()) return preliminary
         val target = PortTarget.classic(context.appId, initial.version, initial.sourcePlatform!!)

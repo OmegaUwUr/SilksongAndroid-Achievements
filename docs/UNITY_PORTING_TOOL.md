@@ -75,6 +75,12 @@ graphs. Reason categories and bounded examples now identify the capability still
 needed instead of labeling every unresolved type a missing file. Native/player
 eligibility and persistent component/build identities are unchanged.
 
+Revision 52 adds [source/use evidence](LEGACY_SCRIPT_REFERENCE_EVIDENCE.md) for the
+registration provider: exact original assembly comparison and a bounded serialized
+MonoBehaviour header census. Retained import records, observed component references
+and dynamic/native reachability remain separate facts. No inventory entry is
+removed automatically.
+
 1. **Engine families:** complete providers for Unity 2022.3, 2021.3 and 2019.4.
    Each needs exact official components, its compiler/profile, native recipe,
    registration mapping and Android Java player integration. The existing Unity

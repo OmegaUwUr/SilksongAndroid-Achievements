@@ -27,7 +27,7 @@ internal object PortEvidenceExport {
         require(managed.canonicalFile == managed.absoluteFile)
         val selected = assemblies.map { "source/Managed/${it.name}" to it } +
             bootstrap.map { "source/$it" to File(data, it) }.filter { it.second.isFile } +
-            listOf("managed-port-audit.json", "native-call-sites.json", "classic-inventory.json", "legacy-runtime-registration.json", "slime-source-review.json", "engine-profile-evidence.json", "legacy-android-registration.json").map {
+            listOf("managed-port-audit.json", "native-call-sites.json", "classic-inventory.json", "legacy-runtime-registration.json", "slime-source-review.json", "engine-profile-evidence.json", "legacy-android-registration.json", "legacy-source-bindings.json", "legacy-script-usage.json").map {
                 "reports/$it" to File(root, it)
             }.filter { it.second.isFile }
         require(selected.size == selected.map { it.first.lowercase(java.util.Locale.ROOT) }.toSet().size) { "Case-conflicting porting filenames require review." }

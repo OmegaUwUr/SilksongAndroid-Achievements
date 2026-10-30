@@ -56,6 +56,16 @@ fun portEvidenceExportChecks(test: (String, () -> Unit) -> Unit) {
                 check((0 until rows.length()).any { rows.getJSONObject(it).getString("path") == "reports/legacy-android-registration.json" })
             } finally { plan.delete() }
         }
+        test("porting export includes source comparisons and script header census reports") {
+            val files = listOf("legacy-source-bindings.json", "legacy-script-usage.json").map { name -> File(reports, name).apply { writeText("metadata fixture") } }
+            try {
+                val bytes = ByteArrayOutputStream(); write(bytes); val names = mutableListOf<String>()
+                ZipInputStream(bytes.toByteArray().inputStream()).use { zip -> while (true) {
+                    val entry = zip.nextEntry ?: break; names += entry.name; zip.closeEntry()
+                } }
+                check(files.all { "reports/${it.name}" in names })
+            } finally { files.forEach { it.delete() } }
+        }
         test("porting export retains custom script names and binds the complete assembly set") {
             val custom = File(assembly.parentFile, "Example.Gameplay.dll")
             check(assembly.renameTo(custom))

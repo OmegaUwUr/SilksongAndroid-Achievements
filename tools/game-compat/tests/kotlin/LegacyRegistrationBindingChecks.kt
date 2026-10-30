@@ -29,6 +29,26 @@ fun legacyRegistrationBindingChecks(test: (String, () -> Unit) -> Unit) {
             .put("resolvedScripts", 1).put("runtimeApproved", false)
     }
     fun read(json: JSONObject) = LegacyRegistrationBindings.read(root, "2019.4.29f1", 24, json)
+    fun baseEvidence(plan: JSONObject) = JSONObject().put("schema", 1).put("unityVersion", "2019.4.29f1").put("sourceTarget", 24)
+        .put("bindingsSha256", plan.getString("bindingsSha256")).put("globalManagersSha256", plan.getString("globalManagersSha256"))
+        .put("bindingPlanSha256", "a".repeat(64)).put("runtimeApproved", false)
+    fun sourceEvidence(plan: JSONObject, resolved: Boolean?) = baseEvidence(plan)
+        .put("scripts", JSONArray().put(JSONObject().put("index", 0).put("androidResolved", plan.getJSONArray("scripts").getJSONObject(0).getBoolean("resolved"))
+            .put("sourceResolved", resolved ?: JSONObject.NULL).put("sourceAssembly", if (resolved == true) assembly.name else JSONObject.NULL)
+            .put("sourceType", if (resolved == true) "Example.Actor" else JSONObject.NULL).put("sourceIssueCode", if (resolved == false) "TYPE_MISSING" else JSONObject.NULL)))
+        .put("sourceUnbound", if (resolved == false) 1 else 0).put("sourceUnknown", if (resolved == null) 1 else 0)
+        .put("androidOnlyFailures", if (resolved == true && !plan.getJSONArray("scripts").getJSONObject(0).getBoolean("resolved")) 1 else 0)
+    fun usageEvidence(plan: JSONObject, observed: Boolean) = baseEvidence(plan).put("sourceTreeSha256", "c".repeat(64))
+        .put("references", JSONArray().apply { if (observed) put(JSONObject().put("file", "level0").put("objectId", -7)
+            .put("inventoryIndexes", JSONArray().put(0)).put("bindingResolved", false).put("issue", "Unbound script")) })
+        .put("serializedFiles", 2).put("unresolvedReferences", if (observed) 1 else 0).put("unobservedUnresolvedInventory", if (observed) 0 else 1)
+        .put("headerScanComplete", true).put("diagnostics", JSONArray())
+    fun unresolvedPlan() = report().apply {
+        getJSONArray("scripts").getJSONObject(0).put("resolved", false).put("issue", "Unresolved").put("issueCode", "TYPE_MISSING")
+        put("resolvedScripts", 0).put("diagnostics", JSONArray().put("Unresolved script"))
+    }
+    fun supplement(plan: JSONObject, source: JSONObject? = null, usage: JSONObject? = null, tree: String? = "c".repeat(64)) =
+        LegacyBindingSupplement.read(root, "2019.4.29f1", 24, plan, "a".repeat(64), source, usage, tree)
     try {
         test("legacy binding plans preserve negative IDs and never grant a native provider") {
             val details = read(report())
@@ -141,6 +161,61 @@ fun legacyRegistrationBindingChecks(test: (String, () -> Unit) -> Unit) {
             check("10 missing managed types" in counts && "3 missing assembly providers" in counts && "2 unmapped built-in resources" in counts)
             check(details.facts.count { it.startsWith("Legacy script example:") } == 3)
             check(details.blockers.any { "15 legacy script references" in it } && details.blockers.none { "Complete referenced loose files" in it })
+        }
+        test("originally unbound imports stay a reviewed registration requirement") {
+            val plan = unresolvedPlan(); val details = supplement(plan, sourceEvidence(plan, false))
+            check(details.facts.single().contains("1 Android-unresolved inventory records are also unbound"))
+            check(details.blockers.single().contains("not automatically excluded"))
+        }
+        test("a source-resolved Android failure and an unknown source identity are distinguished") {
+            val plan = unresolvedPlan()
+            check(supplement(plan, sourceEvidence(plan, true)).facts.single().contains("1 failures bind on the original source only"))
+            check(supplement(plan, sourceEvidence(plan, null)).facts.single().contains("1 source identities could not be inspected"))
+        }
+        test("supplemental evidence rejects stale source plan hashes and runtime approval") {
+            val plan = unresolvedPlan()
+            for (problem in listOf("hash", "target", "approval", "count")) {
+                val source = sourceEvidence(plan, false)
+                when (problem) {
+                    "hash" -> source.put("bindingPlanSha256", "b".repeat(64))
+                    "target" -> source.put("sourceTarget", 19)
+                    "approval" -> source.put("runtimeApproved", true)
+                    "count" -> source.put("sourceUnbound", 0)
+                }
+                check(runCatching { supplement(plan, source) }.isFailure)
+            }
+            val source = sourceEvidence(plan, false); val saved = assembly.readBytes()
+            try { assembly.appendText("changed"); check(runCatching { supplement(plan, source) }.isFailure) } finally { assembly.writeBytes(saved) }
+        }
+        test("zero observed headers cannot authorize excluding a script inventory record") {
+            val plan = unresolvedPlan(); val details = supplement(plan, usage = usageEvidence(plan, false))
+            check(details.facts.single().contains("1 unresolved inventory entries not observed"))
+            check(details.facts.single().contains("zero observations do not authorize removal"))
+            check(!GenericPortAssessment(root, "2019.4.29f1", details.facts, details.blockers, true, "a".repeat(64), 24, true).canBuild)
+        }
+        test("observed unresolved MonoBehaviour headers remain blockers") {
+            val plan = unresolvedPlan(); val details = supplement(plan, usage = usageEvidence(plan, true))
+            check(details.blockers.single().contains("1 observed MonoBehaviour"))
+        }
+        test("script use evidence rejects forged counts pointers and stale trees") {
+            val plan = unresolvedPlan()
+            for (problem in listOf("count", "duplicate", "outside", "resolved")) {
+                val usage = usageEvidence(plan, true); val row = usage.getJSONArray("references").getJSONObject(0)
+                when (problem) {
+                    "count" -> usage.put("unobservedUnresolvedInventory", 1)
+                    "duplicate" -> row.put("inventoryIndexes", JSONArray().put(0).put(0))
+                    "outside" -> row.put("inventoryIndexes", JSONArray().put(99))
+                    "resolved" -> row.put("bindingResolved", true).put("issue", JSONObject.NULL)
+                }
+                check(runCatching { supplement(plan, usage = usage) }.isFailure)
+            }
+            check(runCatching { supplement(plan, usage = usageEvidence(plan, true), tree = "d".repeat(64)) }.isFailure)
+        }
+        test("incomplete script-header coverage stays visible and blocked") {
+            val plan = unresolvedPlan(); val usage = usageEvidence(plan, false).put("headerScanComplete", false)
+                .put("diagnostics", JSONArray().put("Unreadable file"))
+            check(supplement(plan, usage = usage).blockers.single().contains("incomplete"))
+            usage.put("headerScanComplete", true); check(runCatching { supplement(plan, usage = usage) }.isFailure)
         }
     } finally { root.deleteRecursively() }
 }

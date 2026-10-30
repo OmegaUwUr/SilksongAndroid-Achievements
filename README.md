@@ -27,6 +27,12 @@ explicit type forwarders, and shows categorized binding failures with identity
 examples in assessments/logs. Existing SDK/download/build caches are retained.
 See [script binding coverage and evidence](docs/UNITY_SCRIPT_BINDINGS.md).
 
+Revision 52 compares failed script identities with the original DLLs and adds a
+serialized MonoBehaviour script-reference census. The supplied Slime Rancher
+export confirms 873 failures were already unbound on the original source; their
+use/registration treatment remains under review. See
+[original-source and content-reference evidence](docs/LEGACY_SCRIPT_REFERENCE_EVIDENCE.md).
+
 This is a community project based on **jakobkhansen's SilksongAndroid**, with
 additional SteamSync and achievement features. It is not an official Team Cherry
 or Valve release.

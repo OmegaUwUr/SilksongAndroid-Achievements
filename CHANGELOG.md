@@ -2,6 +2,41 @@
 
 All Android achievement-fork revisions are tracked separately from the upstream SilksongAndroid version.
 
+## 1.0.3-achievements.52 (candidate)
+
+- Adds exact-original-source comparison for legacy script plans. A failed Android
+  lookup is now checked against the original DLL graph, with source-unbound,
+  unknown and Android-only cases distinguished. No short-name/namespace guess or
+  exclusion rule is applied.
+- Adds a read-only MonoBehaviour `m_Script` header census across loose serialized
+  files, serialized built-in inputs and supported local UnityFS entries. It keeps
+  object IDs and joins explicit loose-file pointers to the original MonoManager
+  inventory. Missing/out-of-plan/bundle mappings stay unresolved; unreadable or
+  mixed layouts and incomplete scene trees cannot claim full header coverage.
+- Reports observed unresolved references separately from unobserved inventory
+  entries. The census covers headers only; other fields, code/reflection, dynamic
+  loading and runtime registration remain unverified. Zero observations do not
+  authorize deleting registrations or native wrappers.
+- Binds supplemental reports to the original assembly/bootstrap fingerprints,
+  exact binding-plan hash and inspected content tree. Displays summaries in the
+  assessment/log and exports both reports with hashes in profile evidence.
+  Existing SDK receipts, source/download snapshots, installed-player ABI and
+  conversion/native cache identities are unchanged.
+
+The new owned export verifies all 102 manifest entries. Its 885 failures comprise
+526 missing assembly providers, 347 missing type matches and 12 virtual built-in
+resource references. Production C# comparison confirms all 873 non-built-in cases
+are already unbound in the exact original 92-DLL desktop graph; no additional
+Android-only failure is identified among them. Production Kotlin accepts that
+real report, and all 95 original source files remain unchanged. Scene payloads
+are absent from this export, so actual game header-use counts still need the new
+on-device census. No records are stripped and no runtime compatibility is claimed.
+
+Validation: 200 C# cases, 83 generic checks, 17 pack checks and 33 persistence
+checks pass. All 116 production Kotlin files and both Java launch adapters compile.
+No revision-52 APK, native/player run or gameplay test was performed; builds stay
+manual. See docs/LEGACY_SCRIPT_REFERENCE_EVIDENCE.md.
+
 ## 1.0.3-achievements.51 (candidate)
 
 - Expands shared MonoScript type lookup to simple assembly names and exact DLL

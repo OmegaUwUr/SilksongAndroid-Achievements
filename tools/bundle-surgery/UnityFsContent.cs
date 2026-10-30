@@ -26,6 +26,24 @@ internal static class UnityFsContent
         return InspectLoaded(loaded.Manager, loaded.Bundle, sourceTarget, version);
     }
 
+    // Shared bounded read-only traversal. The caller owns no reader after this method returns.
+    internal static void VisitSerialized(string path, int sourceTarget, string version,
+        Action<AssetsManager, AssetsFileInstance, string> visit)
+    {
+        using var loaded = Open(path);
+        if (loaded.Bundle.file.Header.EngineVersion != version) throw new InvalidDataException("Bundle has a different exact Unity version.");
+        foreach (var entry in loaded.Bundle.file.BlockAndDirInfo.DirectoryInfos)
+        {
+            if (!IsSerialized(loaded.Bundle.file, entry)) continue;
+            loaded.Bundle.file.GetFileRange(loaded.Bundle.file.GetFileIndex(entry.Name), out var start, out var length);
+            SerializedFileDetection.RequireValidHeader(loaded.Bundle.file.DataReader.BaseStream, start, length);
+            var asset = loaded.Manager.LoadAssetsFileFromBundle(loaded.Bundle, entry.Name);
+            if (asset.file.Metadata.TargetPlatform != sourceTarget || asset.file.Metadata.UnityVersion != version)
+                throw new InvalidDataException("Bundle entry has a different exact source layout.");
+            loaded.Manager.LoadClassDatabaseFromPackage(version); visit(loaded.Manager, asset, entry.Name);
+        }
+    }
+
     internal static TransformReport Transform(string input, string output, int sourceTarget, string version)
     {
         var part = output + ".part";

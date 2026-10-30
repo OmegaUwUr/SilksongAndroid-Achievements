@@ -1,5 +1,10 @@
 # Managed script lookup and failure evidence — revision 51
 
+Revision 52 now has the requested binding export and [classifies its 885 failures](LEGACY_SCRIPT_REFERENCE_EVIDENCE.md).
+All 873 non-built-in cases also fail original-source lookup; 12 refer to a virtual
+built-in resource. Source comparison and serialized header-use reports are now
+part of preparation. The revision-51 observations below remain historical.
+
 The shared registration inspector can now match MonoScript identities through
 explicit managed type-forwarding metadata. It handles more valid naming layouts
 without guessing a class or using an unrelated same-named assembly. It still
